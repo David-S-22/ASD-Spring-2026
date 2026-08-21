@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - "main"
+    paths:
+      - "david/**"
   push:
     branches:
       - "main"
@@ -11,7 +13,6 @@ on:
       - "david/**"
 jobs:
   build:
-    name: David-CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
