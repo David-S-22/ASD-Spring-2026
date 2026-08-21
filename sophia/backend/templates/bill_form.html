@@ -1,0 +1,51 @@
+{# Add/edit bill modal form. Submitting it (through the confirm modal) IS the confirmation. #}
+<div class="modal-form" id="bill-form">
+  <h3>{{ "Edit bill" if bill else "Add a bill" }}</h3>
+  <form hx-post="{{ action }}" hx-target="#bills-table" hx-swap="outerHTML">
+    <label>Name
+      <input name="name" value="{{ bill.name if bill else '' }}" required>
+    </label>
+    <label>Merchant
+      <input name="merchant" value="{{ bill.merchant if bill else '' }}" required>
+    </label>
+    <label>Amount ($)
+      <input name="amount" type="number" step="0.01" min="0" value="{{ '%.2f'|format(bill.amount_cents / 100) if bill else '' }}" required>
+    </label>
+    <label>Every
+      <select name="cadence" required>
+        {% for value, label in [("weekly", "Week"), ("fortnightly", "Fortnight"), ("monthly", "Month")] %}
+        <option value="{{ value }}" {{ "selected" if bill and bill.cadence == value else "" }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Next billing date
+      <input name="next_billing_date" type="date" value="{{ bill.next_billing_date if bill else '' }}" required>
+    </label>
+    <label>Type
+      <select name="type" required>
+        {% for value in ["bill", "subscription"] %}
+        <option value="{{ value }}" {{ "selected" if bill and bill.type == value else "" }}>{{ value|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Paid by
+      <select name="payment_method">
+        <option value="">—</option>
+        {% for value, label in [("direct_debit", "Direct debit"), ("card", "Card"), ("bpay", "BPAY")] %}
+        <option value="{{ value }}" {{ "selected" if bill and bill.payment_method == value else "" }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="exclude_from_plan" {{ "checked" if bill and bill.exclude_from_plan else "" }}>
+      Fixed — leave out of the monthly plan
+    </label>
+    <div class="form-actions">
+      <button type="submit">{{ "Save changes" if bill else "Add bill" }}</button>
+      {% if bill %}
+      <button type="button" hx-post="/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML">Delete</button>
+      {% endif %}
+      <button type="button" data-action="dismiss-modal">Cancel</button>
+    </div>
+  </form>
+</div>

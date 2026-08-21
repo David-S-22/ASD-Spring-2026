@@ -1,5 +1,5 @@
 {# Bills table fragment: Name / Amount / Every / Next billing / Paid by / Status. #}
-<div class="bills-panel">
+<div class="bills-panel" id="bills-table">
   <h2>Bills &amp; subscriptions · {{ monthly_total }}</h2>
   <table class="bills-table">
     <thead>
@@ -19,17 +19,18 @@
           <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
           {% if bill.needs_confirmation %}
           <span class="confirm-prompt">Confirm this?</span>
-          <button class="confirm" hx-post="/api/bills/{{ bill.id }}/confirm" hx-target="closest tr">Confirm</button>
+          <button class="confirm" hx-post="/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
           {% endif %}
         </td>
         <td>
-          <button data-action="cancel" data-bill-id="{{ bill.id }}">Cancel…</button>
-          <button hx-get="/ui/disputes?bill_id={{ bill.id }}" hx-target="#dispute-panel">Dispute</button>
-          <button data-action="record-payment" data-bill-id="{{ bill.id }}">Record payment</button>
+          <button hx-get="/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+          <button hx-get="/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+          <button hx-get="/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
+          <button hx-get="/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
-  <button data-action="add-bill">Add a bill</button>
+  <button hx-get="/ui/bills/new-form" hx-target="#modal-root">Add a bill</button>
 </div>

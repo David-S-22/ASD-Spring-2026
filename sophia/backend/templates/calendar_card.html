@@ -1,5 +1,5 @@
 {# Calendar card fragment: usual-vs-extra breakdown for one month. #}
-<div class="calendar-card">
+<div class="calendar-card" id="calendar-card"{% if oob %} hx-swap-oob="true"{% endif %}>
   <h3>Plan for {{ month_name }}</h3>
   <p class="headline">Set aside up to {{ total_high }}</p>
   {% if has_extras %}
@@ -13,6 +13,6 @@
     <li>{{ line }}</li>
     {% endfor %}
   </ul>
-  <button data-action="set-aside">Set aside {{ total_high }}</button>
-  <button data-action="other-months">See other months</button>
+  <button type="button" data-action="set-aside" data-toast="Done — change saved.">Set aside {{ total_high }}</button>
+  <button hx-get="/ui/calendar?month={{ next_month_param }}" hx-target="#calendar-card" hx-swap="outerHTML">See other months</button>
 </div>

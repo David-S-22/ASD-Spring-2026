@@ -1,0 +1,27 @@
+{# Disputes tab: left list of disputes, right the selected dispute's panel. #}
+<div class="disputes-tab">
+  <div class="dispute-list">
+    {% if disputes %}
+    <ul>
+      {% for d in disputes %}
+      <li>
+        <button
+          class="dispute-list-item"
+          hx-get="/ui/disputes?dispute_id={{ d.id }}"
+          hx-target="#dispute-panel"
+          hx-swap="outerHTML"
+        >
+          <span class="bill-name">{{ d.bill_name }}</span>
+          <span class="reason">{{ d.reason }}</span>
+          <span class="chip chip-dispute-{{ d.status }}">{{ d.status }}</span>
+          <span class="opened">{{ d.opened_at }}</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
+    {% endif %}
+  </div>
+  <div id="dispute-panel" class="dispute-panel" hx-get="/ui/disputes" hx-trigger="load" hx-swap="outerHTML"></div>
+</div>

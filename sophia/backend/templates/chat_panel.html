@@ -1,24 +1,29 @@
-{# Ask Tally chat panel fragment: chips, history with preview cards, input. #}
+{# Ask Tally chat panel fragment: chips, history with preview cards, input + Ask button. #}
 <div class="chat-panel">
   <div class="chips">
-    <button data-chip="What do my bills add up to?">What do my bills add up to?</button>
-    <button data-chip="Which subscriptions am I barely using?">Which subscriptions am I barely using?</button>
-    <button data-chip="I cancelled Spotify from September — remove the future payments">I cancelled Spotify from September — remove the future payments</button>
-    <button data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
+    <button type="button" data-chip="What do my bills add up to?">What do my bills add up to?</button>
+    <button type="button" data-chip="Which subscriptions am I barely using?">Which subscriptions am I barely using?</button>
+    <button type="button" data-chip="I cancelled Spotify from September — remove the future payments">I cancelled Spotify from September — remove the future payments</button>
+    <button type="button" data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
   </div>
   <div class="history">
     {% for message in messages %}
     {% if message.heading %}<h4 class="history-heading">{{ message.heading }}</h4>{% endif %}
     <div class="message message-{{ message.role }}">{{ message.content }}</div>
     {% if message.preview %}
+    {% if message.applied %}
+    <div class="preview-card applied">Applied</div>
+    {% else %}
     <div class="preview-card">
-      <button class="confirm" hx-post="/api/chat/apply" hx-vals='{{ message.preview | tojson }}'>Confirm</button>
-      <button class="keep-it" data-action="dismiss-preview">Keep it</button>
+      <button class="confirm" hx-post="/ui/chat/apply" hx-vals='{{ message.preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
+      <button class="keep-it" type="button" data-action="dismiss-preview">Keep it</button>
     </div>
+    {% endif %}
     {% endif %}
     {% endfor %}
   </div>
-  <form hx-post="/api/chat" hx-target=".history" hx-swap="beforeend">
-    <input name="message" placeholder="Ask" />
+  <form hx-post="/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()">
+    <input name="message" placeholder="Ask" required>
+    <button type="submit">Ask</button>
   </form>
 </div>
