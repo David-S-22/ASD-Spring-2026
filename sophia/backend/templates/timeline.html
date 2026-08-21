@@ -16,7 +16,7 @@
     <li>
       <span class="date">{{ item.day_label }} · {{ item.name }}</span>
       <span class="amount">{{ item.display_amount }}</span>
-      {% if item.kind == "predicted" %}<span class="tag">Predicted</span>{% endif %}
+      {% if item.kind == "predicted" and not item.within_30_days %}<span class="tag">Predicted</span>{% endif %}
     </li>
     {% endfor %}
   </ul>
