@@ -179,6 +179,12 @@ def create_chat_message(payload):
     return response.json()
 
 
+def update_chat_message(message_id, payload):
+    response = requests.put(_url(f"/chat_messages/{message_id}"), json=payload, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
 def health():
     response = requests.get(_url("/health"), timeout=5)
     _raise_for_status(response)

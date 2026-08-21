@@ -348,6 +348,23 @@ def create_app(db_path=None, bills_backend_url=None):
         row = connection.execute("SELECT * FROM chat_messages WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return jsonify(row_to_dict(row)), 201
 
+    @app.put("/chat_messages/<int:message_id>")
+    def update_chat_message(message_id):
+        data = request.get_json(silent=True) or {}
+        connection = db()
+        existing = connection.execute("SELECT id FROM chat_messages WHERE id = ?", (message_id,)).fetchone()
+        if existing is None:
+            raise ApiError("chat message not found", 404)
+        if "applied" not in data:
+            raise ApiError("no updatable fields supplied")
+        connection.execute(
+            "UPDATE chat_messages SET applied = ? WHERE id = ?",
+            (int(bool(data["applied"])), message_id),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM chat_messages WHERE id = ?", (message_id,)).fetchone()
+        return jsonify(row_to_dict(row))
+
     @app.delete("/chat_messages")
     def delete_chat_messages():
         connection = db()
