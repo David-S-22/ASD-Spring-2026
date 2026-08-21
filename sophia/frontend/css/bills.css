@@ -1,0 +1,165 @@
+/* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tabs button {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.5em 0.25em;
+}
+
+.tabs button.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-panel {
+  grid-column: 1;
+}
+
+.ask-tally {
+  grid-column: 2;
+  align-self: start;
+  position: sticky;
+  top: 1rem;
+}
+
+.bills-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bills-table th,
+.bills-table td {
+  text-align: left;
+  padding: 0.5em 0.6em;
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline ul,
+.dispute-panel ul,
+.dispute-panel ol,
+.chat-panel .chips {
+  list-style: none;
+  padding: 0;
+}
+
+.timeline li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4em 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline .tag {
+  background: var(--a200);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.1em 0.6em;
+  font-size: 0.8em;
+  margin-left: 0.5em;
+}
+
+.range-buttons button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.calendar-card .note {
+  color: var(--mut);
+}
+
+.dispute-panel .letter {
+  width: 100%;
+  min-height: 8em;
+}
+
+.dispute-panel .caveat {
+  color: var(--warn);
+  background: var(--warn-bg);
+  padding: 0.5em;
+  border-radius: 6px;
+}
+
+.chat-panel .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin-bottom: 0.6em;
+}
+
+.chat-panel .message {
+  border-radius: 8px;
+  padding: 0.5em 0.8em;
+  margin: 0.3em 0;
+}
+
+.chat-panel .message-user {
+  background: var(--a100);
+  margin-left: 2em;
+}
+
+.chat-panel .message-assistant {
+  background: var(--card);
+  border: 1px solid var(--line);
+  margin-right: 2em;
+}
+
+.chat-panel .history-heading {
+  color: var(--mut);
+  font-size: 0.85em;
+  margin: 0.8em 0 0.2em;
+}
+
+.chat-panel .preview-card {
+  display: flex;
+  gap: 0.4em;
+  margin: 0.3em 0 0.3em 2em;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(29, 34, 44, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.5rem;
+  min-width: 280px;
+}
+
+.toast-holder {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.toast {
+  background: var(--ink);
+  color: #fff;
+  padding: 0.6em 1.2em;
+  border-radius: 999px;
+}

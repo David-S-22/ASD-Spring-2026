@@ -34,4 +34,4 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build service images
-        run: docker compose build bills-backend bills-db
+        run: docker compose build bills-frontend bills-backend bills-db

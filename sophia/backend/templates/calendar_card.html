@@ -9,8 +9,8 @@
   {% endif %}
   <p class="usual">Usual bills — weekly &amp; fortnightly you pay every month {{ usual_range }}</p>
   <ul class="extras">
-    {% for extra in extras %}
-    <li>{{ extra.name }} — +{{ extra.amount }}</li>
+    {% for line in extras %}
+    <li>{{ line }}</li>
     {% endfor %}
   </ul>
   <button data-action="set-aside">Set aside {{ total_high }}</button>
