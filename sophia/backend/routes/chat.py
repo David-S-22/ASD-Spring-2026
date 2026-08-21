@@ -34,25 +34,42 @@ def _answer_total():
     return f"This month you're set to pay around {money.format_estimate_single(breakdown.total_high_cents)} in bills and subscriptions."
 
 
+_COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _count_word(n):
+    return _COUNT_WORDS.get(n, str(n))
+
+
 def _answer_barely_using():
-    """A subscription counts as barely used when it has fewer than BARELY_USING_THRESHOLD
-    payments since it was confirmed (or created), and few matching transactions either.
+    """A subscription counts as barely used once it has been billed at least
+    BARELY_USING_THRESHOLD times since confirmed_at (or created_at when confirmed_at
+    is null) - it keeps charging even though the user hasn't re-confirmed they still
+    want it. Transaction history for the merchant since that date is supporting
+    evidence only, never a second threshold that could exclude a flagged subscription.
     """
     bill_rows = bills_db.list_bills()
     payment_rows = bills_db.list_payments()
-    barely = []
+    sentences = []
     for row in bill_rows:
         if row["type"] != "subscription":
             continue
         since = row.get("confirmed_at") or row.get("created_at")
         count = sum(1 for p in payment_rows if p["bill_id"] == row["id"] and (since is None or p["date"] >= since))
         if count < BARELY_USING_THRESHOLD:
-            transaction_rows, _source = transactions.list_transactions(merchant=row["merchant"])
-            if len(transaction_rows) < BARELY_USING_THRESHOLD:
-                barely.append(row["name"])
-    if not barely:
-        return "Everything looks actively used based on your payment and transaction history."
-    return f"These subscriptions look barely used: {', '.join(barely)}."
+            continue
+        transaction_rows, _source = transactions.list_transactions(merchant=row["merchant"], since=since)
+        amount = money.format_actual(row["amount_cents"])
+        sentence = (
+            f"{row['name']} has billed {_count_word(count)} times since you last "
+            f"confirmed you're using it — worth a look at {amount}/month."
+        )
+        if not transaction_rows:
+            sentence += " No recent activity for that merchant either."
+        sentences.append(sentence)
+    if not sentences:
+        return "Everything looks actively used — nothing has billed repeatedly since you last confirmed it."
+    return " ".join(sentences)
 
 
 def _answer_upcoming():

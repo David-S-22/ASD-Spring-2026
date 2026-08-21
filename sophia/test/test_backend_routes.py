@@ -270,3 +270,37 @@ def test_dispute_creation_falls_back_and_adds_direct_debit_step(client, monkeypa
     data = response.get_json()
     assert data["draft"]["fallback"] is True
     assert any("authority" in step.lower() or "direct debit" in step.lower() for step in data["draft"]["steps"])
+
+
+def test_barely_using_flags_bills_billed_repeatedly_since_confirmation(client, store, monkeypatch):
+    store.bills[12] = {
+        "id": 12, "name": "DriveBox", "merchant": "DriveBox", "amount_cents": 299,
+        "cadence": "monthly", "next_billing_date": "2026-08-28", "type": "subscription",
+        "payment_method": "card", "status": "due", "end_date": None,
+        "source": "manual", "confirmed_at": "2026-03-28", "created_at": "2026-03-28",
+    }
+    for payment_id, payment_date in enumerate(
+        ["2026-04-28", "2026-05-28", "2026-06-28", "2026-07-28"], start=100
+    ):
+        store.payments[payment_id] = {"id": payment_id, "bill_id": 12, "date": payment_date, "amount_cents": 299}
+
+    store.bills[3]["confirmed_at"] = "2026-08-16"
+    store.payments = {
+        k: v for k, v in store.payments.items() if not (v["bill_id"] == 3 and v["date"] >= "2026-08-16")
+    }
+
+    def fake_chat(model, messages, timeout=None):
+        content = json.dumps(
+            {"op": None, "entity": None, "id": None, "fields": None, "question": "barely_using", "say": ""}
+        )
+        return {"message": {"content": content}}
+
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
+    response = client.post("/api/chat", json={"message": "Which subscriptions am I barely using?"})
+    assert response.status_code == 200
+    reply = response.get_json()["reply"]
+    assert (
+        "DriveBox has billed four times since you last confirmed you're using it — worth a look at $2.99/month."
+        in reply
+    )
+    assert "Spotify" not in reply
