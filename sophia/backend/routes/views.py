@@ -8,6 +8,7 @@ from sophia.backend.clients import bills_db
 from sophia.backend.engine import money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.projection import timeline as project_timeline
+from sophia.backend.services.calendar import parse_year_month
 
 bp = Blueprint("views", __name__, url_prefix="/api")
 
@@ -71,9 +72,9 @@ def _breakdown_payload(breakdown):
 
 @bp.get("/calendar/<year_month>")
 def calendar_month(year_month):
-    year_str, month_str = year_month.split("-")
+    year, month = parse_year_month(year_month)
     bills, payments = _load_bills_and_payments()
-    breakdown = month_breakdown(bills, payments, int(year_str), int(month_str), config.DEMO_TODAY)
+    breakdown = month_breakdown(bills, payments, year, month, config.DEMO_TODAY)
     return jsonify(_breakdown_payload(breakdown))
 
 
@@ -82,8 +83,7 @@ def calendar_range():
     from_param = request.args.get("from")
     months = int(request.args.get("months", 6))
     if from_param:
-        year_str, month_str = from_param.split("-")
-        year, month = int(year_str), int(month_str)
+        year, month = parse_year_month(from_param)
     else:
         year, month = config.DEMO_TODAY.year, config.DEMO_TODAY.month
     bills, payments = _load_bills_and_payments()
