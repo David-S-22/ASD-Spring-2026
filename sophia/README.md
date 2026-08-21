@@ -78,8 +78,15 @@ second attempt also fails. Neither call ever raises out to the route.
 
 ## Date engine rules
 
-- **Actual vs predicted**: an occurrence is `actual` if a payment for that
-  bill exists within ±3 days of it, else `predicted`.
+- **Actual vs predicted vs overdue**: an occurrence is `actual` if a payment
+  for that bill exists within ±3 days of it, `overdue` if its current cycle
+  (`current_cycle_due`) is strictly before today with no matching payment —
+  `timeline()`'s forward-only window otherwise drops these entirely, so
+  `project()`'s normal walk is topped up with one synthetic occurrence per
+  bill for this case — else `predicted`. The `Predicted` tag itself is
+  hidden inside the first 30 days of the timeline (an imminent charge reads
+  as expected, not speculative); `Overdue` always shows, at the real cents
+  amount rather than a rounded estimate, since it's a real unpaid charge.
 - **Usual vs extra** (calendar breakdown): a bill already billing before the
   month and still active is "usual" — it contributes `expected_per_month ×
   usual_range` to the month's low/high, plus an `extra_occurrence` line for
