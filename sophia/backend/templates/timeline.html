@@ -1,22 +1,22 @@
-{# Timeline fragment: upcoming occurrences, actual amounts in cents, predicted in whole dollars. #}
-<div class="timeline">
+{# Timeline fragment: upcoming occurrences, actual/overdue amounts in cents, predicted in whole dollars. #}
+<div class="timeline" id="timeline"{% if oob %} hx-swap-oob="true"{% endif %}>
   <h3>Coming up · next 30 days, then to 180</h3>
   <div class="range-buttons">
     {% for value in [30, 60, 90, 180] %}
     <button
       class="{{ 'active' if value == days else '' }}"
       hx-get="/ui/timeline?days={{ value }}"
-      hx-target="closest .timeline"
+      hx-target="#timeline"
       hx-swap="outerHTML"
     >{{ value }}</button>
     {% endfor %}
   </div>
   <ul>
     {% for item in items %}
-    <li>
+    <li class="{{ 'overdue-row' if item.kind == 'overdue' else '' }}">
       <span class="date">{{ item.day_label }} · {{ item.name }}</span>
       <span class="amount">{{ item.display_amount }}</span>
-      {% if item.kind == "predicted" and not item.within_30_days %}<span class="tag">Predicted</span>{% endif %}
+      {% if item.tag %}<span class="tag tag-{{ item.kind }}">{{ item.tag }}</span>{% endif %}
     </li>
     {% endfor %}
   </ul>

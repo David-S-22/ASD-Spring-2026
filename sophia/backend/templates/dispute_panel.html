@@ -1,10 +1,10 @@
 {# Dispute panel fragment: editable letter, checklist, escalation path, status tracker. #}
-<div class="dispute-panel" id="dispute-panel">
+<div class="dispute-panel" id="dispute-panel"{% if oob %} hx-swap-oob="true"{% endif %}>
   {% if dispute %}
   {% if context_line %}<p class="context">{{ context_line }}</p>{% endif %}
 
   {% if versions|length > 1 %}
-  <select class="version-picker" hx-get="/ui/disputes?dispute_id={{ dispute.id }}" hx-trigger="change" name="version">
+  <select class="version-picker" hx-get="/ui/disputes?dispute_id={{ dispute.id }}" hx-trigger="change" hx-target="#dispute-panel" hx-swap="outerHTML" name="version">
     {% for v in versions %}
     <option value="{{ v }}" {{ "selected" if v == selected_version else "" }}>Version {{ v }}</option>
     {% endfor %}
@@ -20,16 +20,20 @@
     {% for step in draft.escalation if draft %}<li>{{ step }}</li>{% endfor %}
   </ul>
   <p class="caveat">Heads-up for direct-debit bills: the merchant or your bank has to remove the saved payment authority, so the steps differ.</p>
-  <div class="status-tracker" data-current="{{ dispute.status }}">draft → sent → resolved</div>
-
-  <button data-action="copy-note">Copy the note</button>
-  <button data-action="rewrite" data-dispute-id="{{ dispute.id }}">Rewrite it</button>
-  <div class="rewrite-feedback" hidden>
-    <textarea class="feedback" placeholder="What should change?"></textarea>
-    <button hx-post="/api/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML">Send feedback</button>
+  <div class="status-tracker" data-current="{{ dispute.status }}">
+    {% for stage in ["draft", "sent", "resolved"] %}
+    <span class="stage {{ 'current' if stage == dispute.status else '' }}">{{ stage }}</span>{% if not loop.last %} → {% endif %}
+    {% endfor %}
   </div>
-  <button hx-put="/api/disputes/{{ dispute.id }}" hx-vals='{"status": "sent"}'>Mark as sent</button>
-  <button hx-put="/api/disputes/{{ dispute.id }}" hx-vals='{"status": "resolved"}'>Mark as resolved</button>
+
+  <button type="button" data-action="copy-note" data-toast="Copied">Copy the note</button>
+  <button type="button" data-action="rewrite" data-dispute-id="{{ dispute.id }}">Rewrite it</button>
+  <div class="rewrite-feedback" hidden>
+    <textarea class="feedback" name="feedback" placeholder="What should change?"></textarea>
+    <button hx-post="/ui/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML">Send feedback</button>
+  </div>
+  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as sent</button>
+  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as resolved</button>
   {% else %}
   <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
   {% endif %}

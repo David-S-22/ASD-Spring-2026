@@ -1,8 +1,14 @@
-"""HTMX HTML fragment routes for the frontend, under /ui/*."""
+"""HTMX HTML fragment routes for the frontend, under /ui/*.
+
+Every write handler here is parse form -> service call -> render: the
+services module (shared with /api/*) does the actual work, this module only
+turns a Flask form into plain arguments and turns the result into HTML plus
+an HX-Trigger toast header.
+"""
 import json
 from datetime import date, datetime
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, make_response, render_template, request
 
 from sophia.backend import config
 from sophia.backend.clients import bills_db
@@ -11,6 +17,12 @@ from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.dates import add_months, expected_per_month
 from sophia.backend.engine.projection import timeline as project_timeline
 from sophia.backend.engine.status import derive_status
+from sophia.backend.services import bills as bills_service
+from sophia.backend.services import chat as chat_service
+from sophia.backend.services import disputes as disputes_service
+from sophia.backend.services import payments as payments_service
+from sophia.backend.services.calendar import parse_year_month
+from sophia.backend.services.errors import ServiceError
 
 bp = Blueprint("fragments", __name__, url_prefix="/ui")
 
@@ -18,6 +30,19 @@ CADENCE_LABELS = {"weekly": "Week", "fortnightly": "Fortnight", "monthly": "Mont
 PAYMENT_METHOD_LABELS = {"direct_debit": "Direct debit", "card": "Card", "bpay": "BPAY", None: "—"}
 UNIT_WORDS = {"weekly": ("week", "weeks"), "fortnightly": ("fortnight", "fortnights"), "monthly": ("month", "months")}
 COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+KIND_LABELS = {"predicted": "Predicted", "overdue": "Overdue"}
+
+
+@bp.errorhandler(ServiceError)
+def handle_service_error(error):
+    return render_template("error_fragment.html", message=error.message), 422
+
+
+@bp.errorhandler(Exception)
+def handle_unexpected_error(error):
+    if isinstance(error, ServiceError):
+        raise error
+    return render_template("error_fragment.html", message="Something went wrong — try again."), 500
 
 
 def _count_word(n):
@@ -30,6 +55,35 @@ def _short_date(d):
 
 def _day_month_label(d):
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
+
+
+def _toast_headers(text):
+    return {"HX-Trigger": json.dumps({"toast": text})}
+
+
+def _form_to_bill_payload(form):
+    """Convert the add/edit bill form (dollars, checkbox) into a service payload (cents, 0/1)."""
+    payload = form.to_dict()
+    if "amount" in payload:
+        raw = payload.pop("amount")
+        try:
+            payload["amount_cents"] = round(float(raw) * 100)
+        except (TypeError, ValueError):
+            payload["amount_cents"] = raw
+    payload["exclude_from_plan"] = 1 if "exclude_from_plan" in payload else 0
+    return payload
+
+
+def _form_to_payment_payload(form):
+    """Convert the record-payment form (dollars) into a service payload (cents)."""
+    payload = form.to_dict()
+    if "amount" in payload:
+        raw = payload.pop("amount")
+        try:
+            payload["amount_cents"] = round(float(raw) * 100)
+        except (TypeError, ValueError):
+            payload["amount_cents"] = raw
+    return payload
 
 
 def _load_bills_and_payments():
@@ -52,8 +106,7 @@ def _extra_line_text(extra, bills_by_id, month_name):
     return f"{extra.name} +{amount}"
 
 
-@bp.get("/bills")
-def bills_table():
+def _render_bills_table():
     today = config.DEMO_TODAY
     bills, payments = _load_bills_and_payments()
     rows = []
@@ -76,14 +129,20 @@ def bills_table():
     return render_template("bills_table.html", bills=rows, monthly_total=monthly_total)
 
 
-@bp.get("/calendar")
-def calendar_card():
+def _render_calendar_card(plan_month=None, oob=False):
+    """Render the calendar card for plan_month (default: the month after today).
+
+    Only this rendering excludes bills.exclude_from_plan (decision D) - the
+    chat "total" answer and /api/upcoming keep including everything.
+    """
     today = config.DEMO_TODAY
+    if plan_month is None:
+        plan_month = add_months(today.replace(day=1), 1)
     bills, payments = _load_bills_and_payments()
-    bills_by_id = {bill.id: bill for bill in bills}
-    plan_month = add_months(today.replace(day=1), 1)
+    planned_bills = [b for b in bills if not b.exclude_from_plan]
+    bills_by_id = {bill.id: bill for bill in planned_bills}
     month_name = plan_month.strftime("%B")
-    breakdown = month_breakdown(bills, payments, plan_month.year, plan_month.month, today)
+    breakdown = month_breakdown(planned_bills, payments, plan_month.year, plan_month.month, today)
     return render_template(
         "calendar_card.html",
         month_name=month_name,
@@ -91,36 +150,132 @@ def calendar_card():
         has_extras=bool(breakdown.extras),
         usual_range=money.format_estimate(breakdown.usual_low_cents, breakdown.usual_high_cents),
         extras=[_extra_line_text(e, bills_by_id, month_name) for e in breakdown.extras],
+        next_month_param=add_months(plan_month, 1).strftime("%Y-%m"),
+        oob=oob,
     )
+
+
+def _render_timeline(days=30, oob=False):
+    today = config.DEMO_TODAY
+    bills, payments = _load_bills_and_payments()
+    occurrences = project_timeline(bills, payments, today, days)
+    items = []
+    for occ in occurrences:
+        if occ.kind in ("overdue", "actual"):
+            display_amount = money.format_actual(occ.amount_cents)
+            tag = KIND_LABELS.get(occ.kind)
+        else:
+            display_amount = money.format_estimate_single(occ.amount_cents)
+            tag = None if (occ.date - today).days < 30 else KIND_LABELS.get(occ.kind)
+        items.append(
+            {
+                "day_label": _day_month_label(occ.date),
+                "name": occ.name,
+                "display_amount": display_amount,
+                "kind": occ.kind,
+                "tag": tag,
+            }
+        )
+    return render_template("timeline.html", items=items, days=max(30, min(180, days)), oob=oob)
+
+
+@bp.get("/bills")
+def bills_table():
+    return _render_bills_table()
+
+
+@bp.get("/calendar")
+def calendar_card():
+    month_param = request.args.get("month")
+    plan_month = None
+    if month_param:
+        year, month = parse_year_month(month_param)
+        plan_month = date(year, month, 1)
+    return _render_calendar_card(plan_month=plan_month)
 
 
 @bp.get("/timeline")
 def timeline_fragment():
-    today = config.DEMO_TODAY
     days = int(request.args.get("days", 30))
-    bills, payments = _load_bills_and_payments()
-    occurrences = project_timeline(bills, payments, today, days)
-    items = [
-        {
-            "day_label": _day_month_label(occ.date),
-            "name": occ.name,
-            "display_amount": money.format_actual(occ.amount_cents)
-            if occ.kind == "actual"
-            else money.format_estimate_single(occ.amount_cents),
-            "kind": occ.kind,
-            "within_30_days": (occ.date - today).days < 30,
-        }
-        for occ in occurrences
-    ]
-    return render_template("timeline.html", items=items, days=max(30, min(180, days)))
+    return _render_timeline(days=days)
 
 
-@bp.get("/disputes")
-def dispute_panel():
-    bill_id = request.args.get("bill_id", type=int)
-    dispute_id = request.args.get("dispute_id", type=int)
-    version = request.args.get("version", type=int)
+def _bills_write_response(toast_text, status=200, refresh_projection=True):
+    html = _render_bills_table()
+    if refresh_projection:
+        html += _render_timeline(oob=True)
+        html += _render_calendar_card(oob=True)
+    response = make_response(html, status)
+    response.headers.update(_toast_headers(toast_text))
+    return response
 
+
+@bp.get("/bills/new-form")
+def bill_new_form():
+    return render_template("bill_form.html", bill=None, action="/ui/bills")
+
+
+@bp.get("/bills/<int:bill_id>/edit")
+def bill_edit_form(bill_id):
+    bill = bills_service.get_bill(bill_id)
+    return render_template("bill_form.html", bill=bill, action=f"/ui/bills/{bill_id}/edit")
+
+
+@bp.post("/bills")
+def bills_create():
+    bills_service.create_bill(_form_to_bill_payload(request.form))
+    return _bills_write_response("Done — change saved.", status=201)
+
+
+@bp.post("/bills/<int:bill_id>/edit")
+def bills_edit(bill_id):
+    bills_service.update_bill(bill_id, _form_to_bill_payload(request.form))
+    return _bills_write_response("Done — change saved.")
+
+
+@bp.post("/bills/<int:bill_id>/delete")
+def bills_delete(bill_id):
+    bills_service.delete_bill(bill_id)
+    return _bills_write_response("Done — removed.")
+
+
+@bp.get("/bills/<int:bill_id>/cancel-form")
+def bill_cancel_form(bill_id):
+    bill = bills_service.get_bill(bill_id)
+    return render_template("cancel_form.html", bill=bill)
+
+
+@bp.post("/bills/<int:bill_id>/cancel")
+def bills_cancel(bill_id):
+    bills_service.cancel_bill(bill_id, request.form.get("end_date"))
+    return _bills_write_response("Done — change saved.")
+
+
+@bp.post("/bills/<int:bill_id>/confirm")
+def bills_confirm(bill_id):
+    bills_service.confirm_bill(bill_id)
+    return _bills_write_response("Done — change saved.", refresh_projection=False)
+
+
+@bp.get("/bills/<int:bill_id>/payment-form")
+def payment_form(bill_id):
+    bill = bills_service.get_bill(bill_id)
+    return render_template("payment_form.html", bill=bill, today=config.DEMO_TODAY.isoformat())
+
+
+@bp.post("/payments")
+def payments_create():
+    payments_service.create_payment(_form_to_payment_payload(request.form))
+    return _bills_write_response("Done — change saved.", status=201)
+
+
+@bp.get("/bills/<int:bill_id>/dispute-form")
+def dispute_form(bill_id):
+    bill = bills_service.get_bill(bill_id)
+    return render_template("dispute_form.html", bill=bill)
+
+
+def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False):
     disputes = bills_db.list_disputes()
     dispute = None
     if dispute_id is not None:
@@ -131,7 +286,7 @@ def dispute_panel():
         dispute = disputes[0]
 
     if dispute is None:
-        return render_template("dispute_panel.html", dispute=None, draft=None, context_line=None, versions=[], selected_version=None)
+        return render_template("dispute_panel.html", dispute=None, draft=None, context_line=None, versions=[], selected_version=None, oob=oob)
 
     drafts = bills_db.list_dispute_drafts(dispute["id"])
     versions = [d["version"] for d in drafts]
@@ -154,18 +309,78 @@ def dispute_panel():
         context_line=context_line,
         versions=versions,
         selected_version=chosen["version"] if chosen else None,
+        oob=oob,
     )
 
 
-def _history_heading(created_at, today):
-    parsed = datetime.fromisoformat(created_at).date()
-    if parsed == today:
-        return None
-    return f"Earlier — {parsed.strftime('%a')} {parsed.day} {parsed.strftime('%b')}"
+@bp.get("/disputes")
+def dispute_panel():
+    return _render_dispute_panel(
+        dispute_id=request.args.get("dispute_id", type=int),
+        bill_id=request.args.get("bill_id", type=int),
+        version=request.args.get("version", type=int),
+    )
+
+
+def _dispute_write_response(dispute_id, toast_text, status=200):
+    html = _render_dispute_panel(dispute_id=dispute_id)
+    response = make_response(html, status)
+    response.headers.update(_toast_headers(toast_text))
+    return response
+
+
+@bp.post("/disputes")
+def disputes_create():
+    dispute = disputes_service.create_dispute(request.form.get("bill_id", type=int), request.form.get("reason"))
+    html = _render_dispute_panel(dispute_id=dispute["id"])
+    response = make_response(html, 201)
+    response.headers["HX-Trigger"] = json.dumps({"toast": "Done — change saved.", "switchTab": "disputes"})
+    return response
+
+
+@bp.post("/disputes/<int:dispute_id>/status")
+def disputes_status(dispute_id):
+    disputes_service.update_status(dispute_id, request.form.get("status"))
+    return _dispute_write_response(dispute_id, "Done — change saved.")
+
+
+@bp.post("/disputes/<int:dispute_id>/regenerate")
+def disputes_regenerate(dispute_id):
+    disputes_service.regenerate(
+        dispute_id, edited_letter=request.form.get("edited_letter"), feedback=request.form.get("feedback")
+    )
+    return _dispute_write_response(dispute_id, "Done — change saved.")
+
+
+def _render_disputes_tab():
+    disputes = bills_db.list_disputes()
+    bills_by_id = {b["id"]: b for b in bills_db.list_bills()}
+    rows = []
+    for d in disputes:
+        bill = bills_by_id.get(d["bill_id"], {})
+        rows.append(
+            {
+                "id": d["id"],
+                "bill_name": bill.get("name", "Unknown"),
+                "reason": d["reason"],
+                "status": d["status"],
+                "opened_at": _short_date(date.fromisoformat(d["opened_at"])),
+            }
+        )
+    return render_template("disputes_tab.html", disputes=rows)
+
+
+@bp.get("/disputes-tab")
+def disputes_tab():
+    return _render_disputes_tab()
 
 
 @bp.get("/chat")
 def chat_panel():
+    return _render_chat_panel()
+
+
+def _render_chat_panel():
     today = config.DEMO_TODAY
     rows = bills_db.list_chat_messages()
     messages = []
@@ -176,15 +391,68 @@ def chat_panel():
         if show_heading:
             seen_headings.add(heading)
         preview = json.loads(row["op_json"]) if row.get("op_json") else None
+        if preview:
+            preview["message_id"] = row["id"]
         messages.append(
             {
                 "role": row["role"],
                 "content": row["content"],
                 "heading": heading if show_heading else None,
                 "preview": preview,
+                "applied": bool(row.get("applied")),
             }
         )
     return render_template("chat_panel.html", messages=messages)
+
+
+def _history_heading(created_at, today):
+    parsed = datetime.fromisoformat(created_at).date()
+    if parsed == today:
+        return None
+    return f"Earlier — {parsed.strftime('%a')} {parsed.day} {parsed.strftime('%b')}"
+
+
+@bp.post("/chat")
+def chat_send():
+    result = chat_service.send_message(request.form.get("message", ""))
+    reply_html = render_template(
+        "chat_reply.html", reply=result["reply"], preview=result["preview"], fallback=result["fallback"]
+    )
+    response = make_response(reply_html, 200)
+    response.headers.update(_toast_headers("Done — change saved."))
+    return response
+
+
+@bp.post("/chat/apply")
+def chat_apply():
+    fields = json.loads(request.form.get("fields") or "{}")
+    message_id = request.form.get("message_id", type=int)
+    chat_service.apply(
+        request.form.get("op"),
+        request.form.get("entity"),
+        _coerce_id(request.form.get("id")),
+        fields,
+        message_id=message_id,
+    )
+    applied_html = render_template("chat_applied.html")
+    html = applied_html + _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
+    response = make_response(html, 200)
+    response.headers.update(_toast_headers("Done — change saved."))
+    return response
+
+
+def _render_bills_table_oob():
+    html = _render_bills_table()
+    return html.replace('id="bills-table"', 'id="bills-table" hx-swap-oob="true"', 1)
+
+
+def _coerce_id(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return value
 
 
 @bp.get("/modal")

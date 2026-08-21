@@ -1,0 +1,17 @@
+{# Record-payment modal form: date defaults to today, amount defaults to the bill's usual amount. #}
+<div class="modal-form" id="payment-form">
+  <h3>Record a payment for {{ bill.name }}</h3>
+  <form hx-post="/ui/payments" hx-target="#bills-table" hx-swap="outerHTML">
+    <input type="hidden" name="bill_id" value="{{ bill.id }}">
+    <label>Date
+      <input name="date" type="date" value="{{ today }}" required>
+    </label>
+    <label>Amount ($)
+      <input name="amount" type="number" step="0.01" min="0" value="{{ '%.2f'|format(bill.amount_cents / 100) }}" required>
+    </label>
+    <div class="form-actions">
+      <button type="submit">Record payment</button>
+      <button type="button" data-action="dismiss-modal">Cancel</button>
+    </div>
+  </form>
+</div>

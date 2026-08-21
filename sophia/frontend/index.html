@@ -12,12 +12,23 @@
 <div class="app-shell">
   <div class="tab-panel">
     <div class="tabs">
-      <button type="button" class="active" data-tab="bills" hx-get="/ui/bills" hx-target="#tab-content">Bills</button>
-      <button type="button" data-tab="calendar" hx-get="/ui/calendar" hx-target="#tab-content">Calendar</button>
-      <button type="button" data-tab="timeline" hx-get="/ui/timeline" hx-target="#tab-content">Coming up</button>
-      <button type="button" data-tab="disputes" hx-get="/ui/disputes" hx-target="#tab-content">Disputes</button>
+      <button type="button" class="active" data-tab="bills">Bills</button>
+      <button type="button" data-tab="calendar">Calendar</button>
+      <button type="button" data-tab="timeline">Coming up</button>
+      <button type="button" data-tab="disputes">Disputes</button>
     </div>
-    <div id="tab-content" class="card" hx-get="/ui/bills" hx-trigger="load"></div>
+    <div class="tab-page active" data-tab-page="bills">
+      <div id="bills-table" class="card" hx-get="/ui/bills" hx-trigger="load" hx-swap="outerHTML"></div>
+    </div>
+    <div class="tab-page" data-tab-page="calendar">
+      <div id="calendar-card" class="card" hx-get="/ui/calendar" hx-trigger="load" hx-swap="outerHTML"></div>
+    </div>
+    <div class="tab-page" data-tab-page="timeline">
+      <div id="timeline" class="card" hx-get="/ui/timeline" hx-trigger="load" hx-swap="outerHTML"></div>
+    </div>
+    <div class="tab-page" data-tab-page="disputes">
+      <div id="disputes-tab" class="card" hx-get="/ui/disputes-tab" hx-trigger="load"></div>
+    </div>
   </div>
   <div class="ask-tally card">
     <h3>Ask Tally</h3>

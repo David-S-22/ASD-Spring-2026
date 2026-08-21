@@ -1,3 +1,10 @@
+htmx.config.responseHandling = [
+  { code: "204", swap: false },
+  { code: "[23]..", swap: true },
+  { code: "422", swap: true, error: false },
+  { code: "[45]..", swap: true, error: false },
+];
+
 function showModal(onConfirm) {
   var root = document.getElementById("modal-root");
   root.innerHTML =
@@ -25,6 +32,15 @@ function showToast(text) {
   }, 2500);
 }
 
+function activateTab(name) {
+  document.querySelectorAll(".tabs button").forEach(function (btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === name);
+  });
+  document.querySelectorAll(".tab-page").forEach(function (page) {
+    page.classList.toggle("active", page.getAttribute("data-tab-page") === name);
+  });
+}
+
 document.addEventListener("htmx:confirm", function (evt) {
   var verb = (evt.detail.verb || "get").toLowerCase();
   if (verb === "get") {
@@ -36,22 +52,24 @@ document.addEventListener("htmx:confirm", function (evt) {
   });
 });
 
-document.addEventListener("htmx:afterRequest", function (evt) {
-  var config = evt.detail.requestConfig || {};
-  var verb = (config.verb || "get").toLowerCase();
-  if (verb === "get" || !evt.detail.successful) {
-    return;
+document.body.addEventListener("toast", function (evt) {
+  var detail = evt.detail || {};
+  var text = typeof detail.value === "string" ? detail.value : detail;
+  showToast(typeof text === "string" ? text : "Done.");
+});
+
+document.body.addEventListener("switchTab", function (evt) {
+  var detail = evt.detail || {};
+  var name = typeof detail.value === "string" ? detail.value : detail;
+  if (typeof name === "string") {
+    activateTab(name);
   }
-  showToast(verb === "delete" ? "Done — removed." : "Done — change saved.");
 });
 
 document.body.addEventListener("click", function (evt) {
   var tab = evt.target.closest(".tabs button");
   if (tab) {
-    document.querySelectorAll(".tabs button").forEach(function (btn) {
-      btn.classList.remove("active");
-    });
-    tab.classList.add("active");
+    activateTab(tab.getAttribute("data-tab"));
     return;
   }
 
@@ -74,6 +92,24 @@ document.body.addEventListener("click", function (evt) {
     if (feedback) {
       feedback.hidden = !feedback.hidden;
     }
+    return;
+  }
+
+  var copyNote = evt.target.closest('[data-action="copy-note"]');
+  if (copyNote) {
+    var panelForCopy = copyNote.closest(".dispute-panel");
+    var letter = panelForCopy && panelForCopy.querySelector(".letter");
+    if (letter && navigator.clipboard) {
+      navigator.clipboard.writeText(letter.value).then(function () {
+        showToast(copyNote.getAttribute("data-toast") || "Copied");
+      });
+    }
+    return;
+  }
+
+  var setAside = evt.target.closest('[data-action="set-aside"]');
+  if (setAside) {
+    showToast(setAside.getAttribute("data-toast") || "Done — change saved.");
     return;
   }
 

@@ -1,0 +1,8 @@
+{# One assistant reply, appended (beforeend) to .history after a POST /ui/chat. #}
+<div class="message message-assistant">{{ reply }}</div>
+{% if preview %}
+<div class="preview-card">
+  <button class="confirm" hx-post="/ui/chat/apply" hx-vals='{{ preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
+  <button class="keep-it" type="button" data-action="dismiss-preview">Keep it</button>
+</div>
+{% endif %}
