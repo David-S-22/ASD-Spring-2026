@@ -1,3 +1,38 @@
-{
+services:
+  bills-frontend:
+    build: ./sophia/frontend
+    container_name: bills-frontend
+    ports:
+      - "3005:80"
+    depends_on:
+      - bills-backend
+  bills-backend:
+    build: ./sophia/backend
+    container_name: bills-backend
+    ports:
+      - "5005:5005"
+    environment:
+      PORT: 5005
+      BILLS_DB_API_URL: http://bills-db:6005
+      OLLAMA_URL: http://host.docker.internal:11434
+      DRAFT_MODEL: llama3.1:8b
+      CHAT_MODEL: qwen2.5:0.5b
+      DEMO_TODAY: 2026-08-20
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - bills-db
+  bills-db:
+    build: ./sophia/database
+    container_name: bills-db
+    ports:
+      - "6005:6005"
+    environment:
+      PORT: 6005
+      DB_PATH: /data/bills.db
+      BILLS_BACKEND_URL: http://bills-backend:5005
+    volumes:
+      - bills_data:/data
 
-}
+volumes:
+  bills_data:
