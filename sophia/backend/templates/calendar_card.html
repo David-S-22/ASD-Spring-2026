@@ -1,0 +1,18 @@
+{# Calendar card fragment: usual-vs-extra breakdown for one month. #}
+<div class="calendar-card">
+  <h3>Plan for {{ month_name }}</h3>
+  <p class="headline">Set aside up to {{ total_high }}</p>
+  {% if has_extras %}
+  <p class="note">for bills beyond rent — {{ month_name }} runs higher than usual</p>
+  {% else %}
+  <p class="note">— {{ month_name }} looks like a usual month</p>
+  {% endif %}
+  <p class="usual">Usual bills — weekly &amp; fortnightly you pay every month {{ usual_range }}</p>
+  <ul class="extras">
+    {% for extra in extras %}
+    <li>{{ extra.name }} — +{{ extra.amount }}</li>
+    {% endfor %}
+  </ul>
+  <button data-action="set-aside">Set aside {{ total_high }}</button>
+  <button data-action="other-months">See other months</button>
+</div>

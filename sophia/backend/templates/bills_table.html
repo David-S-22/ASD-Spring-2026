@@ -1,0 +1,31 @@
+{# Bills table fragment: Name / Amount / Every / Next billing / Paid by / Status. #}
+<table class="bills-table">
+  <thead>
+    <tr>
+      <th>Name</th><th>Amount</th><th>Every</th><th>Next billing</th><th>Paid by</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bill in bills %}
+    <tr data-bill-id="{{ bill.id }}">
+      <td>{{ bill.name }}</td>
+      <td>{{ bill.amount }}</td>
+      <td>{{ bill.cadence_label }}</td>
+      <td>{{ bill.next_occurrence }}</td>
+      <td>{{ bill.payment_method_label }}</td>
+      <td>
+        <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
+        {% if bill.needs_confirmation %}
+        <button hx-post="/api/bills/{{ bill.id }}/confirm" hx-target="closest tr">Confirm this?</button>
+        {% endif %}
+      </td>
+      <td>
+        <button data-action="cancel" data-bill-id="{{ bill.id }}">Cancel…</button>
+        <button hx-get="/ui/disputes?bill_id={{ bill.id }}" hx-target="#dispute-panel">Dispute</button>
+        <button data-action="record-payment" data-bill-id="{{ bill.id }}">Record payment</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<button data-action="add-bill">Add a bill</button>

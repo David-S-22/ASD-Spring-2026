@@ -1,0 +1,17 @@
+{# Ask Tally chat panel fragment: chips, history, input. #}
+<div class="chat-panel">
+  <div class="chips">
+    <button data-chip="What do my bills add up to?">What do my bills add up to?</button>
+    <button data-chip="Which subscriptions am I barely using?">Which subscriptions am I barely using?</button>
+    <button data-chip="I cancelled Spotify from September — remove the future payments">I cancelled Spotify from September — remove the future payments</button>
+    <button data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
+  </div>
+  <div class="history">
+    {% for message in history %}
+    <div class="message message-{{ message.role }}">{{ message.content }}</div>
+    {% endfor %}
+  </div>
+  <form hx-post="/api/chat" hx-target=".history" hx-swap="beforeend">
+    <input name="message" placeholder="Ask" />
+  </form>
+</div>
