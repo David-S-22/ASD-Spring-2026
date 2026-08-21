@@ -1,80 +1,16 @@
 """Integration tests for the /ui/* HTML fragments.
 
-Runs the real sophia/database Flask app in a background thread against a
-temp seeded SQLite file, points the backend's bills_db client at it, and
-hits /ui/* with the Flask test client so the rendered HTML is checked
-against real seed data end to end.
+Uses the live_client fixture from conftest.py: the real sophia/database
+Flask app in a background thread against a temp seeded SQLite file, with
+the backend pointed at it, so the rendered HTML is checked against real
+seed data end to end.
 """
-import importlib.util
-import os
-import sys
-import threading
-import time
 from datetime import date
-from html import unescape
 
 import pytest
-import requests
-from werkzeug.serving import make_server
 
 from sophia.backend.clients import bills_db as bills_db_module
-
-_DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database")
-if _DATABASE_DIR not in sys.path:
-    sys.path.insert(0, _DATABASE_DIR)
-
-
-def _load_database_app():
-    spec = importlib.util.spec_from_file_location("bills_database_app_for_ui_tests", os.path.join(_DATABASE_DIR, "app.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-database_app = _load_database_app()
-
-
-def _text(response):
-    return unescape(response.get_data(as_text=True))
-
-
-@pytest.fixture(scope="module")
-def live_db_base_url(tmp_path_factory):
-    db_path = str(tmp_path_factory.mktemp("ui-db") / "bills.db")
-    connection = database_app.get_connection(db_path)
-    database_app.load_schema(connection, database_app.SCHEMA_PATH)
-    database_app.seed(connection)
-    connection.close()
-
-    flask_app = database_app.create_app(db_path=db_path, bills_backend_url="http://unreachable-host.invalid:5999")
-    server = make_server("127.0.0.1", 0, flask_app)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    base_url = f"http://127.0.0.1:{server.server_port}"
-
-    deadline = time.time() + 5
-    while time.time() < deadline:
-        try:
-            requests.get(f"{base_url}/health", timeout=1)
-            break
-        except requests.RequestException:
-            time.sleep(0.05)
-
-    yield base_url
-    server.shutdown()
-    thread.join(timeout=5)
-
-
-@pytest.fixture
-def live_client(live_db_base_url, monkeypatch):
-    from sophia.backend import app as backend_app_module
-    from sophia.backend import config
-
-    monkeypatch.setattr(config, "BILLS_DB_API_URL", live_db_base_url)
-    monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
-    app = backend_app_module.create_app()
-    app.config["TESTING"] = True
-    return app.test_client()
+from conftest import response_text as _text
 
 
 def test_bills_fragment_verbatim_header_and_columns(live_client):

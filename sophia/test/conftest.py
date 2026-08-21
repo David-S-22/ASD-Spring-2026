@@ -35,3 +35,74 @@ def make_bill(**overrides):
 def make_payment(bill_id, payment_date, amount_cents):
     """Build a Payment for the given bill."""
     return Payment(bill_id=bill_id, date=payment_date, amount_cents=amount_cents)
+
+
+import importlib.util
+import os
+import sys
+import threading
+import time
+from html import unescape
+
+import requests
+from werkzeug.serving import make_server
+
+_DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database")
+if _DATABASE_DIR not in sys.path:
+    sys.path.insert(0, _DATABASE_DIR)
+
+
+def _load_database_app():
+    spec = importlib.util.spec_from_file_location("bills_database_app_for_ui_tests", os.path.join(_DATABASE_DIR, "app.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+database_app = _load_database_app()
+
+
+def response_text(response):
+    """Decode HTML entities in a Flask test response body, for verbatim-copy assertions."""
+    return unescape(response.get_data(as_text=True))
+
+
+@pytest.fixture(scope="module")
+def live_db_base_url(tmp_path_factory):
+    """Run the real sophia/database Flask app in a background thread on a temp seeded SQLite file."""
+    db_path = str(tmp_path_factory.mktemp("ui-db") / "bills.db")
+    connection = database_app.get_connection(db_path)
+    database_app.load_schema(connection, database_app.SCHEMA_PATH)
+    database_app.seed(connection)
+    connection.close()
+
+    flask_app = database_app.create_app(db_path=db_path, bills_backend_url="http://unreachable-host.invalid:5999")
+    server = make_server("127.0.0.1", 0, flask_app)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        try:
+            requests.get(f"{base_url}/health", timeout=1)
+            break
+        except requests.RequestException:
+            time.sleep(0.05)
+
+    yield base_url
+    server.shutdown()
+    thread.join(timeout=5)
+
+
+@pytest.fixture
+def live_client(live_db_base_url, monkeypatch):
+    """A backend Flask test client pointed at the live_db_base_url database, with DEMO_TODAY fixed."""
+    from sophia.backend import app as backend_app_module
+    from sophia.backend import config
+
+    monkeypatch.setattr(config, "BILLS_DB_API_URL", live_db_base_url)
+    monkeypatch.setattr(config, "DEMO_TODAY", TODAY)
+    app = backend_app_module.create_app()
+    app.config["TESTING"] = True
+    return app.test_client()
