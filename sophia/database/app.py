@@ -1,0 +1,383 @@
+"""Thin CRUD JSON API over the bills SQLite database. No business logic lives here."""
+import json
+import os
+from datetime import datetime, timezone
+
+import requests
+from flask import Flask, g, jsonify, request
+from flask_cors import CORS
+
+from db import get_connection, load_schema, row_to_dict, rows_to_list
+from seed import seed
+
+SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
+
+CADENCES = {"weekly", "fortnightly", "monthly"}
+BILL_TYPES = {"bill", "subscription"}
+BILL_STATUSES = {"paid", "due", "overdue"}
+BILL_SOURCES = {"manual", "f3_handoff", "f4_handoff", "chat"}
+DISPUTE_STATUSES = {"draft", "sent", "resolved"}
+CHAT_ROLES = {"user", "assistant"}
+
+BILL_FIELDS = [
+    "name", "merchant", "amount_cents", "cadence", "next_billing_date", "type",
+    "payment_method", "status", "end_date", "source", "confirmed_at", "created_at",
+]
+PAYMENT_FIELDS = ["bill_id", "date", "amount_cents"]
+DISPUTE_FIELDS = ["bill_id", "reason", "status", "opened_at"]
+
+
+class ApiError(Exception):
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _now_date():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _now_timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _require(data, fields):
+    if not isinstance(data, dict):
+        raise ApiError("request body must be a JSON object")
+    missing = [f for f in fields if data.get(f) in (None, "")]
+    if missing:
+        raise ApiError(f"missing required fields: {', '.join(missing)}")
+
+
+def _validate_bill(data, partial):
+    if not partial:
+        _require(data, ["name", "merchant", "amount_cents", "cadence", "next_billing_date", "type"])
+    if "cadence" in data and data["cadence"] not in CADENCES:
+        raise ApiError(f"cadence must be one of {sorted(CADENCES)}")
+    if "type" in data and data["type"] not in BILL_TYPES:
+        raise ApiError(f"type must be one of {sorted(BILL_TYPES)}")
+    if "status" in data and data["status"] not in BILL_STATUSES:
+        raise ApiError(f"status must be one of {sorted(BILL_STATUSES)}")
+    if "source" in data and data["source"] not in BILL_SOURCES:
+        raise ApiError(f"source must be one of {sorted(BILL_SOURCES)}")
+    if "amount_cents" in data and not isinstance(data["amount_cents"], int):
+        raise ApiError("amount_cents must be an integer")
+
+
+def _validate_payment(data, partial):
+    if not partial:
+        _require(data, PAYMENT_FIELDS)
+    if "amount_cents" in data and not isinstance(data["amount_cents"], int):
+        raise ApiError("amount_cents must be an integer")
+
+
+def _validate_dispute(data, partial):
+    if not partial:
+        _require(data, ["bill_id", "reason"])
+    if "status" in data and data["status"] not in DISPUTE_STATUSES:
+        raise ApiError(f"status must be one of {sorted(DISPUTE_STATUSES)}")
+
+
+def create_app(db_path=None, bills_backend_url=None):
+    app = Flask(__name__)
+    CORS(app)
+    app.config["DB_PATH"] = db_path or os.environ.get("DB_PATH", "./bills.db")
+    app.config["BILLS_BACKEND_URL"] = bills_backend_url or os.environ.get(
+        "BILLS_BACKEND_URL", "http://bills-backend:5005"
+    )
+
+    def db():
+        if "db" not in g:
+            g.db = get_connection(app.config["DB_PATH"])
+        return g.db
+
+    @app.teardown_appcontext
+    def close_db(_exception=None):
+        connection = g.pop("db", None)
+        if connection is not None:
+            connection.close()
+
+    @app.errorhandler(ApiError)
+    def handle_api_error(error):
+        return jsonify({"error": error.message}), error.status
+
+    @app.get("/health")
+    def health():
+        return jsonify({"ok": True})
+
+    @app.get("/bills")
+    def list_bills():
+        rows = db().execute("SELECT * FROM bills ORDER BY id").fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/bills")
+    def create_bill():
+        data = request.get_json(silent=True) or {}
+        _validate_bill(data, partial=False)
+        payload = {field: data.get(field) for field in BILL_FIELDS}
+        payload["status"] = payload["status"] or "due"
+        payload["source"] = payload["source"] or "manual"
+        payload["created_at"] = payload["created_at"] or _now_date()
+        connection = db()
+        cursor = connection.execute(
+            """
+            INSERT INTO bills
+                (name, merchant, amount_cents, cadence, next_billing_date, type,
+                 payment_method, status, end_date, source, confirmed_at, created_at)
+            VALUES (:name, :merchant, :amount_cents, :cadence, :next_billing_date, :type,
+                    :payment_method, :status, :end_date, :source, :confirmed_at, :created_at)
+            """,
+            payload,
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM bills WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.get("/bills/<int:bill_id>")
+    def get_bill(bill_id):
+        row = db().execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
+        if row is None:
+            raise ApiError("bill not found", 404)
+        return jsonify(row_to_dict(row))
+
+    @app.put("/bills/<int:bill_id>")
+    def update_bill(bill_id):
+        data = request.get_json(silent=True) or {}
+        _validate_bill(data, partial=True)
+        updates = {field: data[field] for field in BILL_FIELDS if field in data}
+        if not updates:
+            raise ApiError("no updatable fields supplied")
+        connection = db()
+        existing = connection.execute("SELECT id FROM bills WHERE id = ?", (bill_id,)).fetchone()
+        if existing is None:
+            raise ApiError("bill not found", 404)
+        set_clause = ", ".join(f"{field} = :{field}" for field in updates)
+        updates["id"] = bill_id
+        connection.execute(f"UPDATE bills SET {set_clause} WHERE id = :id", updates)
+        connection.commit()
+        row = connection.execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
+        return jsonify(row_to_dict(row))
+
+    @app.delete("/bills/<int:bill_id>")
+    def delete_bill(bill_id):
+        connection = db()
+        existing = connection.execute("SELECT id FROM bills WHERE id = ?", (bill_id,)).fetchone()
+        if existing is None:
+            raise ApiError("bill not found", 404)
+        connection.execute("DELETE FROM bills WHERE id = ?", (bill_id,))
+        connection.commit()
+        return jsonify({"deleted": bill_id})
+
+    @app.get("/bills/<int:bill_id>/payments")
+    def list_bill_payments(bill_id):
+        rows = db().execute(
+            "SELECT * FROM payments WHERE bill_id = ? ORDER BY date", (bill_id,)
+        ).fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.get("/payments")
+    def list_payments():
+        rows = db().execute("SELECT * FROM payments ORDER BY id").fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/payments")
+    def create_payment():
+        data = request.get_json(silent=True) or {}
+        _validate_payment(data, partial=False)
+        connection = db()
+        bill = connection.execute("SELECT id FROM bills WHERE id = ?", (data["bill_id"],)).fetchone()
+        if bill is None:
+            raise ApiError("bill not found", 404)
+        cursor = connection.execute(
+            "INSERT INTO payments (bill_id, date, amount_cents) VALUES (?, ?, ?)",
+            (data["bill_id"], data["date"], data["amount_cents"]),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM payments WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.get("/payments/<int:payment_id>")
+    def get_payment(payment_id):
+        row = db().execute("SELECT * FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        if row is None:
+            raise ApiError("payment not found", 404)
+        return jsonify(row_to_dict(row))
+
+    @app.put("/payments/<int:payment_id>")
+    def update_payment(payment_id):
+        data = request.get_json(silent=True) or {}
+        _validate_payment(data, partial=True)
+        updates = {field: data[field] for field in PAYMENT_FIELDS if field in data}
+        if not updates:
+            raise ApiError("no updatable fields supplied")
+        connection = db()
+        existing = connection.execute("SELECT id FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        if existing is None:
+            raise ApiError("payment not found", 404)
+        set_clause = ", ".join(f"{field} = :{field}" for field in updates)
+        updates["id"] = payment_id
+        connection.execute(f"UPDATE payments SET {set_clause} WHERE id = :id", updates)
+        connection.commit()
+        row = connection.execute("SELECT * FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        return jsonify(row_to_dict(row))
+
+    @app.delete("/payments/<int:payment_id>")
+    def delete_payment(payment_id):
+        connection = db()
+        existing = connection.execute("SELECT id FROM payments WHERE id = ?", (payment_id,)).fetchone()
+        if existing is None:
+            raise ApiError("payment not found", 404)
+        connection.execute("DELETE FROM payments WHERE id = ?", (payment_id,))
+        connection.commit()
+        return jsonify({"deleted": payment_id})
+
+    @app.get("/disputes")
+    def list_disputes():
+        rows = db().execute("SELECT * FROM disputes ORDER BY id").fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/disputes")
+    def create_dispute():
+        data = request.get_json(silent=True) or {}
+        _validate_dispute(data, partial=False)
+        connection = db()
+        bill = connection.execute("SELECT id FROM bills WHERE id = ?", (data["bill_id"],)).fetchone()
+        if bill is None:
+            raise ApiError("bill not found", 404)
+        status = data.get("status") or "draft"
+        opened_at = data.get("opened_at") or _now_date()
+        cursor = connection.execute(
+            "INSERT INTO disputes (bill_id, reason, status, opened_at) VALUES (?, ?, ?, ?)",
+            (data["bill_id"], data["reason"], status, opened_at),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM disputes WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.get("/disputes/<int:dispute_id>")
+    def get_dispute(dispute_id):
+        row = db().execute("SELECT * FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+        if row is None:
+            raise ApiError("dispute not found", 404)
+        return jsonify(row_to_dict(row))
+
+    @app.put("/disputes/<int:dispute_id>")
+    def update_dispute(dispute_id):
+        data = request.get_json(silent=True) or {}
+        _validate_dispute(data, partial=True)
+        updates = {field: data[field] for field in DISPUTE_FIELDS if field in data}
+        if not updates:
+            raise ApiError("no updatable fields supplied")
+        connection = db()
+        existing = connection.execute("SELECT id FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+        if existing is None:
+            raise ApiError("dispute not found", 404)
+        set_clause = ", ".join(f"{field} = :{field}" for field in updates)
+        updates["id"] = dispute_id
+        connection.execute(f"UPDATE disputes SET {set_clause} WHERE id = :id", updates)
+        connection.commit()
+        row = connection.execute("SELECT * FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+        return jsonify(row_to_dict(row))
+
+    @app.delete("/disputes/<int:dispute_id>")
+    def delete_dispute(dispute_id):
+        connection = db()
+        existing = connection.execute("SELECT id FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+        if existing is None:
+            raise ApiError("dispute not found", 404)
+        connection.execute("DELETE FROM disputes WHERE id = ?", (dispute_id,))
+        connection.commit()
+        return jsonify({"deleted": dispute_id})
+
+    @app.get("/disputes/<int:dispute_id>/drafts")
+    def list_dispute_drafts(dispute_id):
+        rows = db().execute(
+            "SELECT * FROM dispute_drafts WHERE dispute_id = ? ORDER BY version", (dispute_id,)
+        ).fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/disputes/<int:dispute_id>/drafts")
+    def create_dispute_draft(dispute_id):
+        data = request.get_json(silent=True) or {}
+        _require(data, ["letter_text", "steps_json"])
+        connection = db()
+        dispute = connection.execute("SELECT id FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+        if dispute is None:
+            raise ApiError("dispute not found", 404)
+        current_max = connection.execute(
+            "SELECT COALESCE(MAX(version), 0) FROM dispute_drafts WHERE dispute_id = ?", (dispute_id,)
+        ).fetchone()[0]
+        steps_json = data["steps_json"]
+        if not isinstance(steps_json, str):
+            steps_json = json.dumps(steps_json)
+        cursor = connection.execute(
+            """
+            INSERT INTO dispute_drafts (dispute_id, version, letter_text, steps_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (dispute_id, current_max + 1, data["letter_text"], steps_json, _now_date()),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM dispute_drafts WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.get("/chat_messages")
+    def list_chat_messages():
+        rows = db().execute("SELECT * FROM chat_messages ORDER BY id").fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/chat_messages")
+    def create_chat_message():
+        data = request.get_json(silent=True) or {}
+        _require(data, ["role", "content"])
+        if data["role"] not in CHAT_ROLES:
+            raise ApiError(f"role must be one of {sorted(CHAT_ROLES)}")
+        op_json = data.get("op_json")
+        if op_json is not None and not isinstance(op_json, str):
+            op_json = json.dumps(op_json)
+        connection = db()
+        cursor = connection.execute(
+            """
+            INSERT INTO chat_messages (role, content, op_json, applied, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (data["role"], data["content"], op_json, int(bool(data.get("applied", False))), _now_timestamp()),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM chat_messages WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.delete("/chat_messages")
+    def delete_chat_messages():
+        connection = db()
+        connection.execute("DELETE FROM chat_messages")
+        connection.commit()
+        return jsonify({"deleted": "all"})
+
+    @app.get("/upcoming")
+    def upcoming():
+        days = request.args.get("days", "90")
+        try:
+            response = requests.get(
+                f"{app.config['BILLS_BACKEND_URL']}/api/upcoming",
+                params={"days": days},
+                timeout=10,
+            )
+            response.raise_for_status()
+        except requests.RequestException:
+            return jsonify({"error": "bills backend unavailable"}), 503
+        return jsonify(response.json()), response.status_code
+
+    return app
+
+
+if __name__ == "__main__":
+    db_path = os.environ.get("DB_PATH", "./bills.db")
+    init_connection = get_connection(db_path)
+    load_schema(init_connection, SCHEMA_PATH)
+    seed(init_connection)
+    init_connection.close()
+    port = int(os.environ.get("PORT", "6005"))
+    application = create_app(db_path)
+    application.run(host="0.0.0.0", port=port)
