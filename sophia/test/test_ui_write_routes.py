@@ -10,6 +10,7 @@ against the real service, not a mock.
 import json
 
 from sophia.backend.clients import bills_db as bills_db_module
+from conftest import response_text as _text
 
 
 _bill_counter = [0]
@@ -240,3 +241,71 @@ def test_api_chat_apply_with_form_body_returns_400_json_not_500(live_client):
     response = live_client.post("/api/chat/apply", data={"op": "update"})
     assert response.status_code == 400
     assert response.get_json() == {"error": "expected a JSON body"}
+
+
+def test_api_calendar_month_invalid_returns_400_never_500(live_client):
+    response = live_client.get("/api/calendar/2026-13")
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "month must be YYYY-MM"}
+
+
+def test_api_calendar_month_unparsable_returns_400(live_client):
+    response = live_client.get("/api/calendar/not-a-month")
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "month must be YYYY-MM"}
+
+
+def test_api_calendar_range_bad_from_returns_400(live_client):
+    response = live_client.get("/api/calendar", query_string={"from": "2026-13"})
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "month must be YYYY-MM"}
+
+
+def test_ui_calendar_month_invalid_returns_422_error_fragment(live_client):
+    response = live_client.get("/ui/calendar", query_string={"month": "2026-13"})
+    assert response.status_code == 422
+    body = response.get_data(as_text=True)
+    assert "error-fragment" in body
+    assert "month must be YYYY-MM" in body
+
+
+def test_api_chat_apply_disallowed_field_returns_400(live_client):
+    response = live_client.post(
+        "/api/chat/apply",
+        json={"op": "update", "entity": "bill", "id": 1, "fields": {"status": "paid"}},
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "field 'status' cannot be set via chat"}
+
+
+def test_ui_chat_apply_disallowed_field_returns_422_error_fragment(live_client):
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "update", "entity": "bill", "id": "1", "fields": json.dumps({"status": "paid"})},
+    )
+    assert response.status_code == 422
+    body = _text(response)
+    assert "error-fragment" in body
+    assert "field 'status' cannot be set via chat" in body
+
+
+def test_api_chat_apply_value_db_rejects_returns_400_not_500(live_client):
+    bill_id, _response, _name = _add_bill(live_client)
+    response = live_client.post(
+        "/api/chat/apply",
+        json={"op": "update", "entity": "bill", "id": bill_id, "fields": {"cadence": "daily"}},
+    )
+    assert response.status_code == 400
+    assert "cadence" in response.get_json()["error"]
+
+
+def test_ui_chat_apply_value_db_rejects_returns_422_not_500(live_client):
+    bill_id, _response, _name = _add_bill(live_client)
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "update", "entity": "bill", "id": str(bill_id), "fields": json.dumps({"cadence": "daily"})},
+    )
+    assert response.status_code == 422
+    body = response.get_data(as_text=True)
+    assert "error-fragment" in body
+    assert "cadence" in body
