@@ -1,0 +1,12 @@
+"""Environment configuration for the bills backend, read once at import time."""
+import os
+from datetime import datetime
+
+PORT = int(os.environ.get("PORT", "5005"))
+BILLS_DB_API_URL = os.environ.get("BILLS_DB_API_URL", "http://bills-db:6005")
+TRANSACTIONS_DB_API_URL = os.environ.get("TRANSACTIONS_DB_API_URL") or None
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+DRAFT_MODEL = os.environ.get("DRAFT_MODEL", "llama3.1:8b")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen2.5:0.5b")
+AI_TIMEOUT_SECONDS = int(os.environ.get("AI_TIMEOUT_SECONDS", "90"))
+DEMO_TODAY = datetime.strptime(os.environ.get("DEMO_TODAY", "2026-08-20"), "%Y-%m-%d").date()
