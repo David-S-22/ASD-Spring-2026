@@ -11,6 +11,7 @@ from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.projection import project
+from sophia.backend.routes.disputes import _draft_for_bill
 
 bp = Blueprint("chat", __name__, url_prefix="/api/chat")
 
@@ -108,9 +109,10 @@ def chat():
     history = _recent_history()
     bills_db.create_chat_message({"role": "user", "content": message})
 
+    bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
-        lambda error: chat_prompt.build(message, history, error=error),
+        lambda error: chat_prompt.build(message, history, bills=bills, error=error),
         validate_chat_response,
         chat_prompt.FALLBACK,
     )
@@ -149,6 +151,18 @@ def apply():
         result = bills_db.delete_payment(entity_id)
     elif entity == "dispute" and op == "update":
         result = bills_db.update_dispute(entity_id, clean_fields)
+    elif entity == "dispute" and op == "create":
+        bill_row = bills_db.get_bill(clean_fields.get("bill_id"))
+        if bill_row is None:
+            return jsonify({"error": "bill not found"}), 404
+        reason = clean_fields.get("reason", "")
+        result = bills_db.create_dispute({"bill_id": bill_row["id"], "reason": reason})
+        draft = _draft_for_bill(bill_row, reason)
+        bills_db.create_dispute_draft(
+            result["id"],
+            {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
+        )
+        result["draft"] = draft
     else:
         return jsonify({"error": f"unsupported op '{op}' for entity '{entity}'"}), 400
 

@@ -9,12 +9,21 @@ from sophia.backend.clients import bills_db
 bp = Blueprint("disputes", __name__, url_prefix="/api")
 
 
-def _draft_for_bill(bill_row, reason, feedback=None):
+def _draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, feedback=None):
     bill = bills_db.row_to_bill(bill_row)
+    payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill.id)]
     fallback = dispute_prompt.fallback_draft(bill, reason)
     data = guard.run(
         config.DRAFT_MODEL,
-        lambda error: dispute_prompt.build(bill, reason, feedback=feedback, error=error),
+        lambda error: dispute_prompt.build(
+            bill,
+            reason,
+            payments=payments,
+            previous_letter=previous_letter,
+            edited_letter=edited_letter,
+            feedback=feedback,
+            error=error,
+        ),
         validate_dispute_draft,
         fallback,
     )
@@ -74,10 +83,11 @@ def regenerate(dispute_id):
         return jsonify({"error": "dispute not found"}), 404
     bill_row = bills_db.get_bill(dispute["bill_id"])
     bill = bills_db.row_to_bill(bill_row)
-    if payload.get("edited_letter"):
+    edited_letter = payload.get("edited_letter")
+    if edited_letter and not payload.get("feedback"):
         draft = dispute_prompt.enforce_payment_method_step(
             {
-                "letter_text": payload["edited_letter"],
+                "letter_text": edited_letter,
                 "steps": [],
                 "escalation": list(dispute_prompt.ESCALATION_DEFAULT),
                 "fallback": False,
@@ -85,7 +95,15 @@ def regenerate(dispute_id):
             bill,
         )
     else:
-        draft = _draft_for_bill(bill_row, dispute["reason"], feedback=payload.get("feedback"))
+        existing_drafts = bills_db.list_dispute_drafts(dispute_id)
+        previous_letter = existing_drafts[-1]["letter_text"] if existing_drafts else None
+        draft = _draft_for_bill(
+            bill_row,
+            dispute["reason"],
+            previous_letter=previous_letter,
+            edited_letter=edited_letter,
+            feedback=payload.get("feedback"),
+        )
     created = bills_db.create_dispute_draft(
         dispute_id,
         {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},

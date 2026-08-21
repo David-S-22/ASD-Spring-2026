@@ -29,6 +29,7 @@ def row_to_bill(row):
         end_date=_parse_date(row.get("end_date")),
         confirmed_at=_parse_date(row.get("confirmed_at")),
         created_at=_parse_date(row.get("created_at")),
+        source=row.get("source") or "manual",
     )
 
 

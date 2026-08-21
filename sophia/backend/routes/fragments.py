@@ -1,6 +1,6 @@
 """HTMX HTML fragment routes for the frontend, under /ui/*."""
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import Blueprint, render_template, request
 
@@ -22,6 +22,10 @@ COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7
 
 def _count_word(n):
     return COUNT_WORDS.get(n, str(n))
+
+
+def _short_date(d):
+    return f"{d.day} {d.strftime('%b')}"
 
 
 def _day_month_label(d):
@@ -61,11 +65,11 @@ def bills_table():
                 "name": bill.name,
                 "amount": money.format_actual(bill.amount_cents),
                 "cadence_label": CADENCE_LABELS.get(bill.cadence, bill.cadence),
-                "next_occurrence": bill.next_billing_date.isoformat(),
+                "next_occurrence": _short_date(bill.next_billing_date),
                 "payment_method_label": PAYMENT_METHOD_LABELS.get(bill.payment_method, bill.payment_method),
                 "status": status,
                 "status_label": label,
-                "needs_confirmation": bill.confirmed_at is None,
+                "needs_confirmation": bill.source == "f4_handoff" and bill.confirmed_at is None,
             }
         )
     monthly_total = money.format_actual(sum(b.amount_cents * expected_per_month(b.cadence) for b in bills))
@@ -138,7 +142,8 @@ def dispute_panel():
     bill_row = bills_db.get_bill(dispute["bill_id"])
     context_line = None
     if bill_row and bill_row["next_billing_date"] > config.DEMO_TODAY.isoformat():
-        context_line = f"Next billing is {bill_row['next_billing_date']}. Cancel before then and you won't be charged."
+        next_date = _day_month_label(date.fromisoformat(bill_row["next_billing_date"]))
+        context_line = f"Next billing is {next_date}. Cancel before then and you won't be charged."
 
     return render_template(
         "dispute_panel.html",
