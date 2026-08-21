@@ -85,3 +85,13 @@ def test_usual_range_from_last_six_payments():
         Payment(bill_id=9, date=date(2026, 8, 10), amount_cents=13975),
     ]
     assert usual_range(bill, payments) == (12840, 15120)
+
+
+def test_bill_starting_next_month_is_absent_from_this_month():
+    netflix = make_bill(
+        cadence="monthly", amount_cents=2099, next_billing_date=date(2026, 9, 2), created_at=date(2026, 8, 19)
+    )
+    august = month_breakdown([netflix], [], 2026, 8, date(2026, 8, 20))
+    assert august.extras == [] and august.usual_high_cents == 0
+    september = month_breakdown([netflix], [], 2026, 9, date(2026, 8, 20))
+    assert [(e.reason, e.amount_cents) for e in september.extras] == [("starts", 2099)]

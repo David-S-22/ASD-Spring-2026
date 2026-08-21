@@ -116,9 +116,9 @@ DISPUTE_DRAFTS = [
 
 CHAT_MESSAGES = [
     ("user", "What do my bills add up to?", None, 0, "2026-08-17T09:00:00"),
-    ("assistant", "This month you're set to pay around $410 in bills and subscriptions beyond rent, based on your usual range plus anything extra landing this month.", None, 0, "2026-08-17T09:00:05"),
+    ("assistant", "September needs up to $697 beyond rent — your usual weekly and fortnightly bills come to $572–595, plus Netflix starts ($21), GymCo starts ($25), an extra Anytime Fitness payment because three fortnights land in September ($18), and a fifth Opal top-up ($39).", None, 0, "2026-08-17T09:00:05"),
     ("user", "Which subscriptions am I barely using?", None, 0, "2026-08-17T09:02:00"),
-    ("assistant", "Prime Video and GymCo look barely used — no payments recorded against them since they were added, and I couldn't find recent transactions for either merchant.", None, 0, "2026-08-17T09:02:06"),
+    ("assistant", "Cloud storage has billed four times since you last confirmed you're using it — worth a look at $2.99/month.", None, 0, "2026-08-17T09:02:06"),
     ("user", "I cancelled Spotify from September — remove the future payments", None, 0, "2026-08-17T09:05:00"),
     ("assistant", "Got it — I can mark Spotify as ending after 16 Sep, which drops October's estimate by $13.99. Want me to apply that?", '{"op":"update","entity":"bill","id":3,"fields":{"end_date":"2026-09-16"}}', 0, "2026-08-17T09:05:04"),
     ("user", "Draft a note to dispute my GymCo charge", None, 0, "2026-08-17T09:10:00"),

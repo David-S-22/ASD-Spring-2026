@@ -8,7 +8,7 @@ from sophia.backend import config
 from sophia.backend.clients import bills_db
 from sophia.backend.engine import money
 from sophia.backend.engine.calendar import month_breakdown
-from sophia.backend.engine.dates import expected_per_month
+from sophia.backend.engine.dates import add_months, expected_per_month
 from sophia.backend.engine.projection import timeline as project_timeline
 from sophia.backend.engine.status import derive_status
 
@@ -81,8 +81,9 @@ def calendar_card():
     today = config.DEMO_TODAY
     bills, payments = _load_bills_and_payments()
     bills_by_id = {bill.id: bill for bill in bills}
-    month_name = today.strftime("%B")
-    breakdown = month_breakdown(bills, payments, today.year, today.month, today)
+    plan_month = add_months(today.replace(day=1), 1)
+    month_name = plan_month.strftime("%B")
+    breakdown = month_breakdown(bills, payments, plan_month.year, plan_month.month, today)
     return render_template(
         "calendar_card.html",
         month_name=month_name,
@@ -107,6 +108,7 @@ def timeline_fragment():
             if occ.kind == "actual"
             else money.format_estimate_single(occ.amount_cents),
             "kind": occ.kind,
+            "within_30_days": (occ.date - today).days < 30,
         }
         for occ in occurrences
     ]

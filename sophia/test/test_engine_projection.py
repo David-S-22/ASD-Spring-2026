@@ -73,3 +73,12 @@ def test_timeline_is_deterministic():
     bill = make_bill(cadence="monthly", next_billing_date=date(2026, 9, 1))
     today = date(2026, 8, 20)
     assert timeline([bill], [], today, 60) == timeline([bill], [], today, 60)
+
+
+def test_project_never_emits_dates_before_created_at():
+    netflix = make_bill(
+        cadence="monthly", amount_cents=2099, next_billing_date=date(2026, 9, 2), created_at=date(2026, 8, 19)
+    )
+    assert project(netflix, date(2026, 8, 1), date(2026, 9, 1)) == []
+    september = project(netflix, date(2026, 9, 1), date(2026, 10, 1))
+    assert [o.date for o in september] == [date(2026, 9, 2)]

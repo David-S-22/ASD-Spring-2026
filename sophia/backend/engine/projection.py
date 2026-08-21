@@ -11,6 +11,8 @@ def _within(bill, d: date, start: date, end: date) -> bool:
         return False
     if bill.end_date is not None and d > bill.end_date:
         return False
+    if bill.created_at is not None and d < bill.created_at:
+        return False
     return True
 
 

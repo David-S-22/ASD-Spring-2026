@@ -94,7 +94,7 @@ def test_calendar_fragment_verbatim_copy(live_client):
     response = live_client.get("/ui/calendar")
     assert response.status_code == 200
     text = _text(response)
-    assert "Plan for August" in text
+    assert "Plan for September" in text
     assert "Set aside up to $" in text
     assert "Usual bills — weekly & fortnightly you pay every month" in text
     assert "See other months" in text
@@ -193,9 +193,10 @@ def timeline_client(monkeypatch):
 
 
 def test_timeline_fragment_actual_vs_predicted_formatting(timeline_client):
-    response = timeline_client.get("/ui/timeline?days=30")
+    response = timeline_client.get("/ui/timeline?days=60")
     assert response.status_code == 200
     text = _text(response)
     assert "$1,100" in text
     assert "$13.99" in text
-    assert text.count("Predicted") == 1
+    assert "$13.99 " in text or "$13.99<" in text
+    assert text.count("Predicted") == 2
