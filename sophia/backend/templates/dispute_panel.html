@@ -1,0 +1,22 @@
+{# Dispute panel fragment: editable letter, checklist, escalation path, status tracker. #}
+<div class="dispute-panel">
+  {% if dispute %}
+  {% if context_line %}<p class="context">{{ context_line }}</p>{% endif %}
+  <textarea class="letter">{{ draft.letter_text if draft else "" }}</textarea>
+  <ol class="checklist">
+    {% for step in draft.steps if draft %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  <h4>Escalation path</h4>
+  <ul class="escalation">
+    {% for step in draft.escalation if draft %}<li>{{ step }}</li>{% endfor %}
+  </ul>
+  <p class="caveat">Heads-up for direct-debit bills: the merchant or your bank has to remove the saved payment authority, so the steps differ.</p>
+  <div class="status-tracker">draft → sent → resolved</div>
+  <button data-action="copy-note">Copy the note</button>
+  <button data-action="rewrite">Rewrite it</button>
+  <button hx-put="/api/disputes/{{ dispute.id }}" hx-vals='{"status": "sent"}'>Mark as sent</button>
+  <button hx-put="/api/disputes/{{ dispute.id }}" hx-vals='{"status": "resolved"}'>Mark as resolved</button>
+  {% else %}
+  <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
+  {% endif %}
+</div>

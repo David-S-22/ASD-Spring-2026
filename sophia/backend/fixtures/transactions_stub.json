@@ -1,0 +1,202 @@
+[
+  {
+    "date": "2026-06-10",
+    "merchant": "Harbourview Realty",
+    "description": "Rent payment",
+    "amount": 1100.0,
+    "category_id": 30,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-06-10",
+    "merchant": "Netflix",
+    "description": "Netflix.com subscription",
+    "amount": 20.99,
+    "category_id": 33,
+    "ai_confidence": 0.91
+  },
+  {
+    "date": "2026-06-10",
+    "merchant": "FibreLink",
+    "description": "Internet plan",
+    "amount": 79.0,
+    "category_id": 60,
+    "ai_confidence": 0.85
+  },
+  {
+    "date": "2026-06-10",
+    "merchant": "Transport card",
+    "description": "Opal top-up",
+    "amount": 38.5,
+    "category_id": 70,
+    "ai_confidence": 0.94
+  },
+  {
+    "date": "2026-06-10",
+    "merchant": "Harbourview Realty",
+    "description": "Rent payment",
+    "amount": 1100.0,
+    "category_id": 30,
+    "ai_confidence": 0.9
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Harbourview Realty",
+    "description": "Rent payment",
+    "amount": 1100.0,
+    "category_id": 30,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Anytime Fitness Ultimo",
+    "description": "Direct debit membership fee",
+    "amount": 17.5,
+    "category_id": 31,
+    "ai_confidence": 0.85
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Netflix",
+    "description": "Netflix.com subscription",
+    "amount": 20.99,
+    "category_id": 33,
+    "ai_confidence": 0.91
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Prime Video",
+    "description": "Amazon Prime Video",
+    "amount": 9.99,
+    "category_id": 34,
+    "ai_confidence": 0.94
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "FibreLink",
+    "description": "Internet plan",
+    "amount": 79.0,
+    "category_id": 60,
+    "ai_confidence": 0.85
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Telco One",
+    "description": "Mobile plan",
+    "amount": 49.0,
+    "category_id": 61,
+    "ai_confidence": 0.88
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Transport card",
+    "description": "Opal top-up",
+    "amount": 38.5,
+    "category_id": 70,
+    "ai_confidence": 0.94
+  },
+  {
+    "date": "2026-06-24",
+    "merchant": "Housemates",
+    "description": "Shared kitty transfer",
+    "amount": 25.0,
+    "category_id": 71,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Anytime Fitness Ultimo",
+    "description": "Direct debit membership fee",
+    "amount": 17.5,
+    "category_id": 31,
+    "ai_confidence": 0.85
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Spotify AU",
+    "description": "Spotify Premium subscription",
+    "amount": 13.99,
+    "category_id": 32,
+    "ai_confidence": 0.88
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Prime Video",
+    "description": "Amazon Prime Video",
+    "amount": 9.99,
+    "category_id": 34,
+    "ai_confidence": 0.94
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "GymCo",
+    "description": "GymCo membership",
+    "amount": 24.99,
+    "category_id": 35,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Telco One",
+    "description": "Mobile plan",
+    "amount": 49.0,
+    "category_id": 61,
+    "ai_confidence": 0.88
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Sparkwell Energy",
+    "description": "Electricity bill",
+    "amount": 139.75,
+    "category_id": 62,
+    "ai_confidence": 0.91
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "Housemates",
+    "description": "Shared kitty transfer",
+    "amount": 25.0,
+    "category_id": 71,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-07-08",
+    "merchant": "DriveBox",
+    "description": "Cloud storage subscription",
+    "amount": 2.99,
+    "category_id": 72,
+    "ai_confidence": 0.85
+  },
+  {
+    "date": "2026-07-15",
+    "merchant": "Spotify AU",
+    "description": "Spotify Premium subscription",
+    "amount": 13.99,
+    "category_id": 32,
+    "ai_confidence": 0.88
+  },
+  {
+    "date": "2026-07-15",
+    "merchant": "GymCo",
+    "description": "GymCo membership",
+    "amount": 24.99,
+    "category_id": 35,
+    "ai_confidence": 0.82
+  },
+  {
+    "date": "2026-07-15",
+    "merchant": "Sparkwell Energy",
+    "description": "Electricity bill",
+    "amount": 139.75,
+    "category_id": 62,
+    "ai_confidence": 0.91
+  },
+  {
+    "date": "2026-07-15",
+    "merchant": "DriveBox",
+    "description": "Cloud storage subscription",
+    "amount": 2.99,
+    "category_id": 72,
+    "ai_confidence": 0.85
+  }
+]

@@ -1,0 +1,6 @@
+{# Confirmation modal fragment shown before any state change. #}
+<div class="modal">
+  <p>Confirm this change</p>
+  <button class="confirm" hx-post="{{ confirm_url }}" hx-vals="{{ confirm_payload | default('{}') }}">Confirm</button>
+  <button class="cancel" data-action="dismiss-modal">Cancel</button>
+</div>
