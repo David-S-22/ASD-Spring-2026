@@ -17,7 +17,7 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       DRAFT_MODEL: llama3.1:8b
       CHAT_MODEL: qwen2.5:0.5b
-      DEMO_TODAY: 2026-08-20
+      DEMO_TODAY: "2026-08-20"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
