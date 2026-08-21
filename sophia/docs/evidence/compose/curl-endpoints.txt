@@ -1,0 +1,25 @@
+== GET http://localhost:6005/health
+{"ok":true}
+
+
+== GET http://localhost:5005/health
+{"db_api":"up","ok":true,"ollama":"up","today":"2026-08-20","transactions_api":"stub"}
+
+
+== GET http://localhost:3005/api/bills
+[{"amount_cents":110000,"cadence":"monthly","confirmed_at":"2026-08-01","created_at":"2026-03-01","end_date":null,"id":1,"merchant":"Harbourview Realty","monthly_equivalent_cents":110000,"name":"Rent","next_billing_date":"2026-09-01","next_occurrence":"2026-09-01","payment_method":"direct_debit","source":"manual","status":"paid","status_label":"Paid for Aug","type":"bill","usual_range":{"hi":"$1,100.00","hi_cents":110000,"lo":"$1,100.00","lo_cents":110000}},{"amount_cents":1750,"cadence":"fortnightly","confirmed_at":"2026-05-01","created_at":"2026-03-10","end_date":null,"id":2,"merchant":"Anytime Fitness Ultimo","monthly_equivalent_cents":3500,"name":"Anytime Fitness","next_billing_date":"2026-08-18","next_occurrence":"2026-09-01","payment_method":"direct_debit","source":"manual","status":"paid","status_label":"Paid for Aug","type":"subscription","usual_range":{"hi":"$17.50","hi_cents":1750,"lo":"$17.50","lo_cents":1750}},{"amount_cents":1399,"cadence":"monthly","confirmed_at":"2026-08-16","created_at":"2026-02-16","end_date":null,"id":3,"merchant":"Spotify AU","monthly_equivalent_cents":1399,"name":"Spotify","next_billing_date":"2026-08-16","next_occurrence":"2026-09-16","payment_
+
+== GET http://localhost:5005/api/calendar/2026-09
+{"ends":[],"extras":[{"amount_cents":1750,"bill_id":2,"count":1,"name":"Anytime Fitness","reason":"extra_occurrence"},{"amount_cents":2099,"bill_id":4,"count":1,"name":"Netflix","reason":"starts"},{"amount_cents":2499,"bill_id":6,"count":1,"name":"GymCo","reason":"starts"},{"amount_cents":3850,"bill_id":10,"count":1,"name":"Opal commute top-up","reason":"extra_occurrence"}],"month":9,"total_high":"$1,797.15","total_high_cents":179715,"usual_high":"$1,695.17","usual_high_cents":169517,"usual_low":"$1,672.37","usual_low_cents":167237,"year":2026}
+
+
+== GET http://localhost:5005/api/timeline?days=60
+{"days":60,"items":[{"amount":"$25.00","amount_cents":2500,"bill_id":11,"date":"2026-08-21","display_amount":"$25","kind":"predicted","merchant":"Housemates","name":"Share-house utilities kitty","within_30_days":true},{"amount":"$9.99","amount_cents":999,"bill_id":5,"date":"2026-08-24","display_amount":"$10","kind":"predicted","merchant":"Prime Video","name":"Prime Video","within_30_days":true},{"amount":"$38.50","amount_cents":3850,"bill_id":10,"date":"2026-08-25","display_amount":"$39","kind":"predicted","merchant":"Transport card","name":"Opal commute top-up","within_30_days":true},{"amount":"$2.99","amount_cents":299,"bill_id":12,"date":"2026-08-28","display_amount":"$3","kind":"predicted","merchant":"DriveBox","name":"Cloud storage","within_30_days":true},{"amount":"$25.00","amount_cents":2500,"bill_id":11,"date":"2026-08-28","display_amount":"$25","kind":"predicted","merchant":"Housemates","name":"Share-house utilities kitty","within_30_days":true},{"amount":"$49.00","amount_cents":4900,"bill_id":8,"date":"2026-08-31","display_amount":"$49","kind":"predicted","merchant":"Telco One","name":"Phone plan","within_30_days":true},{"amount":"$17.50","amount_cents":1750,"bill_id":2,"
+
+== GET http://localhost:6005/upcoming?days=30
+{"items":[{"amount_cents":2500,"bill_id":11,"date":"2026-08-21","kind":"predicted","name":"Share-house utilities kitty"},{"amount_cents":999,"bill_id":5,"date":"2026-08-24","kind":"predicted","name":"Prime Video"},{"amount_cents":3850,"bill_id":10,"date":"2026-08-25","kind":"predicted","name":"Opal commute top-up"},{"amount_cents":299,"bill_id":12,"date":"2026-08-28","kind":"predicted","name":"Cloud storage"},{"amount_cents":2500,"bill_id":11,"date":"2026-08-28","kind":"predicted","name":"Share-house utilities kitty"},{"amount_cents":4900,"bill_id":8,"date":"2026-08-31","kind":"predicted","name":"Phone plan"},{"amount_cents":1750,"bill_id":2,"date":"2026-09-01","kind":"predicted","name":"Anytime Fitness"},{"amount_cents":3850,"bill_id":10,"date":"2026-09-01","kind":"predicted","name":"Opal commute top-up"},{"amount_cents":110000,"bill_id":1,"date":"2026-09-01","kind":"predicted","name":"Rent"},{"amount_cents":2099,"bill_id":4,"date":"2026-09-02","kind":"predicted","name":"Netflix"},{"amount_cents":2499,"bill_id":6,"date":"2026-09-03","kind":"predicted","name":"GymCo"},{"amount_cents":2500,"bill_id":11,"date":"2026-09-04","kind":"predicted","name":"Share-house utilities kitty"},{"am
+
+== GET http://localhost:3005/
+HTTP 200, 1233 bytes
+== GET http://localhost:3005/ui/bills (via nginx proxy)
+HTTP 200

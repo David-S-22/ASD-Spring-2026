@@ -23,6 +23,7 @@ class Bill:
     end_date: Optional[date] = None
     confirmed_at: Optional[date] = None
     created_at: Optional[date] = None
+    source: str = "manual"
 
 
 @dataclass(frozen=True)

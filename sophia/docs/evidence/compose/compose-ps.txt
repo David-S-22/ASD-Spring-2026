@@ -1,0 +1,5 @@
+# docker compose ps — captured 2026-08-21 (UTC)
+NAME             IMAGE                            STATUS          PORTS
+bills-backend    asd-spring-2026-bills-backend    Up 25 seconds   0.0.0.0:5005->5005/tcp, [::]:5005->5005/tcp
+bills-db         asd-spring-2026-bills-db         Up 25 seconds   0.0.0.0:6005->6005/tcp, [::]:6005->6005/tcp
+bills-frontend   asd-spring-2026-bills-frontend   Up 25 seconds   0.0.0.0:3005->80/tcp, [::]:3005->80/tcp
