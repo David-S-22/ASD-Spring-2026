@@ -26,4 +26,4 @@ jobs:
       - name: Install dependencies
         run: pip install -r sophia/requirements.txt
       - name: Run tests
-        run: pytest sophia/test -q --cov=sophia/backend/engine --cov-report=term
+        run: python -m pytest sophia/test -q --cov=sophia/backend/engine --cov-report=term
