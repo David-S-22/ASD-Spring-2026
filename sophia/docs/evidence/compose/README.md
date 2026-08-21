@@ -27,5 +27,11 @@ calendar work is visible in the apply response: `Plan for September` /
 `Set aside up to $697`, and the timeline's top row is `Home internet`
 tagged `Overdue` at `$79.00` (cents, not a rounded estimate).
 
+`four-cases.txt` — after an independent curl sweep found two leftover
+500s (a bad calendar month, and a chat/apply fields key outside the
+per-entity whitelist), a second `docker compose down -v && docker compose
+up -d --build` and four more curls confirm both are fixed: `/api/*` returns
+400 JSON, `/ui/*` returns 422 with the error fragment, never a 500.
+
 Containers were left running after this pass, per instruction, for a
 click-through in the browser.

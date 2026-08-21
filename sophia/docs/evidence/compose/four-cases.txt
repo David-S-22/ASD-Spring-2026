@@ -1,0 +1,24 @@
+=== GET /api/calendar/2026-13 ===
+{"error":"month must be YYYY-MM"}
+
+STATUS:400
+
+=== GET /ui/calendar?month=2026-13 ===
+
+<div class="error-fragment">
+  <p class="error">month must be YYYY-MM</p>
+</div>
+STATUS:422
+
+=== POST /api/chat/apply (disallowed field) ===
+{"error":"field 'status' cannot be set via chat"}
+
+STATUS:400
+
+=== POST /ui/chat/apply (disallowed field) ===
+
+<div class="error-fragment">
+  <p class="error">field &#39;status&#39; cannot be set via chat</p>
+</div>
+STATUS:422
+
