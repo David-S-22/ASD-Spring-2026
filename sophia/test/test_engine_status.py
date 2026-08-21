@@ -65,3 +65,19 @@ def test_rent_paid_then_due_today_then_overdue():
 
     status, _ = derive_status(bill, payments, date(2026, 9, 2))
     assert status == "overdue"
+
+
+def test_next_occurrence_for_31st_anchor_does_not_drift():
+    bill = make_bill(
+        id=8,
+        name="Phone plan",
+        cadence="monthly",
+        amount_cents=4900,
+        payment_method="card",
+        next_billing_date=date(2026, 8, 31),
+        created_at=date(2026, 1, 31),
+    )
+    payments = [Payment(bill_id=8, date=date(2027, 2, 28), amount_cents=4900)]
+    status, label = derive_status(bill, payments, date(2027, 3, 25))
+    assert status == "paid"
+    assert label == "Due 31 Mar"
