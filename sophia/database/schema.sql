@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS bills (
     end_date TEXT,
     source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','f3_handoff','f4_handoff','chat')),
     confirmed_at TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    exclude_from_plan INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS payments (
