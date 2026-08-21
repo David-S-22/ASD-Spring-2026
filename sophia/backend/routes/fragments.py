@@ -21,6 +21,7 @@ from sophia.backend.services import bills as bills_service
 from sophia.backend.services import chat as chat_service
 from sophia.backend.services import disputes as disputes_service
 from sophia.backend.services import payments as payments_service
+from sophia.backend.services.calendar import parse_year_month
 from sophia.backend.services.errors import ServiceError
 
 bp = Blueprint("fragments", __name__, url_prefix="/ui")
@@ -188,8 +189,8 @@ def calendar_card():
     month_param = request.args.get("month")
     plan_month = None
     if month_param:
-        year_str, month_str = month_param.split("-")
-        plan_month = date(int(year_str), int(month_str), 1)
+        year, month = parse_year_month(month_param)
+        plan_month = date(year, month, 1)
     return _render_calendar_card(plan_month=plan_month)
 
 
