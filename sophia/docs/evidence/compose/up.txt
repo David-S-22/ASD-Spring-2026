@@ -1,0 +1,29 @@
+=== docker compose ps ===
+NAME             IMAGE                            COMMAND                  SERVICE          CREATED          STATUS          PORTS
+bills-backend    asd-spring-2026-bills-backend    "python -m sophia.ba…"   bills-backend    22 seconds ago   Up 21 seconds   0.0.0.0:5005->5005/tcp, [::]:5005->5005/tcp
+bills-db         asd-spring-2026-bills-db         "python app.py"          bills-db         22 seconds ago   Up 21 seconds   0.0.0.0:6005->6005/tcp, [::]:6005->6005/tcp
+bills-frontend   asd-spring-2026-bills-frontend   "/docker-entrypoint.…"   bills-frontend   22 seconds ago   Up 21 seconds   0.0.0.0:3005->80/tcp, [::]:3005->80/tcp
+
+=== curl localhost:6005/health ===
+{"ok":true}
+
+=== curl localhost:5005/health ===
+{"db_api":"up","ok":true,"ollama":"up","today":"2026-08-20","transactions_api":"stub"}
+
+=== curl -I localhost:3005/ ===
+HTTP/1.1 200 OK
+Server: nginx/1.31.4
+Date: Fri, 21 Aug 2026 18:56:38 GMT
+Content-Type: text/html
+Content-Length: 1634
+Last-Modified: Fri, 21 Aug 2026 18:50:52 GMT
+Connection: keep-alive
+ETag: "6a889e0c-662"
+Accept-Ranges: bytes
+
+=== curl localhost:3005/api/bills (first 500 chars) ===
+[{"amount_cents":110000,"cadence":"monthly","confirmed_at":"2026-08-01","created_at":"2026-03-01","end_date":null,"exclude_from_plan":1,"id":1,"merchant":"Harbourview Realty","monthly_equivalent_cents":110000,"name":"Rent","next_billing_date":"2026-09-01","next_occurrence":"2026-09-01","payment_method":"direct_debit","source":"manual","status":"paid","status_label":"Paid for Aug","type":"bill","usual_range":{"hi":"$1,100.00","hi_cents":110000,"lo":"$1,100.00","lo_cents":110000}},{"amount_cents":
+NAME             IMAGE                            COMMAND                  SERVICE          CREATED         STATUS         PORTS
+bills-backend    asd-spring-2026-bills-backend    "python -m sophia.ba…"   bills-backend    2 minutes ago   Up 2 minutes   0.0.0.0:5005->5005/tcp, [::]:5005->5005/tcp
+bills-db         asd-spring-2026-bills-db         "python app.py"          bills-db         2 minutes ago   Up 2 minutes   0.0.0.0:6005->6005/tcp, [::]:6005->6005/tcp
+bills-frontend   asd-spring-2026-bills-frontend   "/docker-entrypoint.…"   bills-frontend   2 minutes ago   Up 2 minutes   0.0.0.0:3005->80/tcp, [::]:3005->80/tcp

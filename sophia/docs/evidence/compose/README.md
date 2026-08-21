@@ -1,10 +1,31 @@
-# Docker Compose evidence — 22 Aug 2026
+# Docker Compose verification — 22 Aug 2026
 
-Chain run from the repo root on Windows 11 with Docker Desktop 29.5.3:
+`compose-down.txt`, `compose-ps.txt`, `curl-endpoints.txt` are the baseline
+verification from the prior PR (services build/start/health, before this
+addendum's frontend write-path work existed). `up.txt` and
+`ui-write-routes.txt` below are new, from this addendum.
 
-1. `docker compose build bills-frontend bills-backend bills-db` — three images built.
-2. `docker compose up -d` — `compose-ps.txt` shows all three containers up on 3005/5005/6005.
-3. `curl` against each service — `curl-endpoints.txt` (health on 6005 and 5005, bills via the nginx proxy on 3005, the September calendar breakdown, a 60-day timeline, and the read-only `/upcoming` passthrough on 6005).
-4. `docker compose down` — `compose-down.txt`.
+Docker Desktop's daemon was down for most of this addendum's work (checked
+repeatedly) but came up before the final verification pass, so this is a
+real run, not a substitute.
 
-Two defects were found only by this chain and fixed in the same commit: YAML parsed the unquoted `DEMO_TODAY: 2026-08-20` as a timestamp (now quoted, and `config.py` tolerates the long form), and the bills table showed ISO dates and a spurious "Confirm this?" on every unconfirmed bill rather than only on alerts-handoff rows.
+```
+docker compose down -v
+docker compose up -d --build
+```
+
+`up.txt` — `docker compose ps`, and health checks for all three services
+(`:6005/health`, `:5005/health`, `:3005/`, `:3005/api/bills`).
+
+`ui-write-routes.txt` — every `/ui/*` write route curled form-encoded, the
+way HTMX actually sends them: add/edit/cancel/delete/confirm a bill, record
+a payment, create/status/regenerate a dispute (the last two are real
+Ollama calls, not mocked), send a chat message and apply its preview, plus
+a validation failure (422 + error fragment) and three `/api/*` routes hit
+with a form body (400 JSON, never 500). The exclude_from_plan/next-month
+calendar work is visible in the apply response: `Plan for September` /
+`Set aside up to $697`, and the timeline's top row is `Home internet`
+tagged `Overdue` at `$79.00` (cents, not a rounded estimate).
+
+Containers were left running after this pass, per instruction, for a
+click-through in the browser.
