@@ -2,18 +2,18 @@
 import json
 
 BILLS = [
-    (1, "Rent", "Harbourview Realty", 110000, "monthly", "2026-09-01", "bill", "direct_debit", "manual", "2026-08-01", "2026-03-01"),
-    (2, "Anytime Fitness", "Anytime Fitness Ultimo", 1750, "fortnightly", "2026-08-18", "subscription", "direct_debit", "manual", "2026-05-01", "2026-03-10"),
-    (3, "Spotify", "Spotify AU", 1399, "monthly", "2026-08-16", "subscription", "card", "manual", "2026-08-16", "2026-02-16"),
-    (4, "Netflix", "Netflix", 2099, "monthly", "2026-09-02", "subscription", "card", "manual", None, "2026-08-19"),
-    (5, "Prime Video", "Prime Video", 999, "monthly", "2026-08-24", "subscription", "card", "manual", None, "2026-08-17"),
-    (6, "GymCo", "GymCo", 2499, "monthly", "2026-09-03", "subscription", "direct_debit", "f4_handoff", None, "2026-08-19"),
-    (7, "Home internet", "FibreLink", 7900, "monthly", "2026-08-15", "bill", "bpay", "manual", "2026-07-01", "2026-01-15"),
-    (8, "Phone plan", "Telco One", 4900, "monthly", "2026-08-31", "bill", "card", "manual", "2026-07-31", "2026-01-31"),
-    (9, "Electricity", "Sparkwell Energy", 14200, "monthly", "2026-09-10", "bill", "bpay", "manual", "2026-08-10", "2026-02-10"),
-    (10, "Opal commute top-up", "Transport card", 3850, "weekly", "2026-08-25", "bill", "card", "manual", "2026-08-11", "2026-03-03"),
-    (11, "Share-house utilities kitty", "Housemates", 2500, "weekly", "2026-08-21", "bill", None, "manual", "2026-08-14", "2026-03-06"),
-    (12, "Cloud storage", "DriveBox", 299, "monthly", "2026-08-28", "subscription", "card", "manual", "2026-03-28", "2026-03-28"),
+    (1, "Rent", "Harbourview Realty", 110000, "monthly", "2026-09-01", "bill", "direct_debit", "manual", "2026-08-01", "2026-03-01", 1),
+    (2, "Anytime Fitness", "Anytime Fitness Ultimo", 1750, "fortnightly", "2026-08-18", "subscription", "direct_debit", "manual", "2026-05-01", "2026-03-10", 0),
+    (3, "Spotify", "Spotify AU", 1399, "monthly", "2026-08-16", "subscription", "card", "manual", "2026-08-16", "2026-02-16", 0),
+    (4, "Netflix", "Netflix", 2099, "monthly", "2026-09-02", "subscription", "card", "manual", None, "2026-08-19", 0),
+    (5, "Prime Video", "Prime Video", 999, "monthly", "2026-08-24", "subscription", "card", "manual", None, "2026-08-17", 0),
+    (6, "GymCo", "GymCo", 2499, "monthly", "2026-09-03", "subscription", "direct_debit", "f4_handoff", None, "2026-08-19", 0),
+    (7, "Home internet", "FibreLink", 7900, "monthly", "2026-08-15", "bill", "bpay", "manual", "2026-07-01", "2026-01-15", 0),
+    (8, "Phone plan", "Telco One", 4900, "monthly", "2026-08-31", "bill", "card", "manual", "2026-07-31", "2026-01-31", 0),
+    (9, "Electricity", "Sparkwell Energy", 14200, "monthly", "2026-09-10", "bill", "bpay", "manual", "2026-08-10", "2026-02-10", 0),
+    (10, "Opal commute top-up", "Transport card", 3850, "weekly", "2026-08-25", "bill", "card", "manual", "2026-08-11", "2026-03-03", 0),
+    (11, "Share-house utilities kitty", "Housemates", 2500, "weekly", "2026-08-21", "bill", None, "manual", "2026-08-14", "2026-03-06", 0),
+    (12, "Cloud storage", "DriveBox", 299, "monthly", "2026-08-28", "subscription", "card", "manual", "2026-03-28", "2026-03-28", 0),
 ]
 
 PAYMENTS = [
@@ -138,8 +138,8 @@ def seed(connection):
         """
         INSERT INTO bills
             (id, name, merchant, amount_cents, cadence, next_billing_date, type,
-             payment_method, source, confirmed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             payment_method, source, confirmed_at, created_at, exclude_from_plan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         BILLS,
     )

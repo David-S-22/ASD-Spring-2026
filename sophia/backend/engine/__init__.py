@@ -24,6 +24,7 @@ class Bill:
     confirmed_at: Optional[date] = None
     created_at: Optional[date] = None
     source: str = "manual"
+    exclude_from_plan: bool = False
 
 
 @dataclass(frozen=True)

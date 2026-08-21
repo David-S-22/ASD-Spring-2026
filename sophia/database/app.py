@@ -22,6 +22,7 @@ CHAT_ROLES = {"user", "assistant"}
 BILL_FIELDS = [
     "name", "merchant", "amount_cents", "cadence", "next_billing_date", "type",
     "payment_method", "status", "end_date", "source", "confirmed_at", "created_at",
+    "exclude_from_plan",
 ]
 PAYMENT_FIELDS = ["bill_id", "date", "amount_cents"]
 DISPUTE_FIELDS = ["bill_id", "reason", "status", "opened_at"]
@@ -63,6 +64,8 @@ def _validate_bill(data, partial):
         raise ApiError(f"source must be one of {sorted(BILL_SOURCES)}")
     if "amount_cents" in data and not isinstance(data["amount_cents"], int):
         raise ApiError("amount_cents must be an integer")
+    if "exclude_from_plan" in data and data["exclude_from_plan"] not in (0, 1):
+        raise ApiError("exclude_from_plan must be 0 or 1")
 
 
 def _validate_payment(data, partial):
@@ -119,14 +122,15 @@ def create_app(db_path=None, bills_backend_url=None):
         payload["status"] = payload["status"] or "due"
         payload["source"] = payload["source"] or "manual"
         payload["created_at"] = payload["created_at"] or _now_date()
+        payload["exclude_from_plan"] = payload["exclude_from_plan"] or 0
         connection = db()
         cursor = connection.execute(
             """
             INSERT INTO bills
                 (name, merchant, amount_cents, cadence, next_billing_date, type,
-                 payment_method, status, end_date, source, confirmed_at, created_at)
+                 payment_method, status, end_date, source, confirmed_at, created_at, exclude_from_plan)
             VALUES (:name, :merchant, :amount_cents, :cadence, :next_billing_date, :type,
-                    :payment_method, :status, :end_date, :source, :confirmed_at, :created_at)
+                    :payment_method, :status, :end_date, :source, :confirmed_at, :created_at, :exclude_from_plan)
             """,
             payload,
         )
