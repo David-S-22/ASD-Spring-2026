@@ -1,11 +1,9 @@
 name: David-CI
 
 on:
-  pull_request: 
+  pull_request:
     branches:
       - "main"
-    paths:
-      - "david/**"
   push:
     branches:
       - "main"
