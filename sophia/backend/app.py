@@ -8,6 +8,7 @@ from flask_cors import CORS
 from sophia.backend import config
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.routes import bills, chat, disputes, fragments, handoff, payments, views
+from sophia.backend.services.errors import ServiceError
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
@@ -30,6 +31,10 @@ def create_app():
     app.register_blueprint(chat.bp)
     app.register_blueprint(handoff.bp)
     app.register_blueprint(fragments.bp)
+
+    @app.errorhandler(ServiceError)
+    def handle_service_error(error):
+        return jsonify({"error": error.message}), error.status
 
     @app.get("/health")
     def health():

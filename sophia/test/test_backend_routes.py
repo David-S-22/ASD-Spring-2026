@@ -156,6 +156,10 @@ class FakeStore:
         self.chat_messages[new_id] = row
         return dict(row)
 
+    def update_chat_message(self, message_id, payload):
+        self.chat_messages[message_id].update(payload)
+        return dict(self.chat_messages[message_id])
+
     def health(self):
         return {"ok": True}
 
@@ -167,7 +171,8 @@ def store(monkeypatch):
         "list_bills", "get_bill", "update_bill", "create_bill", "delete_bill", "list_bill_payments",
         "list_payments", "get_payment", "create_payment", "update_payment", "delete_payment",
         "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
-        "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message", "health",
+        "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
+        "update_chat_message", "health",
     ):
         monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
     monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
@@ -238,7 +243,10 @@ def test_chat_only_writes_chat_messages_and_apply_uses_crud(client, store, monke
     response = client.post("/api/chat", json={"message": "I cancelled Spotify from September"})
     assert response.status_code == 200
     data = response.get_json()
-    assert data["preview"] == {"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}}
+    preview = dict(data["preview"])
+    message_id = preview.pop("message_id", None)
+    assert preview == {"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}}
+    assert message_id is not None
     assert store.bills == bills_before
     assert len(store.chat_messages) == 2
     assert {m["role"] for m in store.chat_messages.values()} == {"user", "assistant"}
