@@ -1,0 +1,213 @@
+=== POST /ui/bills (add, form-encoded) ===
+HTTP/1.1 201 CREATED
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:56:52 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 14103
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:201
+
+
+
+<div class="bills-panel" id="bills-table">
+  <h2>Bills &amp; subscriptions · $1,741.94</h2>
+  <table class="bills-table">
+    <thead>
+      <tr>
+        <th>Name</th><th>Amount</th><th>Every</th><th>Next billing</th><th>Paid by</th><th>Status</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+      <tr data-bill-id="1">
+        <td>Rent</td>
+        <td>$1,100.00</td>
+        <td>Month</t
+=== POST /ui/bills/13/edit ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:06 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 14126
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/bills/13/confirm ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:06 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 9305
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/payments (record) ===
+HTTP/1.1 201 CREATED
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:07 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 14126
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:201
+
+=== POST /ui/bills/13/cancel ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:07 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 13922
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/disputes (create, real Ollama call) ===
+HTTP/1.1 201 CREATED
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:18 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 2331
+HX-Trigger: {"toast": "Done \u2014 change saved.", "switchTab": "disputes"}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:201
+
+=== POST /ui/disputes/12/status ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:29 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 2330
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/disputes/12/regenerate (real Ollama call) ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:37 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 2232
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/chat (real Ollama call) ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:57:44 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 121
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/chat/apply (form-encoded, as htmx sends hx-vals) ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:00 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 13989
+HX-Trigger: {"toast": "Done \u2014 change saved."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/bills/13/delete ===
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:21 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 13239
+HX-Trigger: {"toast": "Done \u2014 removed."}
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:200
+
+=== POST /ui/bills (validation failure - missing name) ===
+HTTP/1.1 422 UNPROCESSABLE ENTITY
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:21 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 89
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:422
+
+
+<div class="error-fragment">
+  <p class="error">missing required fields: name</p>
+</div>
+=== POST /api/chat (form-encoded, expect 400 JSON) ===
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:21 GMT
+Content-Type: application/json
+Content-Length: 33
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:400
+
+{"error":"expected a JSON body"}
+
+=== PUT /api/disputes/1 (form-encoded, expect 400 JSON) ===
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:21 GMT
+Content-Type: application/json
+Content-Length: 33
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:400
+
+{"error":"expected a JSON body"}
+
+=== POST /api/chat/apply (form-encoded, expect 400 JSON) ===
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.8 Python/3.12.14
+Date: Fri, 21 Aug 2026 18:58:21 GMT
+Content-Type: application/json
+Content-Length: 33
+Access-Control-Allow-Origin: *
+Connection: close
+
+STATUS:400
+
+{"error":"expected a JSON body"}
+
+=== GET localhost:3005/ui/bills (nginx proxy check) ===
+HTTP/1.1 200 OK
+Server: nginx/1.31.4
+Date: Fri, 21 Aug 2026 18:58:29 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 8622
+Connection: keep-alive
+Access-Control-Allow-Origin: *
+
+STATUS:200
+
