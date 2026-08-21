@@ -18,7 +18,10 @@ from sophia.backend.services import disputes as disputes_service
 from sophia.backend.services.errors import NotFound, ServiceError
 
 BILL_FIELD_WHITELIST = {
-    "bill": {"name", "merchant", "amount_cents", "cadence", "next_billing_date", "type", "payment_method", "end_date"},
+    "bill": {
+        "name", "merchant", "amount_cents", "cadence", "next_billing_date", "type",
+        "payment_method", "end_date", "exclude_from_plan",
+    },
     "payment": {"bill_id", "date", "amount_cents"},
     "dispute": {"bill_id", "reason", "status"},
 }
@@ -132,7 +135,11 @@ def apply(op, entity, entity_id, fields, message_id=None):
     fields = fields or {}
     if entity not in BILL_FIELD_WHITELIST:
         raise ServiceError("unknown entity")
-    clean_fields = {k: v for k, v in fields.items() if k in BILL_FIELD_WHITELIST[entity]}
+    allowed = BILL_FIELD_WHITELIST[entity]
+    for key in fields:
+        if key not in allowed:
+            raise ServiceError(f"field '{key}' cannot be set via chat")
+    clean_fields = dict(fields)
 
     if entity == "bill" and op == "update":
         if bills_db.get_bill(entity_id) is None:
