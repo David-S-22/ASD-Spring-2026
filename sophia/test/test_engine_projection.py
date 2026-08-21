@@ -82,3 +82,24 @@ def test_project_never_emits_dates_before_created_at():
     assert project(netflix, date(2026, 8, 1), date(2026, 9, 1)) == []
     september = project(netflix, date(2026, 9, 1), date(2026, 10, 1))
     assert [o.date for o in september] == [date(2026, 9, 2)]
+
+
+def test_timeline_surfaces_an_unpaid_overdue_occurrence_at_the_top():
+    bill = make_bill(
+        id=7,
+        name="Home internet",
+        cadence="monthly",
+        amount_cents=7900,
+        next_billing_date=date(2026, 8, 15),
+        created_at=date(2026, 1, 15),
+    )
+    today = date(2026, 8, 20)
+    late_payment = Payment(bill_id=7, date=date(2026, 7, 15), amount_cents=7900)
+
+    items = timeline([bill], [late_payment], today, 30)
+    assert items[0].date == date(2026, 8, 15)
+    assert items[0].kind == "overdue"
+
+    on_time_payment = Payment(bill_id=7, date=date(2026, 8, 18), amount_cents=7900)
+    items_after_payment = timeline([bill], [late_payment, on_time_payment], today, 30)
+    assert all(o.date != date(2026, 8, 15) for o in items_after_payment)

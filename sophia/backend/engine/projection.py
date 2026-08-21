@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from sophia.backend.engine import Occurrence
 from sophia.backend.engine.dates import add_cadence
+from sophia.backend.engine.status import current_cycle_due
 
 
 def _within(bill, d: date, start: date, end: date) -> bool:
@@ -63,10 +64,31 @@ def tag_kind(occ, payments) -> str:
     return "predicted"
 
 
+def _overdue_occurrence(bill, payments, today: date):
+    """Return the bill's current unpaid cycle as an "overdue" Occurrence, or None.
+
+    project()'s forward window starts at today, so a due date strictly
+    before today (unpaid, and still within the bill's end_date) would
+    otherwise never appear on the timeline at all.
+    """
+    due = current_cycle_due(bill, today)
+    if due is None or due >= today:
+        return None
+    if bill.end_date is not None and due > bill.end_date:
+        return None
+    candidate = _occurrence(bill, due, 0)
+    if tag_kind(candidate, payments) == "actual":
+        return None
+    return replace(candidate, kind="overdue")
+
+
 def timeline(bills, payments, today: date, days: int) -> list:
     """Return every occurrence across bills in [today, today + days), tagged and sorted.
 
-    days is clamped to the 30..180 range.
+    days is clamped to the 30..180 range. kind is "actual", "predicted", or
+    "overdue" - the last one is a real, unpaid charge whose due date has
+    already passed (current_cycle_due < today with no matching payment),
+    which project()'s forward-only window would otherwise drop entirely.
     """
     clamped_days = max(30, min(180, days))
     end = today + timedelta(days=clamped_days)
@@ -74,5 +96,8 @@ def timeline(bills, payments, today: date, days: int) -> list:
     for bill in bills:
         for occ in project(bill, today, end):
             occurrences.append(replace(occ, kind=tag_kind(occ, payments)))
+        overdue_occ = _overdue_occurrence(bill, payments, today)
+        if overdue_occ is not None:
+            occurrences.append(overdue_occ)
     occurrences.sort(key=lambda o: (o.date, o.name))
     return occurrences
