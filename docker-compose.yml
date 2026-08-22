@@ -38,7 +38,7 @@ services:
     build: ./aiden/database
     container_name: anomalies-db
     ports:
-      - "6004:${PORT}"
+      - "6004:6004"
     volumes:
       - anomalies_data:/app/data
     environment:

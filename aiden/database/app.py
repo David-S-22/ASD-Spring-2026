@@ -58,7 +58,7 @@ def delete_anomaly(id: UUID):
 
 if __name__ == "__main__":
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.environ["DB_PATH"]
-    port = int(os.environ.get("INTERNAL_PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))
 
     with app.app_context():
         db.init_app(app)
