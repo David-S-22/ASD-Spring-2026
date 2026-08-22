@@ -32,7 +32,7 @@ def test_calendar_fragment_verbatim_copy(live_client):
     text = _text(response)
     assert "Plan for September" in text
     assert "Set aside up to $" in text
-    assert "Usual bills — weekly & fortnightly you pay every month" in text
+    assert "Usual bills you pay every month" in text
     assert "See other months" in text
 
 
