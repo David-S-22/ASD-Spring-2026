@@ -1,0 +1,2 @@
+# The environment also installs requirements from the other folders, so these must be compatible
+pytest==9.1.1
