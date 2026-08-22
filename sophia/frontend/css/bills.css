@@ -276,4 +276,14 @@
 #modal-root .modal-form {
   max-height: 85vh;
   overflow-y: auto;
+
+.working {
+  font-size: 0.9em;
+  color: var(--muted, #666);
+  margin-left: 0.5em;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }

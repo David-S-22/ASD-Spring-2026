@@ -22,8 +22,9 @@
     {% endif %}
     {% endfor %}
   </div>
-  <form hx-post="/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()">
+  <form hx-post="/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()" hx-disabled-elt="find button[type=submit]">
     <input name="message" placeholder="Ask" required>
     <button type="submit">Ask</button>
+    <span class="htmx-indicator working">Tally is thinking…</span>
   </form>
 </div>
