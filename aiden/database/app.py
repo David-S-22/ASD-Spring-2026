@@ -1,8 +1,8 @@
 from uuid import UUID
 
 from flask import Flask, abort, jsonify, request
-from flask_sqlalchemy.model import Model
 from models import Anomaly, db
+from helpers import set_mandatory_field, set_optional_field, try_parse_uuid, try_parse_bool
 
 
 app = Flask(__name__)
@@ -17,8 +17,10 @@ def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
 
-    set_field_or_error(anomaly, data, "transaction_id", UUID)
-    set_field_or_error(anomaly, data, "agent_reason_suspected", str)
+    # I will fix this later but it works fine now
+    set_mandatory_field(anomaly, data, "transaction_id", try_parse_uuid)
+    set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
+    set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
 
     db.session.add(anomaly)
     db.session.commit()
@@ -51,14 +53,6 @@ def delete_anomaly(id: UUID):
     db.session.commit()
 
     return jsonify(deleted=True)
-
-def set_field_or_error(model: Model, data: dict, field_name: str, field_type: type):
-    if field_name not in data.keys():
-        abort(400, f"Missing required field {field_name}")
-    elif not isinstance(value := data.get(field_name), field_type):
-        abort(400, f"Field {field_name} expected {field_type.__name__} but was {type(value).__name__}")
-    else:
-        setattr(model, field_name, value)
 
 
 if __name__ == "__main__":
