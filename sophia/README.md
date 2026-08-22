@@ -112,13 +112,13 @@ figure ("$379–415", or "$379" when lo == hi).
 
 ## Inbound contracts
 
-See `docs/contracts-inbound.md` (dated 22 Aug 2026) for the two inbound
+See `docs/release-0/sophia/contracts-inbound.md` (dated 22 Aug 2026) for the two inbound
 handoff endpoints (`POST /api/handoff/recurring`, `POST /api/suggestions`)
 and the transactions-service contract this feature assumes.
 
 ## Schema adoption
 
-See `docs/schema-adoption.md` for the four additive schema items
+See `docs/release-0/sophia/schema-adoption.md` for the four additive schema items
 (`end_date`, `source`, `confirmed_at`, `chat_messages`) and why each exists.
 
 ## Testing and evidence
@@ -127,7 +127,7 @@ See `docs/schema-adoption.md` for the four additive schema items
 python -m pytest sophia/test -q
 ```
 
-82 passed in 1.26s
+108 passed in 3.00s
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
@@ -138,13 +138,16 @@ fallback), and the `/ui/*` HTML fragments (a real `sophia/database` instance
 in a background thread against a temp seeded SQLite file, verbatim-copy and
 `$`-formatting assertions).
 
-`docs/evidence/ai/` holds raw JSON from real local Ollama calls (not
+`docs/release-0/sophia/evidence/ai/` holds raw JSON from real local Ollama calls (not
 mocked) — dispute drafts for a direct-debit bill and a card bill plus a
 regenerate-with-feedback call (3/3 first-try schema pass), and all four
 chat chips (4/4 correct op), with an honest note on what tuning changed and
-what this small sample does and doesn't demonstrate. `docs/evidence/compose/`
-holds the `docker compose` verification run, or a note saying Docker wasn't
-available.
+what this small sample does and doesn't demonstrate.
+`docs/release-0/sophia/evidence/compose/` holds the `docker compose`
+verification run and the curl transcripts of the `/ui/*` write routes.
+Diagrams are in `docs/architecture/` and app screenshots in
+`docs/release-0/sophia/screenshots/` (see the README there). Per the spec's
+repository layout, nothing under `sophia/` is documentation.
 
 ## Merge status
 
