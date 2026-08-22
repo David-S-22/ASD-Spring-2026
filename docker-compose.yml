@@ -34,5 +34,15 @@ services:
     volumes:
       - bills_data:/data
 
+  anomalies-db:
+    build: ./aiden/database
+    container_name: anomalies-db
+    ports:
+      - "6004:${INTERNAL_PORT}"
+    environment:
+      - FLASK_ENV=production
+      - INTERNAL_PORT=80
+    restart: unless-stopped
+
 volumes:
   bills_data:
