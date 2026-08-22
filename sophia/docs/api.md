@@ -16,7 +16,7 @@ Base URL in compose: `http://bills-backend:5005`. Locally: `http://localhost:500
 | GET | `/api/timeline?days=30..180` | `{today, days, items:[{date, bill_id, name, merchant, amount, amount_cents, display_amount, kind, within_30_days}]}`. `display_amount` is exact for `kind=actual`, whole-dollar for `kind=predicted`. |
 | GET | `/api/calendar/<YYYY-MM>` | Usual/extra breakdown for one month. |
 | GET | `/api/calendar?from=YYYY-MM&months=6` | Breakdown for a run of months. |
-| GET | `/api/upcoming?days=90` | `{today, monthly_committed_cents, items}`. This is what the database API's `GET /upcoming` proxies to. |
+| GET | `/api/upcoming?days=90` | `{today, monthly_committed_cents, items}`. Other features that need projected bills call this endpoint on the backend directly; the database API at :6005 serves stored rows only and has no dependency on the backend. |
 | GET/POST | `/api/disputes` | POST `{bill_id, reason}` creates a dispute and drafts letter v1 via the AI guard. |
 | GET/PUT/DELETE | `/api/disputes/<id>` | PUT `{status}`. |
 | GET | `/api/disputes/<id>/drafts` | |

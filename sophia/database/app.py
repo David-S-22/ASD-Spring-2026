@@ -3,7 +3,6 @@ import json
 import os
 from datetime import datetime, timezone
 
-import requests
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
@@ -82,13 +81,10 @@ def _validate_dispute(data, partial):
         raise ApiError(f"status must be one of {sorted(DISPUTE_STATUSES)}")
 
 
-def create_app(db_path=None, bills_backend_url=None):
+def create_app(db_path=None):
     app = Flask(__name__)
     CORS(app)
     app.config["DB_PATH"] = db_path or os.environ.get("DB_PATH", "./bills.db")
-    app.config["BILLS_BACKEND_URL"] = bills_backend_url or os.environ.get(
-        "BILLS_BACKEND_URL", "http://bills-backend:5005"
-    )
 
     def db():
         if "db" not in g:
@@ -375,20 +371,6 @@ def create_app(db_path=None, bills_backend_url=None):
         connection.execute("DELETE FROM chat_messages")
         connection.commit()
         return jsonify({"deleted": "all"})
-
-    @app.get("/upcoming")
-    def upcoming():
-        days = request.args.get("days", "90")
-        try:
-            response = requests.get(
-                f"{app.config['BILLS_BACKEND_URL']}/api/upcoming",
-                params={"days": days},
-                timeout=10,
-            )
-            response.raise_for_status()
-        except requests.RequestException:
-            return jsonify({"error": "bills backend unavailable"}), 503
-        return jsonify(response.json()), response.status_code
 
     return app
 

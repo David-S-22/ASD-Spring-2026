@@ -76,7 +76,7 @@ def live_db_base_url(tmp_path_factory):
     database_app.seed(connection)
     connection.close()
 
-    flask_app = database_app.create_app(db_path=db_path, bills_backend_url="http://unreachable-host.invalid:5999")
+    flask_app = database_app.create_app(db_path=db_path)
     server = make_server("127.0.0.1", 0, flask_app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

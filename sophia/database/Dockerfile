@@ -3,7 +3,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir Flask==3.1.3 flask-cors==4.0.1 requests==2.34.2
+RUN pip install --no-cache-dir Flask==3.1.3 flask-cors==4.0.1
 
 COPY . ./
 

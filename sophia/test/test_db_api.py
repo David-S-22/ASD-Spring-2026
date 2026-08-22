@@ -27,7 +27,7 @@ def client(tmp_path):
     database_app.load_schema(connection, database_app.SCHEMA_PATH)
     database_app.seed(connection)
     connection.close()
-    app = database_app.create_app(db_path=db_path, bills_backend_url="http://unreachable-host.invalid:5999")
+    app = database_app.create_app(db_path=db_path)
     app.config["TESTING"] = True
     return app.test_client()
 
@@ -160,7 +160,5 @@ def test_deleting_a_bill_cascades_to_payments_and_disputes(client):
         assert client.get(f"/disputes/{dispute_id}/drafts").get_json() == []
 
 
-def test_upcoming_passthrough_returns_503_when_backend_down(client):
-    response = client.get("/upcoming?days=90")
-    assert response.status_code == 503
-    assert response.get_json() == {"error": "bills backend unavailable"}
+def test_db_api_has_no_upcoming_route(client):
+    assert client.get("/upcoming?days=90").status_code == 404

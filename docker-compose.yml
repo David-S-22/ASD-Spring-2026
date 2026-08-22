@@ -30,7 +30,6 @@ services:
     environment:
       PORT: 6005
       DB_PATH: /data/bills.db
-      BILLS_BACKEND_URL: http://bills-backend:5005
     volumes:
       - bills_data:/data
 

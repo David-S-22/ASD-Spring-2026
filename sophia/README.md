@@ -47,7 +47,7 @@ easiest for local iteration).
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
 | `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL`, `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:0.5b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
-| `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`), `BILLS_BACKEND_URL` (default `http://bills-backend:5005`) |
+| `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
 `sophia/backend/engine/` ever calls `date.today()` or `datetime.now()` —
@@ -131,7 +131,7 @@ python -m pytest sophia/test -q
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
-delete, the `/upcoming` passthrough), the backend routes (monkeypatched
+delete), the backend routes (monkeypatched
 `bills_db` client, no network), the AI guard and schemas (mocked HTTP,
 retry-then-fallback, direct-debit/card step injection, unreachable-Ollama
 fallback), and the `/ui/*` HTML fragments (a real `sophia/database` instance
