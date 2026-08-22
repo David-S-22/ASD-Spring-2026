@@ -1,2 +1,3 @@
-# The environment also installs requirements from the other folders, so these must be compatible
+# The env installs requirements from tested containers
+# so these must all be compatible
 pytest==9.1.1
