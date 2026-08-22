@@ -6,4 +6,4 @@ def test_index():
         index = client.get("/")
 
         assert index.status_code == 200
-        assert index.text == "hello this is the index"
+        assert index.text == '"index page"\n'
