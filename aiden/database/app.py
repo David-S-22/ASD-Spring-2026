@@ -2,8 +2,8 @@ import os
 from uuid import UUID
 
 from flask import Flask, abort, jsonify, request
-from models import Anomaly, db
-from helpers import set_mandatory_field, set_optional_field, try_parse_uuid, try_parse_bool
+from .models import Anomaly, db
+from .helpers import set_mandatory_field, set_optional_field, try_parse_uuid, try_parse_bool
 
 
 app = Flask(__name__)

@@ -1,0 +1,3 @@
+# The env installs requirements from tested containers
+# so these must all be compatible
+pytest==9.1.1
