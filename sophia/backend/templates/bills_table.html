@@ -19,14 +19,14 @@
           <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
           {% if bill.needs_confirmation %}
           <span class="confirm-prompt">Confirm this?</span>
-          <button class="confirm" hx-post="/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
+          <button class="confirm btn-sm" hx-post="/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
           {% endif %}
         </td>
-        <td>
-          <button hx-get="/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
-          <button hx-get="/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
-          <button hx-get="/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
-          <button hx-get="/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
+        <td class="actions">
+          <button class="btn-sm" hx-get="/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+          <button class="btn-sm" hx-get="/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+          <button class="btn-sm" hx-get="/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
+          <button class="btn-sm" hx-get="/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
         </td>
       </tr>
       {% endfor %}

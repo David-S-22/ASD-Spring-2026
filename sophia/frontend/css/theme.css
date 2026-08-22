@@ -50,6 +50,11 @@ button {
   cursor: pointer;
 }
 
+button.btn-sm {
+  padding: 0.25em 0.6em;
+  font-size: 0.85em;
+}
+
 button.confirm,
 button[type="submit"] {
   background: var(--accent);

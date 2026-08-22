@@ -1,9 +1,9 @@
 /* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
 .app-shell {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 1rem;
-  max-width: 1100px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -44,11 +44,52 @@
   border-collapse: collapse;
 }
 
+.bills-panel {
+  overflow-x: auto;
+}
+
 .bills-table th,
 .bills-table td {
   text-align: left;
   padding: 0.5em 0.6em;
   border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.bills-table th,
+.bills-table td:nth-child(2),
+.bills-table td:nth-child(3),
+.bills-table td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.bills-table .actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.bills-table .actions button + button {
+  margin-left: 0.25em;
+}
+
+.bills-table .confirm-prompt {
+  display: block;
+  margin-top: 0.3em;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-panel,
+  .ask-tally {
+    grid-column: 1;
+  }
+
+  .ask-tally {
+    position: static;
+  }
 }
 
 .timeline ul,
