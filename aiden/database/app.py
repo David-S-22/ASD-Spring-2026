@@ -1,3 +1,4 @@
+import os
 from uuid import UUID
 
 from flask import Flask, abort, jsonify, request
@@ -56,10 +57,11 @@ def delete_anomaly(id: UUID):
 
 
 if __name__ == "__main__":
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///anomalies.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.environ["DB_PATH"]
+    port = int(os.environ["PORT"])
 
     with app.app_context():
         db.init_app(app)
         db.create_all()
 
-    app.run()
+    app.run(host="0.0.0.0", port=port)

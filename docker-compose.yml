@@ -33,5 +33,18 @@ services:
     volumes:
       - bills_data:/data
 
+  anomalies-db:
+    build: ./aiden/database
+    container_name: anomalies-db
+    ports:
+      - "6004:6004"
+    volumes:
+      - anomalies_data:/app/data
+    environment:
+      FLASK_ENV: production
+      PORT: 6004
+      DB_PATH: /app/data/anomalies.db
+
 volumes:
   bills_data:
+  anomalies_data:
