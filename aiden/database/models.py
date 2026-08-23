@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from uuid import UUID, uuid4
 from sqlalchemy.orm import Mapped, mapped_column
+from shared.backend import dto
 
 db = SQLAlchemy()
 
@@ -10,10 +11,5 @@ class Anomaly(db.Model):
     agent_reason_suspected: Mapped[str] = mapped_column()
     is_confirmed_by_user: Mapped[bool] = mapped_column(nullable=True)
 
-    def to_json(self):
-        return dict(
-            id=self.id,
-            transaction_id=self.transaction_id,
-            agent_reason_suspected=self.agent_reason_suspected,
-            is_confirmed_by_user=self.is_confirmed_by_user
-        )
+    def to_dto(self):
+        return dto.Anomaly(self.id, self.transaction_id, self.agent_reason_suspected, self.is_confirmed_by_user)
