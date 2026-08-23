@@ -2,11 +2,14 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Copy all application files (except those in .dockerignore)
-COPY . .
+# Copy database package into /app/database to preserve package structure
+COPY . ./database
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r database/requirements.txt
 
-# Run the Flask application
-CMD ["python", "app.py"]
+# Set PYTHONPATH so Python can find the database package
+ENV PYTHONPATH=/app
+
+# Run the Flask application as a module
+CMD ["python", "-m", "database"]
