@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 @app.get("/")
 def get_index():
-    return jsonify("index page")
+    return jsonify(container="anomalies-db")
 
 @app.post("/anomaly")
 def post_anomaly():

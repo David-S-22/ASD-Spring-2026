@@ -33,6 +33,17 @@ services:
     volumes:
       - bills_data:/data
 
+  anomalies-backend:
+    build: ./aiden/backend
+    container_name: anomalies-backend
+    ports:
+      - "5004:5004"
+    environment:
+      FLASK_ENV: production
+      PORT: 5004
+      ANOMALIES_DB_URL: http://anomalies-db:6004
+    depends_on:
+      - anomalies-db
   anomalies-db:
     build: ./aiden/database
     container_name: anomalies-db
