@@ -45,6 +45,19 @@ services:
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
 
+  savings-db:
+    build: ./david/database
+    container_name: savings-db
+    ports:
+      - "6002:6002"
+    environment:
+      FLASK_ENV: production
+      PORT: 6002
+      DB_PATH: /app/data/savings.db
+    volumes:
+      - savings_data:/data
+
 volumes:
   bills_data:
   anomalies_data:
+  savings_data:
