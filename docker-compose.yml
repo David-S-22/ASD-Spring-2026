@@ -35,7 +35,7 @@ services:
 
   anomalies-backend:
     build: ./aiden/backend
-    container-name: anomealies-backend
+    container_name: anomealies-backend
     ports:
       - "5004:5004"
     environment:
