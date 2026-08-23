@@ -60,10 +60,3 @@ def setup(db_path: str):
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
         db.create_all()
-
-
-if __name__ == "__main__":
-    setup(os.environ["DB_PATH"])
-    port = int(os.environ["PORT"])
-
-    app.run(host="0.0.0.0", port=port)
