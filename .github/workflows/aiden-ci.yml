@@ -19,20 +19,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.13
-      - run: pip install -r database/requirements.txt -r test/requirements.txt
+      - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
       - run: pytest
 
-  docker-startup-health: # Check docker container health after a few seconds
+  docker-health: # Check docker container health after startup
     runs-on: ubuntu-latest
     needs: pytest
     steps:
       - uses: actions/checkout@v6
-      - run: docker compose build anomalies-db
-      - run: docker compose up -d anomalies-db
+      - run: docker compose build anomalies-backend anomalies-db
+      - run: docker compose up -d anomalies-backend anomalies-db
       - run: sleep 3
-      # - run: curl --fail http://127.0.0.1:6004/ || exit 1 # change once port added
+      - run: curl --fail http://127.0.0.1:5004/ || exit 1
       - run: curl --fail http://127.0.0.1:6004/ || exit 1
-      - run: docker logs anomalies-db
+      - run: docker logs anomalies-backend anomalies-db
         if: failure()
-      - run: docker rm -f anomalies-db
+      - run: docker rm --force --volumes anomalies-backend anomalies-db
         if: always()
