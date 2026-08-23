@@ -20,7 +20,8 @@ def test_index(client: FlaskClient):
     resp = client.get("/")
 
     assert resp.status_code == 200
-    assert resp.text == '"index page"\n'
+    assert isinstance(resp.json, dict)
+    assert resp.json["container"] == "anomalies-db"
 
 def test_create_anomaly(client: FlaskClient):
     json = dict(transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user="False")
