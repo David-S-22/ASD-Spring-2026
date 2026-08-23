@@ -27,7 +27,7 @@ def post_anomaly():
     db.session.commit()
     db.session.refresh(anomaly)
 
-    return anomaly.to_json()
+    return anomaly.to_json(), 201
 
 @app.get("/anomaly/<uuid:id>")
 def get_anomaly(id: UUID):
@@ -55,13 +55,15 @@ def delete_anomaly(id: UUID):
 
     return jsonify(deleted=True)
 
-
-if __name__ == "__main__":
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.environ["DB_PATH"]
-    port = int(os.environ["PORT"])
-
+def setup(db_path: str):
     with app.app_context():
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
         db.create_all()
+
+
+if __name__ == "__main__":
+    setup(os.environ["DB_PATH"])
+    port = int(os.environ["PORT"])
 
     app.run(host="0.0.0.0", port=port)
