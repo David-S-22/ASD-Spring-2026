@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .github/actions/aiden-ci.yml
+      - .github/workflows/aiden-ci.yml
       - aiden/**
 
 jobs:
