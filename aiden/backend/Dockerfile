@@ -9,4 +9,4 @@ COPY . ./backend
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Run the Flask application as a module
-CMD ["python" "-m" "backend"]
+CMD ["python", "-m", "backend"]
