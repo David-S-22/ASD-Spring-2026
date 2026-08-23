@@ -1,3 +1,4 @@
+import random
 from flask import Flask, abort, jsonify, request
 
 app = Flask(__name__)
@@ -8,9 +9,7 @@ def get_index():
 
 @app.post("/check-new-transaction-for-anomalies")
 def post_newtransaction():
-    data = request.get_json() or {}
-
-    if data:
+    if random.choice((True, False)):
         return jsonify(ok=True)
 
     return abort(400)
