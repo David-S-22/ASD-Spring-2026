@@ -4,6 +4,6 @@ from .app import app, setup
 
 if __name__ == "__main__":
     setup(os.environ["DB_PATH"])
-    port = int(os.environ["PORT"])
+    port = int(os.environ["PsORT"])
 
-    # app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
