@@ -27,7 +27,8 @@ jobs:
     needs: pytest
     steps:
       - uses: actions/checkout@v6
-      - run: docker-compose up anomalies-db --build
+      - run: docker compose build anomalies-db
+      - run: docker compose up -d anomalies-db
       - run: sleep 5
       - run: curl --fail http://127.0.0.1:6004/ || exit 1
       - run: docker logs anomalies-db
