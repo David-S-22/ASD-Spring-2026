@@ -7,19 +7,21 @@ from flask import Flask
 import os
 import datetime
 
-app = Flask(__name__)
-
-def setup_app(database_path):
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///"
+def setup_app(database_path) -> Flask:
+    app = Flask(__name__)
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{database_path}"
     db.init_app(app)
     with app.app_context():
         db.create_all()
+    return app
+
+app = setup_app(os.path.join(os.getcwd(), "savings.db"))
 
 @app.route("/goals")
 def get_goals():
     goals = db.session.execute(db.select(Goal)).scalars().all()
     if (len(goals) == 0):
-        return abort(500)
+        return abort(404)
 
     return jsonify([asdict(goal) for goal in goals])
 
@@ -183,5 +185,4 @@ def delete_feedback_route(id: int):
     return "", 204
 
 if __name__ == "__main__":
-    setup_app({os.path.join(os.getcwd(), "savings.db")})
-    app.run(host="0.0.0.0", port=int(os.environ["PORT"]))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 6002)))
