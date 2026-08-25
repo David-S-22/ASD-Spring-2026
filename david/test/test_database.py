@@ -14,5 +14,5 @@ def client(app: Flask):
     return app.test_client()
 
 def test_get_all_goals(client: FlaskClient):
-    client.get("/goals")
-    assert 1 == 1
+    response = client.get("/goals")
+    assert response.status_code == 200
