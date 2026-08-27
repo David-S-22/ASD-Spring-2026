@@ -48,12 +48,21 @@ def patch_anomaly(id: UUID):
 
 @app.delete("/anomaly/<uuid:id>")
 def delete_anomaly(id: UUID):
-    anomaly = db.get_or_404(Anomaly, id)
+    deleted_count = db.session.query(Anomaly).where(Anomaly.id == id).delete()
 
-    db.session.delete(anomaly)
+    assert deleted_count in (0, 1)
     db.session.commit()
 
-    return jsonify(deleted=True)
+    return jsonify(deleted=deleted_count > 0)
+
+@app.delete("/anomaly/by-transaction/<uuid:id>")
+def delete_anomaly_by_id(id: UUID):
+    deleted_count = db.session.query(Anomaly).where(Anomaly.transaction_id == id).delete()
+
+    assert deleted_count in (0, 1)
+    db.session.commit()
+
+    return jsonify(deleted=deleted_count > 0)
 
 def setup(db_path: str):
     with app.app_context():
