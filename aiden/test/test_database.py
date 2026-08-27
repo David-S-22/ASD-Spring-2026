@@ -2,6 +2,7 @@ import pytest
 from database.app import app, setup
 from flask.testing import FlaskClient
 from shared.backend import dto
+from typing import Any
 from uuid import UUID, uuid4
 
 
@@ -15,8 +16,14 @@ def client():
     with app.test_client() as client:
         yield client
 
-def create_anomaly(client: FlaskClient, **kwargs) -> dto.Anomaly:
-    response = client.post("/anomaly", json=kwargs)
+def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
+    anomaly = dto.Anomaly(**kwargs)
+    payload = {
+        "transaction_id": str(anomaly.transaction_id),
+        "agent_reason_suspected": anomaly.agent_reason_suspected,
+        "is_confirmed_by_user": str(anomaly.is_confirmed_by_user),
+    }
+    response = client.post("/anomaly", json=payload)
 
     assert response.status_code == 201
     assert isinstance(data := response.json, dict)

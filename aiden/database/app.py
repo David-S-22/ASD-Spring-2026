@@ -1,12 +1,11 @@
-import os
 from uuid import UUID
-
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, request
 from .models import Anomaly, db
-from .helpers import set_mandatory_field, set_optional_field, try_parse_uuid, try_parse_bool
 
 
 app = Flask(__name__)
+
+# TODO custom error handlers for abort
 
 
 @app.get("/")
@@ -18,10 +17,24 @@ def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
 
-    # I will fix this later but it works fine now
-    set_mandatory_field(anomaly, data, "transaction_id", try_parse_uuid)
-    set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
-    set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
+    if "transaction_id" not in data:
+        abort(400, "Missing required field transaction_id")
+    try:
+        anomaly.transaction_id = UUID(data["transaction_id"])
+    except (AttributeError, TypeError, ValueError):
+        abort(400, "Field transaction_id expected UUID")
+
+    if "agent_reason_suspected" not in data:
+        abort(400, "Missing required field agent_reason_suspected")
+    anomaly.agent_reason_suspected = data["agent_reason_suspected"]
+
+    if "is_confirmed_by_user" in data:
+        raw_confirmation = data["is_confirmed_by_user"]
+
+        if isinstance(raw_confirmation, bool):
+            anomaly.is_confirmed_by_user = raw_confirmation
+        else:
+            abort(400, "Field is_confirmed_by_user expected bool")
 
     db.session.add(anomaly)
     db.session.commit()
