@@ -142,6 +142,24 @@ def test_delete_goal(client: FlaskClient):
     assert remaining_goals[0].id == goals[1].id
 
 @pytest.mark.usefixtures("app_ctx")
+def test_delete_suggestion(client: FlaskClient):
+    suggestions = setup_suggestions()
+    response = client.delete(f"/suggestion/{suggestions[0].id}")
+    assert response.status_code == 204
+    remaining_suggestions = db.session.execute(db.select(Suggestion)).scalars().all()
+    assert len(remaining_suggestions) == 1
+    assert remaining_suggestions[0].id == suggestions[1].id
+
+@pytest.mark.usefixtures("app_ctx")
+def test_delete_feedback(client: FlaskClient):
+    feedbacks = setup_feedback()
+    response = client.delete(f"/feedback/{feedbacks[0].id}")
+    assert response.status_code == 204
+    remaining_feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
+    assert len(remaining_feedbacks) == 1
+    assert remaining_feedbacks[0].id == feedbacks[1].id
+
+@pytest.mark.usefixtures("app_ctx")
 def test_update_goal(client: FlaskClient):
     goals = setup_goals()
     new_name = "two schmickles"
@@ -158,6 +176,30 @@ def test_update_goal(client: FlaskClient):
     assert updated_goal.name == new_name
     assert updated_goal.cost == new_cost
     assert updated_goal.date == new_date
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_suggestion(client: FlaskClient):
+    suggestions = setup_suggestions()
+    new_suggestion = "two schmickles"
+    suggestions[0].suggestion = new_suggestion
+    updated_suggestion_json = dumps(asdict(suggestions[0]), default=str)
+    response = client.patch(f"/suggestion/{suggestions[0].id}", data=updated_suggestion_json, content_type="application/json")
+    assert response.status_code == 200
+
+    updated_suggestion = db.session.execute(db.select(Suggestion).where(Suggestion.id == suggestions[0].id)).scalar_one()
+    assert updated_suggestion.suggestion == new_suggestion
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_feedback(client: FlaskClient):
+    feedbacks = setup_feedback()
+    new_feedback = "two schmickles"
+    feedbacks[0].feedback = new_feedback
+    updated_feedback_json = dumps(asdict(feedbacks[0]), default=str)
+    response = client.patch(f"/feedback/{feedbacks[0].id}", data=updated_feedback_json, content_type="application/json")
+    assert response.status_code == 200
+
+    updated_feedback = db.session.execute(db.select(Feedback).where(Feedback.id == feedbacks[0].id)).scalar_one()
+    assert updated_feedback.feedback == new_feedback
 
 @pytest.mark.usefixtures("app_ctx")
 def test_update_goal_partial_update(client: FlaskClient):
@@ -180,6 +222,18 @@ def test_update_goal_rejects_invalid_messages(client: FlaskClient):
     assert response.status_code == 400
 
 @pytest.mark.usefixtures("app_ctx")
+def test_update_suggestion_rejects_invalid_messages(client: FlaskClient):
+    suggestions = setup_suggestions()
+    response = client.patch(f"/suggestion/{suggestions[0].id}", data="", content_type="application/json")
+    assert response.status_code == 400
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_feedback_rejects_invalid_messages(client: FlaskClient):
+    feedbacks = setup_feedback()
+    response = client.patch(f"/feedback/{feedbacks[0].id}", data="", content_type="application/json")
+    assert response.status_code == 400
+
+@pytest.mark.usefixtures("app_ctx")
 def test_create_goal(client: FlaskClient):
     goal_to_create = Goal()
     goal_to_create.cost = 5
@@ -193,3 +247,25 @@ def test_create_goal(client: FlaskClient):
     assert new_goal.name == goal_to_create.name
     assert new_goal.cost == goal_to_create.cost
     assert new_goal.date == goal_to_create.date
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_suggestion(client: FlaskClient):
+    suggestion_to_create = Suggestion()
+    suggestion_to_create.suggestion = "Borgr"
+    updated_suggestion_json = dumps(asdict(suggestion_to_create), default=str)
+    response = client.post("/suggestion", content_type="application/json", data=updated_suggestion_json)
+    assert response.status_code == 201
+
+    new_suggestion = db.session.execute(db.select(Suggestion)).scalar_one()
+    assert new_suggestion.suggestion == suggestion_to_create.suggestion
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback(client: FlaskClient):
+    feedback_to_create = Feedback()
+    feedback_to_create.feedback = "Borgr"
+    updated_feedback_json = dumps(asdict(feedback_to_create), default=str)
+    response = client.post("/feedback", content_type="application/json", data=updated_feedback_json)
+    assert response.status_code == 201
+
+    new_feedback = db.session.execute(db.select(Feedback)).scalar_one()
+    assert new_feedback.feedback == feedback_to_create.feedback
