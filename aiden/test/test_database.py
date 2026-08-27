@@ -17,13 +17,13 @@ def client():
         yield client
 
 def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
-    anomaly = dto.Anomaly(**kwargs)
-    payload = {
-        "transaction_id": str(anomaly.transaction_id),
-        "agent_reason_suspected": anomaly.agent_reason_suspected,
-        "is_confirmed_by_user": str(anomaly.is_confirmed_by_user),
-    }
-    response = client.post("/anomaly", json=payload)
+    if "id" in kwargs:
+        kwargs["id"] = str(kwargs["id"])
+
+    if "transaction_id" in kwargs:
+        kwargs["transaction_id"] = str(kwargs["transaction_id"])
+
+    response = client.post("/anomaly", json=kwargs)
 
     assert response.status_code == 201
     assert isinstance(data := response.json, dict)
@@ -45,7 +45,7 @@ def test_index(client: FlaskClient):
     assert resp.json["container"] == "anomalies-db"
 
 def test_create_anomaly(client: FlaskClient):
-    json = dict(transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user="False")
+    json = dict(transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
 
     # Check we can create the object
     resp = client.post("/anomaly", json=json)
