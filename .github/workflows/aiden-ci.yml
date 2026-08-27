@@ -10,7 +10,7 @@ on:
       - shared/**
 
 jobs:
-  pytest: # Run unit test suite
+  test: # Run unit test suite
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,17 +23,18 @@ jobs:
       - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
       - run: pytest
 
-  docker-health: # Check docker container health after startup
+  build-health: # Check docker container health after startup
     runs-on: ubuntu-latest
-    needs: pytest
+    needs: test
     steps:
       - uses: actions/checkout@v6
-      - run: docker compose build anomalies-backend anomalies-db
-      - run: docker compose up -d anomalies-backend anomalies-db
+      - run: docker compose build anomalies-frontend anomalies-backend anomalies-db
+      - run: docker compose up -d anomalies-frontend anomalies-backend anomalies-db
       - run: sleep 3
+      - run: curl --fail http://127.0.0.1:3004/ || exit 1
       - run: curl --fail http://127.0.0.1:5004/ || exit 1
       - run: curl --fail http://127.0.0.1:6004/ || exit 1
-      - run: docker logs anomalies-backend anomalies-db
+      - run: docker logs anomalies-frontend anomalies-backend anomalies-db
         if: failure()
-      - run: docker rm --force --volumes anomalies-backend anomalies-db
+      - run: docker rm --force --volumes anomalies-frontend anomalies-backend anomalies-db
         if: always()
