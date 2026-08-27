@@ -31,9 +31,12 @@ jobs:
       - run: docker compose build anomalies-frontend anomalies-backend anomalies-db
       - run: docker compose up -d anomalies-frontend anomalies-backend anomalies-db
       - run: sleep 3
-      - run: curl --fail http://127.0.0.1:3004/ || exit 1
-      - run: curl --fail http://127.0.0.1:5004/ || exit 1
-      - run: curl --fail http://127.0.0.1:6004/ || exit 1
+      - name: Check frontend availability
+        run: curl --fail http://127.0.0.1:3004/ || exit 1
+      - name: Check backend availability
+        run: curl --fail http://127.0.0.1:5004/ || exit 1
+      - name: Check database availability
+        run: curl --fail http://127.0.0.1:6004/ || exit 1
       - run: docker logs anomalies-frontend anomalies-backend anomalies-db
         if: failure()
       - run: docker rm --force --volumes anomalies-frontend anomalies-backend anomalies-db
