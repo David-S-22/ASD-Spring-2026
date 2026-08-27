@@ -7,9 +7,10 @@ app = Flask(__name__)
 def get_index():
     return jsonify(container="anomalies-backend")
 
-@app.post("/check-new-transaction-for-anomalies")
-def post_newtransaction():
-    if random.choice((True, False)):
-        return jsonify(ok=True)
+@app.get("/all-anomalies")
+def get_all_anomalies():
+    abort(418)
 
-    return abort(400)
+@app.post("/dummy-anomaly")
+def create_dummy_anomaly():
+    abort(418)
