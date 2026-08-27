@@ -3,7 +3,10 @@ WORKDIR /app
 EXPOSE 5004
 
 # Copy backend package into /app/backend to preserve package structure
-COPY . ./backend
+COPY ./aiden/backend ./backend
+
+# Copy shared models
+COPY ./shared/backend ./shared/backend
 
 # Install dependencies
 RUN pip install --no-cache-dir -r backend/requirements.txt

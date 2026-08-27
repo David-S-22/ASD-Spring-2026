@@ -1,5 +1,6 @@
-import random
-from flask import Flask, abort, jsonify, request
+import os
+from flask import Flask, abort, jsonify
+from shared.backend import dto
 
 app = Flask(__name__)
 
@@ -14,3 +15,6 @@ def get_all_anomalies():
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
     abort(418)
+
+def get_env(name: str) -> str:
+    return os.environ[name]

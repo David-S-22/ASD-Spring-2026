@@ -43,7 +43,8 @@ services:
     depends_on:
       - anomalies-backend
   anomalies-backend:
-    build: ./aiden/backend
+    build:
+      dockerfile: ./aiden/backend/Dockerfile
     container_name: anomalies-backend
     ports:
       - 5004:5004
