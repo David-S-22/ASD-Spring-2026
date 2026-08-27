@@ -70,26 +70,19 @@ def test_delete_anomaly(client: FlaskClient):
     anomaly = create_anomaly(client, id=uuid4(), transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
     response = client.delete(f"/anomaly/{anomaly.id}")
 
-    assert response.status_code == 200
-    assert response.json == {"deleted": True}
+    assert response.status_code == 204
     assert client.get(f"/anomaly/{anomaly.id}").status_code == 404
 
 def test_delete_anomaly_by_transaction(client: FlaskClient):
     anomaly = create_anomaly(client, id=uuid4(), transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
     response = client.delete(f"/anomaly/by-transaction/{anomaly.transaction_id}")
 
-    assert response.status_code == 200
-    assert response.json == {"deleted": True}
+    assert response.status_code == 204
     assert client.get(f"/anomaly/{anomaly.id}").status_code == 404
 
 def test_delete_anomaly_that_doesnt_exist(client: FlaskClient):
-    response = client.delete(f"/anomaly/{uuid4()}")
+    by_id = client.delete(f"/anomaly/{uuid4()}")
+    by_transaction = client.delete(f"/anomaly/by-transaction/{uuid4()}")
 
-    assert response.status_code == 200
-    assert response.json == {"deleted": False}
-
-def test_delete_anomaly_by_transaction_that_doesnt_exist(client: FlaskClient):
-    response = client.delete(f"/anomaly/by-transaction/{uuid4()}")
-
-    assert response.status_code == 200
-    assert response.json == {"deleted": False}
+    assert by_id.status_code == 204
+    assert by_transaction.status_code == 204

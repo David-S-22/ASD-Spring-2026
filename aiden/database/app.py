@@ -1,5 +1,5 @@
 from uuid import UUID
-from flask import Flask, abort, jsonify, request
+from flask import Flask, Response, abort, jsonify, request
 from .models import Anomaly, db
 
 
@@ -66,7 +66,7 @@ def delete_anomaly(id: UUID):
     assert deleted_count in (0, 1)
     db.session.commit()
 
-    return jsonify(deleted=deleted_count > 0)
+    return empty()
 
 @app.delete("/anomaly/by-transaction/<uuid:id>")
 def delete_anomaly_by_id(id: UUID):
@@ -75,10 +75,13 @@ def delete_anomaly_by_id(id: UUID):
     assert deleted_count in (0, 1)
     db.session.commit()
 
-    return jsonify(deleted=deleted_count > 0)
+    return empty()
 
 def setup(db_path: str):
     with app.app_context():
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
         db.create_all()
+
+def empty():
+    return Response(status=204)
