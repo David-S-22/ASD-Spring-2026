@@ -33,6 +33,17 @@ services:
     volumes:
       - bills_data:/data
 
+  anomalies-backend:
+    build: ./aiden/backend
+    container_name: anomalies-backend
+    ports:
+      - "5004:5004"
+    environment:
+      FLASK_ENV: production
+      PORT: 5004
+      ANOMALIES_DB_URL: http://anomalies-db:6004
+    depends_on:
+      - anomalies-db
   anomalies-db:
     build:
       dockerfile: ./aiden/database/Dockerfile
@@ -46,6 +57,19 @@ services:
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
 
+  savings-db:
+    build: ./david/database
+    container_name: savings-db
+    ports:
+      - "6002:6002"
+    environment:
+      FLASK_ENV: production
+      PORT: 6002
+      DB_PATH: /app/data/savings.db
+    volumes:
+      - savings_data:/data
+
 volumes:
   bills_data:
   anomalies_data:
+  savings_data:
