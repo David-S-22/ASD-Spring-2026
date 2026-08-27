@@ -25,7 +25,7 @@ def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
 
     response = client.post("/anomaly", json=kwargs)
 
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     assert isinstance(data := response.json, dict)
 
     return dto.Anomaly(

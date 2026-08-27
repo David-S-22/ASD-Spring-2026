@@ -1,13 +1,15 @@
 from uuid import UUID
-from flask import Flask, Response, abort, jsonify, request
+from flask import Flask, jsonify, request
 from .models import Anomaly, db
+from .helpers import empty, set_field, try_parse_bool, try_parse_uuid
 
 
+# Setup app
 app = Flask(__name__)
-
 # TODO custom error handlers for abort
 
 
+# Routes
 @app.get("/")
 def get_index():
     return jsonify(container="anomalies-db")
@@ -17,24 +19,11 @@ def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
 
-    if "transaction_id" not in data:
-        abort(400, "Missing required field transaction_id")
-    try:
-        anomaly.transaction_id = UUID(data["transaction_id"])
-    except (AttributeError, TypeError, ValueError):
-        abort(400, "Field transaction_id expected UUID")
-
-    if "agent_reason_suspected" not in data:
-        abort(400, "Missing required field agent_reason_suspected")
-    anomaly.agent_reason_suspected = data["agent_reason_suspected"]
+    set_field(anomaly, data, "transaction_id", try_parse_uuid)
+    set_field(anomaly, data, "agent_reason_suspected", str)
 
     if "is_confirmed_by_user" in data:
-        raw_confirmation = data["is_confirmed_by_user"]
-
-        if isinstance(raw_confirmation, bool):
-            anomaly.is_confirmed_by_user = raw_confirmation
-        else:
-            abort(400, "Field is_confirmed_by_user expected bool")
+        set_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
 
     db.session.add(anomaly)
     db.session.commit()
@@ -82,6 +71,3 @@ def setup(db_path: str):
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
         db.create_all()
-
-def empty():
-    return Response(status=204)
