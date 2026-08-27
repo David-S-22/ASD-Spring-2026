@@ -45,7 +45,8 @@ services:
     depends_on:
       - anomalies-db
   anomalies-db:
-    build: ./aiden/database
+    build:
+      dockerfile: ./aiden/database/Dockerfile
     container_name: anomalies-db
     ports:
       - "6004:6004"

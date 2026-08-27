@@ -7,12 +7,14 @@ on:
     paths:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
+      - "shared/**"
   push:
     branches:
       - "main"
     paths:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
+      - "shared/**"
 
 jobs:
   test:

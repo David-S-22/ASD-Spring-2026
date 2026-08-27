@@ -1,7 +1,7 @@
 import os
 from uuid import UUID
 
-from flask import Flask, abort, jsonify, request
+from flask import Flask, jsonify, request
 from .models import Anomaly, db
 from .helpers import set_mandatory_field, set_optional_field, try_parse_uuid, try_parse_bool
 
@@ -27,13 +27,13 @@ def post_anomaly():
     db.session.commit()
     db.session.refresh(anomaly)
 
-    return anomaly.to_json(), 201
+    return jsonify(anomaly.to_dto()), 201
 
 @app.get("/anomaly/<uuid:id>")
 def get_anomaly(id: UUID):
     anomaly = db.get_or_404(Anomaly, id)
 
-    return anomaly.to_json()
+    return jsonify(anomaly.to_dto())
 
 @app.patch("/anomaly/<uuid:id>")
 def patch_anomaly(id: UUID):
@@ -44,7 +44,7 @@ def patch_anomaly(id: UUID):
     if isinstance(is_confirmed_by_user := data.get("is_confirmed_by_user"), bool): # I have no idea if this checks the type correctly but I will UT it later I promise
         anomaly.is_confirmed_by_user = is_confirmed_by_user
 
-    return anomaly.to_json()
+    return jsonify(anomaly.to_dto())
 
 @app.delete("/anomaly/<uuid:id>")
 def delete_anomaly(id: UUID):
