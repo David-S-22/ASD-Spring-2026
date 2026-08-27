@@ -5,7 +5,14 @@ from flask import Response, abort
 from flask_sqlalchemy.model import Model
 
 
-def set_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
+def set_mandatory_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
+    _set_field(model, data, field_name, field_parser)
+
+def set_optional_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
+    if field_name in data.keys():
+        _set_field(model, data, field_name, field_parser)
+
+def _set_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
     """
     Attempts to parse a field from the input and apply a parser, before setting
     the appropriate field on the model. Aborts with 400 if the field is missing,
@@ -26,7 +33,6 @@ def set_field(model: Model, data: dict, field_name: str, field_parser: Callable[
         return abort(400, f"Field {field_name} expected {field_parser.__name__} but was {type(raw_value).__name__}")
 
     setattr(model, field_name, value)
-
 
 def try_parse_uuid(value: Any) -> Optional[UUID]:
     if isinstance(value, UUID):

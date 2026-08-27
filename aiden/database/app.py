@@ -2,7 +2,7 @@ from uuid import UUID
 from flask import Flask, json, jsonify, request
 from werkzeug.exceptions import HTTPException
 from .models import Anomaly, db
-from .helpers import empty, set_field, try_parse_bool, try_parse_uuid
+from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
 
 
 app = Flask(__name__)
@@ -17,11 +17,9 @@ def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
 
-    set_field(anomaly, data, "transaction_id", try_parse_uuid)
-    set_field(anomaly, data, "agent_reason_suspected", str)
-
-    if "is_confirmed_by_user" in data:
-        set_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
+    set_mandatory_field(anomaly, data, "transaction_id", try_parse_uuid)
+    set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
+    set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
 
     db.session.add(anomaly)
     db.session.commit()
