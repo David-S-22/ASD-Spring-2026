@@ -1,18 +1,19 @@
 from uuid import UUID
-from flask import Flask, json, jsonify, request
+from flask import Blueprint, Flask, json, jsonify, request
 from werkzeug.exceptions import HTTPException
 from .models import Anomaly, db
 from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
 
 
 app = Flask(__name__)
+anomalies = Blueprint("anomalies", __name__)
 
 
 @app.get("/")
 def get_index():
     return jsonify(container="anomalies-db")
 
-@app.post("/anomaly")
+@anomalies.post("/")
 def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
@@ -27,13 +28,13 @@ def post_anomaly():
 
     return jsonify(anomaly.to_dto()), 201
 
-@app.get("/anomaly/<uuid:id>")
+@anomalies.get("/<uuid:id>")
 def get_anomaly(id: UUID):
     anomaly = db.get_or_404(Anomaly, id)
 
     return jsonify(anomaly.to_dto())
 
-@app.patch("/anomaly/<uuid:id>")
+@anomalies.patch("/<uuid:id>")
 def patch_anomaly(id: UUID):
     anomaly = db.get_or_404(Anomaly, id)
     data = request.get_json() or {}
@@ -47,7 +48,7 @@ def patch_anomaly(id: UUID):
 
     return jsonify(anomaly.to_dto())
 
-@app.delete("/anomaly/<uuid:id>")
+@anomalies.delete("/<uuid:id>")
 def delete_anomaly(id: UUID):
     deleted_count = db.session.query(Anomaly).where(Anomaly.id == id).delete()
 
@@ -56,7 +57,7 @@ def delete_anomaly(id: UUID):
 
     return empty()
 
-@app.delete("/anomaly/by-transaction/<uuid:id>")
+@anomalies.delete("/by-transaction/<uuid:id>")
 def delete_anomaly_by_id(id: UUID):
     deleted_count = db.session.query(Anomaly).where(Anomaly.transaction_id == id).delete()
 
@@ -80,6 +81,8 @@ def handle_exception(e):
     return response
 
 def setup(db_path: str):
+    app.register_blueprint(anomalies, url_prefix="/anomalies")
+
     with app.app_context():
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
