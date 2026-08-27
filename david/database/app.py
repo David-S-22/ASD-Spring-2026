@@ -41,21 +41,21 @@ def setup_app(database_path) -> Flask:
     def get_feedback(id: int):
         return jsonify(asdict(db.get_or_404(Feedback, id)))
 
-    @app.route("/goal/add", methods=["POST"])
+    @app.route("/goal", methods=["POST"])
     def add_goal_route():
         payload = request.get_json()
 
         if "name" not in payload:
             return jsonify({"error": "Missing goal field: name"}), 400
-        if "amount" not in payload:
+        if "cost" not in payload:
             return jsonify({"error": "Missing goal field: amount"}), 400
         if "date" not in payload:
             return jsonify({"error": "Missing goal field: date"}), 400
 
         goal = Goal(
-            name=payload["name"],
-            amount=int(payload["amount"]),
-            date=datetime.datetime.fromisoformat(payload["date"])
+            name = payload["name"],
+            cost = int(payload["cost"]),
+            date = datetime.datetime.fromisoformat(payload["date"])
         )
 
         db.session.add(goal)
@@ -63,7 +63,7 @@ def setup_app(database_path) -> Flask:
         return jsonify(asdict(goal)), 201
 
 
-    @app.route("/suggestion/add", methods=["POST"])
+    @app.route("/suggestion", methods=["POST"])
     def add_suggestion_route():
         payload = request.get_json()
 
@@ -76,7 +76,7 @@ def setup_app(database_path) -> Flask:
         return jsonify(asdict(suggestion)), 201
 
 
-    @app.route("/feedback/add", methods=["POST"])
+    @app.route("/feedback", methods=["POST"])
     def add_feedback_route():
         payload = request.get_json()
 
@@ -125,7 +125,7 @@ def setup_app(database_path) -> Flask:
         if not goal_to_update:
             return abort(404)
 
-        updated_goal = request.get_json() or {}
+        updated_goal = request.get_json()
         if "name" not in updated_goal and "amount" not in updated_goal and "date" not in updated_goal:
             return jsonify({"error": "No valid fields provided"}), 400
 
@@ -140,7 +140,7 @@ def setup_app(database_path) -> Flask:
         return jsonify(asdict(goal_to_update)), 200
 
 
-    @app.route("/goal/delete/<int:id>", methods=["DELETE"])
+    @app.route("/goal/<int:id>", methods=["DELETE"])
     def delete_goal_route(id: int):
         goal = db.session.get(Goal, id)
         if goal is None:
@@ -151,7 +151,7 @@ def setup_app(database_path) -> Flask:
         return "", 204
 
 
-    @app.route("/suggestion/delete/<int:id>", methods=["DELETE"])
+    @app.route("/suggestion/<int:id>", methods=["DELETE"])
     def delete_suggestion_route(id: int):
         suggestion = db.session.get(Suggestion, id)
         if suggestion is None:
@@ -162,7 +162,7 @@ def setup_app(database_path) -> Flask:
         return "", 204
 
 
-    @app.route("/feedback/delete/<int:id>", methods=["DELETE"])
+    @app.route("/feedback/<int:id>", methods=["DELETE"])
     def delete_feedback_route(id: int):
         feedback = db.session.get(Feedback, id)
         if feedback is None:
