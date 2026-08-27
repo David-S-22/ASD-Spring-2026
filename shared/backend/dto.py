@@ -2,6 +2,7 @@
 # They expose the public shape of the data, whilst leaving the internals
 # for the database engine to maintain
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -11,6 +12,7 @@ class Transaction:
     id: UUID
     amount: float
     merchant: str
+    date: datetime
 
 # Represents a transaction an agent has decided may be suspicious. The user can confirm
 # whether it is true positive or false positive, which is represented by is_confirmed_by_user
