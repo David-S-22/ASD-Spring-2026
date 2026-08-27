@@ -1,4 +1,5 @@
 FROM nginx:alpine
 EXPOSE 3004
 
-COPY . /usr/share/nginx/html
+COPY public/ /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/templates/default.conf.template
