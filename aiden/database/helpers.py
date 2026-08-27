@@ -22,10 +22,8 @@ def _set_field(model: Model, data: dict, field_name: str, field_parser: Callable
     if field_name not in data.keys():
         return abort(400, f"Missing required field {field_name}")
 
-    raw_value = data[field_name]
-
     try:
-        value = field_parser(raw_value)
+        value = field_parser(raw_value := data[field_name])
     except:
         value = None
 
