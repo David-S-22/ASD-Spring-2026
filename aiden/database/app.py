@@ -1,15 +1,13 @@
 from uuid import UUID
-from flask import Flask, jsonify, request
+from flask import Flask, json, jsonify, request
+from werkzeug.exceptions import HTTPException
 from .models import Anomaly, db
 from .helpers import empty, set_field, try_parse_bool, try_parse_uuid
 
 
-# Setup app
 app = Flask(__name__)
-# TODO custom error handlers for abort
 
 
-# Routes
 @app.get("/")
 def get_index():
     return jsonify(container="anomalies-db")
@@ -65,6 +63,20 @@ def delete_anomaly_by_id(id: UUID):
     db.session.commit()
 
     return empty()
+
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """Return JSON instead of HTML for HTTP errors."""
+
+    response = e.get_response()
+    response.content_type = "application/json"
+    response.data = json.dumps({
+        "code": e.code,
+        "name": e.name,
+        "description": e.description,
+    })
+
+    return response
 
 def setup(db_path: str):
     with app.app_context():
