@@ -9,7 +9,6 @@ def add_to_path(path: pathlib.Path):
 
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
-        print("adding", path_str)
 
 add_to_path(pathlib.Path(__file__).resolve().parent.parent.parent)
 add_to_path(pathlib.Path(__file__).resolve().parent.parent)
