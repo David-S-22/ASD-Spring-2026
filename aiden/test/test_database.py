@@ -86,3 +86,11 @@ def test_delete_anomaly_that_doesnt_exist(client: FlaskClient):
 
     assert by_id.status_code == 204
     assert by_transaction.status_code == 204
+
+def test_route_not_found(client: FlaskClient):
+    response = client.get("/whatareyoudoinginmyswamp")
+
+    assert response.status_code == 404
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 404
+    assert response.json["name"] == "Not Found"

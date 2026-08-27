@@ -41,8 +41,11 @@ def patch_anomaly(id: UUID):
     data = request.get_json() or {}
 
     # Only the following fields are permitted to be mutated once created
-    if isinstance(is_confirmed_by_user := data.get("is_confirmed_by_user"), bool): # I have no idea if this checks the type correctly but I will UT it later I promise
-        anomaly.is_confirmed_by_user = is_confirmed_by_user
+    if isinstance(is_confirmed_by_user := try_parse_bool(data.get("is_confirmed_by_user")), bool):
+        anomaly.is_confirmed_by_user = is_confirmed_by_user # TODO UT
+
+    db.session.commit()
+    db.session.refresh(anomaly)
 
     return jsonify(anomaly.to_dto())
 
