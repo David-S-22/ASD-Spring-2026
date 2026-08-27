@@ -33,11 +33,20 @@ services:
     volumes:
       - bills_data:/data
 
+  anomalies-frontend:
+    build: ./aiden/frontend
+    container_name: anomalies-frontend
+    ports:
+      - 3004:3004
+    environment:
+      PORT: 3004
+    depends_on:
+      - anomalies-backend
   anomalies-backend:
     build: ./aiden/backend
     container_name: anomalies-backend
     ports:
-      - "5004:5004"
+      - 5004:5004
     environment:
       FLASK_ENV: production
       PORT: 5004
@@ -49,7 +58,7 @@ services:
       dockerfile: ./aiden/database/Dockerfile
     container_name: anomalies-db
     ports:
-      - "6004:6004"
+      - 6004:6004
     volumes:
       - anomalies_data:/app/data
     environment:
