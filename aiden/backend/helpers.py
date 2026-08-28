@@ -2,9 +2,11 @@ from dataclasses import fields, is_dataclass
 from typing import Any, Optional, Type, TypeVar, get_args, get_origin, Union
 from uuid import UUID
 
+from flask import abort
+
 T = TypeVar("T")
 
-def serialize(dto: Any) -> dict:
+def serialise(dto: Any) -> dict:
     """Serializes a flat dataclass into a dict, converting all UUIDs to strings."""
 
     if not is_dataclass(dto):
@@ -21,7 +23,15 @@ def serialize(dto: Any) -> dict:
 
     return result
 
-def try_deserialize(cls: Type[T], data: dict) -> Optional[T]:
+def deserialise_or_abort(cls: Type[T], data: dict) -> Optional[T]:
+    dto = deserialise_safe(cls, data)
+
+    if dto is None:
+        abort(500, "Schema mismatch between backend and database")
+
+    return dto
+
+def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
     """Safely reconstructs a flat dataclass from a dict, converting strings back to UUIDs."""
 
     if not is_dataclass(cls):

@@ -1,6 +1,6 @@
 from uuid import UUID
 from flask import Blueprint, Flask, json, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import select, inspect
 from werkzeug.exceptions import HTTPException
 from .models import Anomaly, db
 from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
@@ -50,7 +50,9 @@ def patch_anomaly(id: UUID):
     if isinstance(is_confirmed_by_user := try_parse_bool(data.get("is_confirmed_by_user")), bool):
         anomaly.is_confirmed_by_user = is_confirmed_by_user # TODO UT
 
-    db.session.commit()
+    if inspect(anomaly, raiseerr=True).modified:
+        db.session.commit() # idk about this one
+
     db.session.refresh(anomaly)
 
     return jsonify(anomaly.to_dto())
