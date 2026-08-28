@@ -30,25 +30,21 @@ jobs:
       - name: Run tests
         run: python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 
-  docker-health:
-    needs: test
+  docker-health: # Check bills container health after startup
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v6
-      - name: Build service images
-        run: docker compose build bills-frontend bills-backend bills-db
-      - name: Start services
-        run: docker compose up -d bills-db bills-backend bills-frontend
+      - run: docker compose build bills-frontend bills-backend bills-db
+      - run: docker compose up -d bills-db bills-backend bills-frontend
       - run: sleep 5
-      - name: Check database health
-        run: curl --fail http://127.0.0.1:6005/health
-      - name: Check backend health
-        run: curl --fail http://127.0.0.1:5005/health
+      - name: Check database availability
+        run: curl --fail http://127.0.0.1:6005/health || exit 1
+      - name: Check backend availability
+        run: curl --fail http://127.0.0.1:5005/health || exit 1
       - name: Check frontend availability
-        run: curl --fail -o /dev/null http://127.0.0.1:3005/
-      - name: Dump container logs
-        run: docker compose logs bills-db bills-backend bills-frontend
+        run: curl --fail http://127.0.0.1:3005/ || exit 1
+      - run: docker logs bills-db && docker logs bills-backend && docker logs bills-frontend
         if: failure()
-      - name: Tear down
-        run: docker compose down -v
+      - run: docker compose down -v
         if: always()
