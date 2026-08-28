@@ -127,3 +127,32 @@ document.body.addEventListener("click", function (evt) {
     document.getElementById("modal-root").innerHTML = "";
   }
 });
+
+(function () {
+  if (location.pathname.indexOf("/handoff/") === 0) {
+    htmx.ajax("GET", "/ui" + location.pathname + location.search, { target: "#modal-root", swap: "innerHTML" });
+    history.replaceState(null, "", "/");
+    return;
+  }
+  if (location.hash.indexOf("#bills?confirm=") === 0) {
+    var billId = parseInt(location.hash.split("confirm=")[1], 10);
+    activateTab("bills");
+    if (isNaN(billId)) {
+      return;
+    }
+    document.body.addEventListener("htmx:afterSettle", function scrollToBill() {
+      var row = document.querySelector('#bills-table tr[data-bill-id="' + billId + '"]');
+      if (row) {
+        document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+        row.scrollIntoView({ block: "center" });
+      }
+    });
+    return;
+  }
+  if (location.hash.indexOf("#chat?") === 0) {
+    var chat = document.querySelector(".ask-tally");
+    if (chat) {
+      chat.scrollIntoView({ block: "start" });
+    }
+  }
+})();
