@@ -9,7 +9,7 @@ def set_mandatory_field(model: Model, data: dict, field_name: str, field_parser:
     _set_field(model, data, field_name, field_parser)
 
 def set_optional_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
-    if field_name in data.keys():
+    if field_name in data.keys() and data[field_name] is not None:
         _set_field(model, data, field_name, field_parser)
 
 def _set_field(model: Model, data: dict, field_name: str, field_parser: Callable[[Any], Any | None]):
@@ -50,6 +50,8 @@ def try_parse_bool(value: Any) -> Optional[bool]:
 
     elif value.lower() == "false":
         return False
+
+    return None
 
 def empty():
     return Response(status=204)

@@ -47,12 +47,11 @@ def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
         field_value = data[field_name]
         field_type = field.type
 
-        assert get_origin(field_type) is not Union # not dealing with this
-        
-        # Unwrap Optional[...] to just ...
-        if get_origin(field_type) is Optional:
-            types = get_args(field_type)
-            field_type = types[0] if types[1] is type(None) else types[1]
+        # Unwrap Optional[...] / Union[..., None] to the underlying type
+        if get_origin(field_type) is Union:
+            non_none = [arg for arg in get_args(field_type) if arg is not type(None)]
+            if len(non_none) == 1:
+                field_type = non_none[0]
 
         # Try reconstruct UUID
         if field_type is UUID and isinstance(field_value, str):

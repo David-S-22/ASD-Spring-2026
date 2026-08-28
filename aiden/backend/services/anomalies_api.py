@@ -10,10 +10,7 @@ def get_all_anomalies() -> List[dto.Anomaly]:
     resp = requests.get(url("/"))
     resp.raise_for_status()
 
-    data = resp.json()
-    assert isinstance(data, list)
-
-    return data # TODO fix
+    return [deserialise_or_abort(dto.Anomaly, item) for item in resp.json()]
 
 def create_anomaly(anomaly: dto.Anomaly) -> dto.Anomaly:
     payload = asdict(anomaly)
