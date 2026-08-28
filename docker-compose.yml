@@ -77,6 +77,17 @@ services:
       DB_PATH: /app/data/savings.db
     volumes:
       - savings_data:/data
+  savings-backend:
+    build: ./david/backend
+    container_name: savings-backend
+    ports:
+      - 5002:5002
+    environment:
+      FLASK_ENV: production
+      PORT: 5002
+      DB_URL: http://savings-db:6002
+    depends_on:
+      - savings-db
 
 volumes:
   bills_data:
