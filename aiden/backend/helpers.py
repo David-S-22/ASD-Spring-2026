@@ -1,6 +1,7 @@
 from dataclasses import fields, is_dataclass
 from typing import Any, Optional, Type, TypeVar, get_args, get_origin, Union
 from uuid import UUID
+import os
 
 from flask import abort
 
@@ -63,3 +64,6 @@ def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
         kwargs[field_name] = field_value
 
     return cls(**kwargs)
+
+def get_env(name: str) -> str:
+    return os.environ[name]

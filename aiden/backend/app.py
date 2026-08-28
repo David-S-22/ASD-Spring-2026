@@ -1,4 +1,3 @@
-import os
 from flask import Flask, abort, jsonify, render_template
 from shared.backend import dto
 from .services import anomalies_api
@@ -17,7 +16,7 @@ def get_anomaly_rows():
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
-    abort(418)
+    model = dto.Anomaly(transaction_id="dummy-transaction-id", agent_reason_suspected="hello")
+    anomalies_api.create_anomaly(model)
 
-def get_env(name: str) -> str:
-    return os.environ[name]
+    return get_anomaly_rows()
