@@ -1,5 +1,5 @@
 import os
-from flask import Flask, abort, jsonify
+from flask import Flask, abort, jsonify, render_template
 from shared.backend import dto
 from .services import anomalies_api
 
@@ -9,13 +9,11 @@ app = Flask(__name__)
 def get_index():
     return jsonify(container="anomalies-backend")
 
-@app.get("/all-anomalies")
-def get_all_anomalies():
-    app.logger.warning("getting anomalies")
-    for anomaly in anomalies_api.get_all_anomalies():
-        app.logger.debug("got anomaly", anomaly)
+@app.get("/anomalies")
+def get_anomaly_rows():
+    anomalies = anomalies_api.get_all_anomalies()
 
-    abort(418)
+    return render_template("anomalies.jinja", anomalies=anomalies)
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():

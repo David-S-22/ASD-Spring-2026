@@ -40,6 +40,7 @@ services:
       - 3004:3004
     environment:
       PORT: 3004
+      ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
     depends_on:
       - anomalies-backend
   anomalies-backend:
