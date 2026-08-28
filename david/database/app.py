@@ -176,5 +176,5 @@ def setup_app(database_path) -> Flask:
     return app
 
 if __name__ == "__main__":
-    app = setup_app(os.path.join(os.getcwd(), "savings.db"))
+    app = setup_app(os.environ.get("DB_PATH", "savings.db"))
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 6002)))

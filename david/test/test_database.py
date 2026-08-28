@@ -1,4 +1,3 @@
-from flask import jsonify
 from database.models import Suggestion
 from typing import List
 from typing import List
@@ -169,6 +168,7 @@ def test_update_goal(client: FlaskClient):
     new_date = datetime(2025, 6, 7);
     goals[0].date = new_date
     updated_goal_json = dumps(asdict(goals[0]), default=str)
+    headers = {"Content-type": "application/json"}
     response = client.patch(f"/goal/{goals[0].id}", data=updated_goal_json, content_type="application/json")
     assert response.status_code == 200
 
