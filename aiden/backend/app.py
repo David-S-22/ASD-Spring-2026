@@ -18,12 +18,12 @@ def get_anomaly_rows():
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
-    model = dto.Anomaly(
+    anomaly = dto.Anomaly(
         id=uuid4(),
         transaction_id=uuid4(),
         agent_reason_suspected="hello",
         is_confirmed_by_user=random.choice((True, False, None)),
     )
 
-    anomalies_api.create_anomaly(model)
+    anomalies_api.create_anomaly(anomaly)
     return get_anomaly_rows()
