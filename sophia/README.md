@@ -41,6 +41,12 @@ Dockerized frontend proxies through nginx; a bare static-file server won't
 proxy `/api/` or `/ui/`, so hitting the backend directly on `:5005` is
 easiest for local iteration).
 
+Architecture diagrams:
+[individual architecture](../docs/architecture/r0-d1-individual-architecture.png),
+[compose topology](../docs/architecture/r0-d2-docker-compose-architecture.png),
+[dispute loop](../docs/architecture/r0-d3-paoa-dispute-loop.png),
+[chat loop](../docs/architecture/r0-d4-paoa-chat-loop.png).
+
 ## Ports and env vars
 
 | Service | Port | Key env vars |
@@ -124,10 +130,10 @@ See `docs/release-0/sophia/schema-adoption.md` for the four additive schema item
 ## Testing and evidence
 
 ```
-python -m pytest sophia/test -q
+python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 ```
 
-108 passed in 3.00s
+108 passed; coverage 81% across `sophia/backend` (measured 28 Aug 2026).
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
@@ -149,19 +155,19 @@ Diagrams are in `docs/architecture/` and app screenshots in
 `docs/release-0/sophia/screenshots/` (see the README there). Per the spec's
 repository layout, nothing under `sophia/` is documentation.
 
-## Merge status
+## Pull requests
 
-All six PRs (`chore/rename-sophia-folder`, `feat/bills-engine`,
-`feat/bills-db-api`, `feat/bills-backend`, `feat/bills-frontend`,
-`feat/bills-ai`) were opened 22 Aug 2026, stacked, and CI-green on their own
-branch. None are merged yet: `main`'s branch ruleset requires the
-`David-CI` status check on every PR before it can merge, but `David-CI.yml`
-only triggers on `david/**` paths, so a PR touching only `sophia/**` can
-never produce that check — it stays blocked indefinitely, not just slow.
-Raised with David on 22 Aug 2026. The workaround in use is a whitespace
-touch to `david/.gitkeep` on David's side per PR, so `David-CI` actually
-runs and the required check can pass; merges are being carried out by hand
-once that lands on each branch.
+All Bills PRs are merged to `main` — 21 in total, each squash-merged after
+review:
+
+- Scaffold #6, #7 · engine #8 · DB API #13 · backend #10 · frontend #11 ·
+  AI #12
+- Defect fixes: #14, #15, #16, #17, #18, #31
+- Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33
+- Requirements split: #34
+
+Actions evidence — Sophia-CI run on `main`:
+<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/32573962576>
 
 ## Workflow note
 

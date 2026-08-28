@@ -28,6 +28,10 @@ Base URL in compose: `http://bills-backend:5005`. Locally: `http://localhost:500
 | POST | `/api/suggestions` | See `contracts-inbound.md`. |
 | GET | `/health` | `{ok, today, db_api, transactions_api, ollama}`. |
 
+## Reading projected bills
+
+Stored bill rows come from the database API: `GET :6005/bills`. Projections (next occurrences, monthly-committed totals) come from the backend: `GET :5005/api/upcoming`, because the date engine lives in the backend, not the database container. The earlier `:6005/upcoming` passthrough was removed in PR #31 so the database container does not depend on the backend. Calling the backend for projections is the one declared exception to reading other features' data through their DB API.
+
 ## HTML fragments (`/ui/*`)
 
 Jinja fragments rendered for HTMX: `GET /ui/bills`, `GET /ui/calendar`, `GET /ui/timeline?days=`, `GET /ui/disputes?bill_id=`, `GET /ui/chat`, `GET /ui/modal`, `GET /ui/toast?text=`. These render the same engine output as the JSON routes above; the frontend build (a later PR) wires the interactive bits (row action buttons, modal confirm/cancel) that are currently inert placeholders in the templates.
