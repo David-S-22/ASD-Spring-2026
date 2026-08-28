@@ -101,7 +101,7 @@ def setup_app(database_path) -> Flask:
 
         feedback_to_update.feedback = updated_feedback["feedback"]
         db.session.commit()
-        return jsonify(asdict(feedback_to_update)), 200
+        return jsonify(feedback_to_update.to_dto()), 200
 
 
     @app.route("/suggestion/<int:id>", methods=["PATCH"])

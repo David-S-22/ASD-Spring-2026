@@ -67,7 +67,8 @@ services:
       DB_PATH: /app/data/anomalies.db
 
   savings-db:
-    build: ./david/database
+    build: 
+      dockerfile: ./david/database/Dockerfile
     container_name: savings-db
     ports:
       - "6002:6002"
