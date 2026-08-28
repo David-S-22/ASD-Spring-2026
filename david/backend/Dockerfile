@@ -2,9 +2,10 @@ FROM python:3.14
 
 WORKDIR /app
 
-COPY ./savings-service ./savings-service
-# COPY ./prompts ./prompts
-COPY requirements.txt ./requirements.txt
+COPY ./david/backend/savings-service ./savings-service
+COPY ./david/backend/prompts ./prompts
+COPY ./david/backend/requirements.txt ./requirements.txt
+COPY ./shared/backend ./shared/backend
 
 RUN pip install --no-cache-dir -r ./requirements.txt
 

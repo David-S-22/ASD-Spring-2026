@@ -81,7 +81,8 @@ services:
     volumes:
       - savings_data:/data
   savings-backend:
-    build: ./david/backend
+    build: 
+      dockerfile: ./david/backend/Dockerfile
     container_name: savings-backend
     ports:
       - 5002:5002
