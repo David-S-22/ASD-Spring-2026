@@ -24,7 +24,7 @@ def serialise(dto: Any) -> dict:
 
     return result
 
-def deserialise_or_abort(cls: Type[T], data: dict) -> Optional[T]:
+def deserialise_or_abort(cls: Type[T], data: dict) -> T:
     dto = deserialise_safe(cls, data)
 
     if dto is None:

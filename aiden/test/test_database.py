@@ -3,6 +3,7 @@ from database.app import app, setup
 from flask.testing import FlaskClient
 from shared.backend import dto
 from typing import Any
+from backend.helpers import serialise, deserialise_safe
 from uuid import UUID, uuid4
 
 
@@ -17,23 +18,13 @@ def client():
         yield client
 
 def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
-    if "id" in kwargs:
-        kwargs["id"] = str(kwargs["id"])
-
-    if "transaction_id" in kwargs:
-        kwargs["transaction_id"] = str(kwargs["transaction_id"])
-
-    response = client.post("/anomalies/", json=kwargs)
+    model = dto.Anomaly(**kwargs)
+    response = client.post("/anomalies/", json=serialise(model))
 
     assert response.status_code == 201, response.text
     assert isinstance(data := response.json, dict)
 
-    return dto.Anomaly(
-        id=UUID(data["id"]),
-        transaction_id=UUID(data["transaction_id"]),
-        agent_reason_suspected=data["agent_reason_suspected"],
-        is_confirmed_by_user=data["is_confirmed_by_user"],
-    )
+    return deserialise_safe(dto.Anomaly, data)
 
 
 # Tests
