@@ -1,5 +1,8 @@
+from uuid import uuid4
 import random
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, jsonify, render_template
+from shared.backend import dto
+from .services import anomalies_api
 
 app = Flask(__name__)
 
@@ -7,9 +10,20 @@ app = Flask(__name__)
 def get_index():
     return jsonify(container="anomalies-backend")
 
-@app.post("/check-new-transaction-for-anomalies")
-def post_newtransaction():
-    if random.choice((True, False)):
-        return jsonify(ok=True)
+@app.get("/anomalies")
+def get_anomaly_rows():
+    anomalies = anomalies_api.get_all_anomalies()
 
-    return abort(400)
+    return render_template("anomalies.jinja", anomalies=anomalies)
+
+@app.post("/dummy-anomaly")
+def create_dummy_anomaly():
+    anomaly = dto.Anomaly(
+        id=uuid4(),
+        transaction_id=uuid4(),
+        agent_reason_suspected="hello",
+        is_confirmed_by_user=random.choice((True, False, None)),
+    )
+
+    anomalies_api.create_anomaly(anomaly)
+    return get_anomaly_rows()

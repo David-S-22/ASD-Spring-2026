@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from flask import abort
 from flask import jsonify
 from flask import request
@@ -17,29 +16,29 @@ def setup_app(database_path) -> Flask:
     @app.route("/goals")
     def get_goals():
         goals = db.session.execute(db.select(Goal)).scalars().all()
-        return jsonify([asdict(goal) for goal in goals])
+        return jsonify([goal.to_dto() for goal in goals])
 
     @app.route("/suggestions")
     def get_suggestions():
         suggestions = db.session.execute(db.select(Suggestion)).scalars().all()
-        return jsonify([asdict(suggestion) for suggestion in suggestions])
+        return jsonify([suggestion.to_dto() for suggestion in suggestions])
 
     @app.route("/feedbacks")
     def get_feedbacks():
         feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
-        return jsonify([asdict(feedback) for feedback in feedbacks])
+        return jsonify([feedback.to_dto() for feedback in feedbacks])
 
     @app.route("/goal/<int:id>")
     def get_goal(id: int):
-        return jsonify(asdict(db.get_or_404(Goal, id)))
+        return jsonify(db.get_or_404(Goal, id).to_dto())
 
     @app.route("/suggestion/<int:id>")
     def get_suggestion(id: int):
-        return jsonify(asdict(db.get_or_404(Suggestion, id)))
+        return jsonify(db.get_or_404(Suggestion, id).to_dto())
 
     @app.route("/feedback/<int:id>")
     def get_feedback(id: int):
-        return jsonify(asdict(db.get_or_404(Feedback, id)))
+        return jsonify(db.get_or_404(Feedback, id).to_dto())
 
     @app.route("/goal", methods=["POST"])
     def add_goal_route():
@@ -60,7 +59,7 @@ def setup_app(database_path) -> Flask:
 
         db.session.add(goal)
         db.session.commit()
-        return jsonify(asdict(goal)), 201
+        return jsonify(goal.to_dto()), 201
 
 
     @app.route("/suggestion", methods=["POST"])
@@ -73,7 +72,7 @@ def setup_app(database_path) -> Flask:
         suggestion = Suggestion(suggestion=payload["suggestion"])
         db.session.add(suggestion)
         db.session.commit()
-        return jsonify(asdict(suggestion)), 201
+        return jsonify(suggestion.to_dto()), 201
 
 
     @app.route("/feedback", methods=["POST"])
@@ -86,7 +85,7 @@ def setup_app(database_path) -> Flask:
         feedback = Feedback(feedback=payload["feedback"])
         db.session.add(feedback)
         db.session.commit()
-        return jsonify(asdict(feedback)), 201
+        return jsonify(feedback.to_dto()), 201
 
 
     @app.route("/feedback/<int:id>", methods=["PATCH"])
@@ -101,7 +100,7 @@ def setup_app(database_path) -> Flask:
 
         feedback_to_update.feedback = updated_feedback["feedback"]
         db.session.commit()
-        return jsonify(asdict(feedback_to_update)), 200
+        return jsonify(feedback_to_update.to_dto()), 200
 
 
     @app.route("/suggestion/<int:id>", methods=["PATCH"])
@@ -116,7 +115,7 @@ def setup_app(database_path) -> Flask:
 
         suggestion_to_update.suggestion = updated_suggestion["suggestion"]
         db.session.commit()
-        return jsonify(asdict(suggestion_to_update)), 200
+        return jsonify(suggestion_to_update.to_dto()), 200
 
 
     @app.route("/goal/<int:id>", methods=["PATCH"])
@@ -126,18 +125,20 @@ def setup_app(database_path) -> Flask:
             return abort(404)
 
         updated_goal = request.get_json()
-        if "name" not in updated_goal and "amount" not in updated_goal and "date" not in updated_goal:
+        if "name" not in updated_goal and "amount" not in updated_goal and "date" not in updated_goal and "cost" not in updated_goal:
             return jsonify({"error": "No valid fields provided"}), 400
 
         if "name" in updated_goal:
             goal_to_update.name = updated_goal["name"]
-        if "amount" in updated_goal:
-            goal_to_update.amount = updated_goal["amount"]
+        if "cost" in updated_goal:
+            goal_to_update.cost = updated_goal["cost"]
+        elif "amount" in updated_goal:
+            goal_to_update.cost = updated_goal["amount"]
         if "date" in updated_goal:
             goal_to_update.date = datetime.datetime.fromisoformat(updated_goal["date"])
 
         db.session.commit()
-        return jsonify(asdict(goal_to_update)), 200
+        return jsonify(goal_to_update.to_dto()), 200
 
 
     @app.route("/goal/<int:id>", methods=["DELETE"])

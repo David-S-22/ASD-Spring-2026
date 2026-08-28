@@ -1,0 +1,10 @@
+{% for anomaly in anomalies %}
+<tr>
+  <td>{{ anomaly.id }}</td>
+  <td>{{ anomaly.transaction_id }}</td>
+  <td>{{ anomaly.agent_reason_suspected }}</td>
+  <td>{% if anomaly.is_confirmed_by_user is none %}Unreviewed{% elif anomaly.is_confirmed_by_user %}Confirmed{% else %}Dismissed{% endif %}</td>
+</tr>
+{% else %}
+<tr><td colspan="4">No anomalies found.</td></tr>
+{% endfor %}
