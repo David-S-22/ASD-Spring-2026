@@ -312,3 +312,21 @@ def test_barely_using_flags_bills_billed_repeatedly_since_confirmation(client, s
         in reply
     )
     assert "Spotify" not in reply
+
+
+def test_handoff_urls_start_with_configured_frontend_origin(client, store):
+    response = client.post(
+        "/api/handoff/recurring", json={"source": "transactions", "merchant": "Spotify AU", "intent": "end"}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["ui_url"].startswith(config.FRONTEND_ORIGIN)
+
+    created = client.post(
+        "/api/suggestions",
+        json={
+            "source": "alerts", "alert_id": 7, "merchant": "StreamCo", "amount": 1299,
+            "cadence": "monthly", "last_seen": "2026-08-01", "occurrences": 4,
+        },
+    )
+    assert created.status_code == 201
+    assert created.get_json()["confirm_url"].startswith(config.FRONTEND_ORIGIN)
