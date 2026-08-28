@@ -79,7 +79,7 @@ services:
       PORT: 6002
       DB_PATH: /app/data/savings.db
     volumes:
-      - savings_data:/data
+      - savings_data:/app/data
   savings-backend:
     build: 
       dockerfile: ./david/backend/Dockerfile
