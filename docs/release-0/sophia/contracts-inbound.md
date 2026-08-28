@@ -2,9 +2,9 @@
 
 Assumptions this feature makes about other students' services, written down so a mismatch is a one-file diff.
 
-## 1. Transactions service (Janelle, :6001)
+## 1. Transactions service (Janelle, :6003)
 
-Assumed contract: `GET /transactions?merchant=&since=` returning a list of rows with `date`, `merchant`, `description`, `amount`, `category_id`, `ai_confidence`. `sophia/backend/clients/transactions.py` normalises every row through one `_normalise()` function, so a differing real contract is a one-function change. When `TRANSACTIONS_DB_API_URL` is unset, or the real service errors, the client falls back to `sophia/backend/fixtures/transactions_stub.json` (~25 rows across the seed merchants) and reports `source="stub"`.
+Assumed contract: `GET /transactions?merchant=&since=` returning a list of rows with `date`, `merchant`, `description`, `amount`, `category_id`, `ai_confidence`. The field shape is Janelle's call as the data owner; `sophia/backend/fixtures/transactions_stub.json` is the worked example Bills currently codes against. `sophia/backend/clients/transactions.py` normalises every row through one `_normalise()` function, so a differing real contract is a one-function change. When `TRANSACTIONS_DB_API_URL` is unset, or the real service errors, the client falls back to `sophia/backend/fixtures/transactions_stub.json` (~25 rows across the seed merchants) and reports `source="stub"`.
 
 ## 2. Recurring-bill handoff
 
@@ -12,6 +12,26 @@ Assumed contract: `GET /transactions?merchant=&since=` returning a list of rows 
 
 Simpler deep link for a plain nudge into chat: `http://localhost:3005/#chat?message=<urlencoded>`.
 
-## 3. Bill suggestions from alerts
+This endpoint deliberately stays a `POST` (decision D2): it returns a preview plus `apply_url`, and nothing is written until the confirmed preview is applied.
 
-`POST /api/suggestions` — body `{source: "alerts", alert_id, merchant, amount, cadence, last_seen, occurrences}` — returns `201 {bill_id, status, confirm_url: "http://localhost:3005/#bills?confirm=<id>"}`. Creates the bill immediately with `source="f4_handoff"` and `confirmed_at=NULL`, so it shows a "Confirm this?" prompt in the bills table until the user confirms it.
+## 3. Bill suggestions from alerts (Feature 4)
+
+Link handoff: `GET http://localhost:3005/handoff/subscription?...` with the parameters below. Bills opens its normal add-bill form prefilled from the parameters; nothing is created until the user saves it. Saved bills carry `source="f4_handoff"` and `confirmed_at=NULL`, so they show a "Confirm this?" prompt in the bills table until confirmed.
+
+| Param | Required | Type | Notes |
+|---|---|---|---|
+| `source` | yes | `f4` | |
+| `alert_id` | yes | int | shown on the preview; lets him mark the alert handled |
+| `merchant` | yes | string | |
+| `amount` | yes | decimal dollars | the typical amount observed; Bills converts to cents |
+| `cadence` | yes | `weekly` / `fortnightly` / `monthly` | if unsure send `monthly` + `confidence=low` |
+| `first_seen` | yes | `YYYY-MM-DD` | first occurrence in the evidence |
+| `last_seen` | yes | `YYYY-MM-DD` | most recent; Bills projects `next_billing_date` from this + cadence |
+| `occurrences` | yes | int | how many charges the pattern rests on; shown on the preview |
+| `confidence` | no | `high` / `low` | wording only |
+| `evidence` | no | comma-separated ints | his transaction refs, shown as "based on N charges" |
+| `return_url` | no | url | back to his alerts |
+
+`next_billing_date` is deliberately not a parameter — he sends what he observed, Bills computes what happens next.
+
+The earlier `POST /api/suggestions` — body `{source: "alerts", alert_id, merchant, amount, cadence, last_seen, occurrences}`, returning `201 {bill_id, status, confirm_url: "http://localhost:3005/#bills?confirm=<id>"}` — still exists and creates the bill immediately; the link above is the preferred handoff because nothing is written until the user saves the prefilled form.
