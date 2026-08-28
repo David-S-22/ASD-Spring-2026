@@ -51,7 +51,7 @@ services:
     environment:
       FLASK_ENV: production
       PORT: 5004
-      ANOMALIES_DB_URL: http://anomalies-db:6004
+      ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
     depends_on:
       - anomalies-db
   anomalies-db:

@@ -1,5 +1,6 @@
 from uuid import UUID
 from flask import Blueprint, Flask, json, jsonify, request
+from sqlalchemy import select
 from werkzeug.exceptions import HTTPException
 from .models import Anomaly, db
 from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
@@ -12,6 +13,12 @@ anomalies = Blueprint("anomalies", __name__)
 @app.get("/")
 def get_index():
     return jsonify(container="anomalies-db")
+
+@anomalies.get("/")
+def get_all_anomalies():
+    anomalies = db.session.scalars(select(Anomaly)).all()
+
+    return jsonify([a.to_dto() for a in anomalies])
 
 @anomalies.post("/")
 def post_anomaly():
