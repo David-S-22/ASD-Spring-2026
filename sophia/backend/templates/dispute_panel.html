@@ -13,11 +13,11 @@
 
   <textarea class="letter">{{ draft.letter_text if draft else "" }}</textarea>
   <ol class="checklist">
-    {% for step in draft.steps if draft %}<li>{{ step }}</li>{% endfor %}
+    {% if draft %}{% for step in draft.steps %}<li>{{ step }}</li>{% endfor %}{% endif %}
   </ol>
   <h4>Escalation path</h4>
   <ul class="escalation">
-    {% for step in draft.escalation if draft %}<li>{{ step }}</li>{% endfor %}
+    {% if draft %}{% for step in draft.escalation %}<li>{{ step }}</li>{% endfor %}{% endif %}
   </ul>
   <p class="caveat">Heads-up for direct-debit bills: the merchant or your bank has to remove the saved payment authority, so the steps differ.</p>
   <div class="status-tracker" data-current="{{ dispute.status }}">

@@ -25,7 +25,8 @@ function showModal(onConfirm) {
 function showToast(text) {
   var root = document.getElementById("toast-root");
   root.innerHTML = '<div class="toast">' + text + "</div>";
-  window.setTimeout(function () {
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(function () {
     if (root.firstChild) {
       root.innerHTML = "";
     }
@@ -140,13 +141,18 @@ document.body.addEventListener("click", function (evt) {
     if (isNaN(billId)) {
       return;
     }
-    document.body.addEventListener("htmx:afterSettle", function scrollToBill() {
+    var scrollToBill = function () {
       var row = document.querySelector('#bills-table tr[data-bill-id="' + billId + '"]');
       if (row) {
+        window.clearTimeout(stopLooking);
         document.body.removeEventListener("htmx:afterSettle", scrollToBill);
         row.scrollIntoView({ block: "center" });
       }
-    });
+    };
+    var stopLooking = window.setTimeout(function () {
+      document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+    }, 10000);
+    document.body.addEventListener("htmx:afterSettle", scrollToBill);
     return;
   }
   if (location.hash.indexOf("#chat?") === 0) {

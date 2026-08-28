@@ -118,7 +118,7 @@ def _render_bills_table():
                 "name": bill.name,
                 "amount": money.format_actual(bill.amount_cents),
                 "cadence_label": CADENCE_LABELS.get(bill.cadence, bill.cadence),
-                "next_occurrence": _short_date(bill.next_billing_date),
+                "next_billing": _short_date(bill.next_billing_date),
                 "payment_method_label": PAYMENT_METHOD_LABELS.get(bill.payment_method, bill.payment_method),
                 "status": status,
                 "status_label": label,
