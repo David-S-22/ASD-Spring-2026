@@ -14,10 +14,7 @@ services:
     environment:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
-      OLLAMA_URL: http://host.docker.internal:11434
-      DRAFT_MODEL: llama3.1:8b
-      CHAT_MODEL: qwen2.5:0.5b
-      DEMO_TODAY: "2026-08-20"
+      FRONTEND_ORIGIN: http://localhost:3005
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

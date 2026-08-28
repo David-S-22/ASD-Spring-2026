@@ -46,12 +46,18 @@ easiest for local iteration).
 | Service | Port | Key env vars |
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
-| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL`, `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:0.5b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
+| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:0.5b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
 | `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
 `sophia/backend/engine/` ever calls `date.today()` or `datetime.now()` —
 every engine function takes `today` as an explicit argument.
+
+Compose sets only `PORT`, `BILLS_DB_API_URL` and `FRONTEND_ORIGIN` for the
+backend — the AI and demo-clock values are in-container defaults from
+`config.py`. Anyone running the backend bare on a machine without Docker
+Desktop should set `OLLAMA_URL=http://localhost:11434`; the demo clock stays
+`DEMO_TODAY=2026-08-20` by default and is overridable per environment.
 
 ## The two AI calls
 
