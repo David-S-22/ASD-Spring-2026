@@ -22,3 +22,20 @@ class Anomaly:
     transaction_id: UUID
     agent_reason_suspected: str
     is_confirmed_by_user: Optional[bool]
+
+@dataclass(frozen=True)
+class Goal:
+    id: int
+    name: str
+    cost: int
+    date: datetime
+
+@dataclass(frozen=True)
+class Suggestion:
+    id: int
+    suggestion: str
+
+@dataclass(frozen=True)
+class Feedback:
+    id: int
+    feedback: str

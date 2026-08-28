@@ -6,6 +6,8 @@ on:
       - "main"
     paths:
       - "david/**"
+      - ".github/workflows/David-CI.yml"
+      - "shared/**"
   push:
     branches:
       - "main"
