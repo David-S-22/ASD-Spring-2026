@@ -108,7 +108,10 @@ second attempt also fails. Neither call ever raises out to the route.
   zero-cost "ends" note; the month after, it contributes nothing.
 - **Status**: `paid` / `due` / `overdue`, derived from the latest occurrence
   at or before `today` and whether a payment covers it — see
-  `sophia/backend/engine/status.py` for the exact rules and labels. Month
+  `sophia/backend/engine/status.py` for the exact rules and labels. Status is
+  derived on every read; the `status` column in the database is a cache
+  refreshed only on write paths (bill create/update/cancel, payment
+  create/update/delete), never by a GET. Month
   arithmetic (`add_months`) is computed directly from the anchor date, never
   by repeatedly stepping — this matters for 31st-anchored monthly bills,
   where re-adding a step from an already-clamped date drifts (28 Feb + 1
@@ -139,7 +142,7 @@ See `docs/release-0/sophia/schema-adoption.md` for the four additive schema item
 python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 ```
 
-108 passed; coverage 81% across `sophia/backend` (measured 28 Aug 2026).
+155 passed; coverage 88% across `sophia/backend` (measured 29 Aug 2026).
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
