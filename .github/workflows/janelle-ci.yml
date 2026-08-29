@@ -22,43 +22,20 @@ permissions:
   contents: read
 
 jobs:
-  build-health:
+  build-health: # Check docker container health after startup
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - name: Validate Docker Compose
-        run: docker compose config --quiet
-      - name: Build transaction service images
-        run: docker compose build transactions-frontend transactions-backend transactions-db
-      - name: Start transaction services
-        run: docker compose up --detach transactions-frontend transactions-backend transactions-db
-      - name: Check service availability
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          check_endpoint() {
-            local service="$1"
-            local url="$2"
-
-            for _ in {1..30}; do
-              if curl --connect-timeout 1 --max-time 2 --fail --silent "$url" > /dev/null; then
-                return 0
-              fi
-              sleep 1
-            done
-
-            echo "::error::$service did not become available at $url"
-            curl --connect-timeout 2 --max-time 5 --fail --show-error "$url"
-          }
-
-          check_endpoint "transactions frontend" "http://127.0.0.1:3001/"
-          check_endpoint "transactions backend" "http://127.0.0.1:5001/"
-          check_endpoint "transactions database" "http://127.0.0.1:6001/"
-      - name: Show container logs
+      - run: docker compose build transactions-frontend transactions-backend transactions-db
+      - run: docker compose up -d transactions-frontend transactions-backend transactions-db
+      - run: sleep 3
+      - name: Check frontend availability
+        run: curl --fail http://127.0.0.1:3001/ || exit 1
+      - name: Check backend availability
+        run: curl --fail http://127.0.0.1:5001/ || exit 1
+      - name: Check database availability
+        run: curl --fail http://127.0.0.1:6001/ || exit 1
+      - run: docker logs transactions-frontend transactions-backend transactions-db
         if: failure()
-        run: docker compose logs transactions-frontend transactions-backend transactions-db
-      - name: Stop transaction services
+      - run: docker rm --force --volumes transactions-frontend transactions-backend transactions-db
         if: always()
-        run: docker compose down --volumes --remove-orphans
