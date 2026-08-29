@@ -18,7 +18,7 @@ def get_anomaly_rows():
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
-    anomaly = dto.Anomaly(
+    anomaly = dto.Anomaly( # test does it appear if i edit this line
         id=uuid4(),
         transactfion_id=uuid4(),
         agent_reason_suspected="hello",
