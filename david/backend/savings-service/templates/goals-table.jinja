@@ -1,0 +1,10 @@
+<table>
+    {% for goal in goals %}
+    <tr>
+        <td>{{ goal.id }}</td>
+        <td>{{ goal.name }}</td>
+        <td>{{ goal.cost }}</td>
+        <td>{{ goal.date.strftime("%d/%m/%y") }}</td>
+    </tr>
+    {% endfor %}
+</table>

@@ -1,3 +1,4 @@
+from flask import render_template
 from datetime import datetime
 import os
 import requests
@@ -18,7 +19,7 @@ def setup_app() -> Flask:
         resp = requests.get(f"{db_url}/goals")
         resp.raise_for_status()
         goals = resp.json(object_hook=object_to_hook)
-        return jsonify(goals), 200
+        return render_template("goals-table.jinja", goals=goals), 200
 
     @app.route("/goal", methods=["POST"])
     def create_dummy_goal():
