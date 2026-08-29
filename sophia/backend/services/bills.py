@@ -35,15 +35,27 @@ def enrich_bill(bill_row, payments, today):
     return enriched, status
 
 
+def _persist_status_if_drifted(bill_row, payments=None):
+    """Sync the cached status column with derivation; returns the up-to-date row.
+
+    Write paths only. Reads must stay side-effect free — they always return the
+    derived status, so the stored column is just a cache for direct :6005 readers.
+    """
+    if payments is None:
+        payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill_row["id"])]
+    status, _label = derive_status(bills_db.row_to_bill(bill_row), payments, config.DEMO_TODAY)
+    if bill_row.get("status") != status:
+        return bills_db.update_bill(bill_row["id"], {"status": status})
+    return bill_row
+
+
 def list_bills(type_filter=None, status_filter=None):
     today = config.DEMO_TODAY
     bill_rows = bills_db.list_bills()
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     results = []
     for row in bill_rows:
-        enriched, status = enrich_bill(row, payments, today)
-        if row.get("status") != status:
-            bills_db.update_bill(row["id"], {"status": status})
+        enriched, _status = enrich_bill(row, payments, today)
         if type_filter and enriched["type"] != type_filter:
             continue
         if status_filter and enriched["status"] != status_filter:
@@ -80,7 +92,8 @@ def _clean_payload(payload, partial):
 
 def create_bill(payload):
     cleaned = _clean_payload(payload, partial=False)
-    return bills_db.create_bill(cleaned)
+    created = bills_db.create_bill(cleaned)
+    return _persist_status_if_drifted(created, payments=[])
 
 
 def get_bill(bill_id):
@@ -88,9 +101,7 @@ def get_bill(bill_id):
     if row is None:
         raise NotFound("bill not found")
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill_id)]
-    enriched, status = enrich_bill(row, payments, config.DEMO_TODAY)
-    if row.get("status") != status:
-        bills_db.update_bill(bill_id, {"status": status})
+    enriched, _status = enrich_bill(row, payments, config.DEMO_TODAY)
     return enriched
 
 
@@ -100,10 +111,8 @@ def update_bill(bill_id, payload):
     cleaned = _clean_payload(payload, partial=True)
     updated = bills_db.update_bill(bill_id, cleaned)
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill_id)]
-    enriched, status = enrich_bill(updated, payments, config.DEMO_TODAY)
-    if updated.get("status") != status:
-        updated = bills_db.update_bill(bill_id, {"status": status})
-        enriched, _status = enrich_bill(updated, payments, config.DEMO_TODAY)
+    updated = _persist_status_if_drifted(updated, payments)
+    enriched, _status = enrich_bill(updated, payments, config.DEMO_TODAY)
     return enriched
 
 
@@ -132,4 +141,5 @@ def cancel_bill(bill_id, end_date):
         raise ServiceError("end_date must be YYYY-MM-DD")
     if bills_db.get_bill(bill_id) is None:
         raise NotFound("bill not found")
-    return bills_db.update_bill(bill_id, {"end_date": end_date})
+    updated = bills_db.update_bill(bill_id, {"end_date": end_date})
+    return _persist_status_if_drifted(updated)

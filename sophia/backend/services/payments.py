@@ -1,9 +1,8 @@
 """Payment CRUD, shared by /api/payments and /ui/payments. Recomputes the owning bill's status."""
 from datetime import date
 
-from sophia.backend import config
 from sophia.backend.clients import bills_db
-from sophia.backend.engine.status import derive_status
+from sophia.backend.services.bills import _persist_status_if_drifted
 from sophia.backend.services.errors import NotFound, ServiceError
 
 
@@ -11,11 +10,7 @@ def _refresh_bill_status(bill_id):
     bill_row = bills_db.get_bill(bill_id)
     if bill_row is None:
         return
-    bill = bills_db.row_to_bill(bill_row)
-    payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill_id)]
-    status, _label = derive_status(bill, payments, config.DEMO_TODAY)
-    if bill_row.get("status") != status:
-        bills_db.update_bill(bill_id, {"status": status})
+    _persist_status_if_drifted(bill_row)
 
 
 def _clean_payload(payload, require_bill_id):

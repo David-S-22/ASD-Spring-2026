@@ -28,6 +28,8 @@ Base URL in compose: `http://bills-backend:5005`. Locally: `http://localhost:500
 | POST | `/api/suggestions` | See `contracts-inbound.md`. |
 | GET | `/health` | `{ok, today, db_api, transactions_api, ollama}`. |
 
+Reads are pure: every GET above computes `status` with `engine/status.derive_status` and never writes it back, so reading a bill has no side effects on :6005. The `status` column stored in the database is a cache, refreshed only where a write already happens — bill create/update/cancel and payment create/update/delete. Other features reading `:6005/bills` directly should treat that column as last-written; read `:5005/api/bills` when the status needs to be current.
+
 ## Reading projected bills
 
 Stored bill rows come from the database API: `GET :6005/bills`. Projections (next occurrences, monthly-committed totals) come from the backend: `GET :5005/api/upcoming`, because the date engine lives in the backend, not the database container. The earlier `:6005/upcoming` passthrough was removed in PR #31 so the database container does not depend on the backend. Calling the backend for projections is the one declared exception to reading other features' data through their DB API.
