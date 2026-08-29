@@ -21,7 +21,6 @@ jobs:
         with:
           python-version: 3.13
       - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
-      - run: mypy --output=json
       - run: mypy --output=json | jq -r '"aaa::error title=Mypy issue,file=aiden\\\(.file),line=\(.line),col=\(.column)::\(.message)"'
       - run: pytest
 
