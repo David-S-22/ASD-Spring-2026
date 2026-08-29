@@ -53,9 +53,8 @@ def integrate_database(monkeypatch: MonkeyPatch):
 
             return resp.status_code, dict(resp.headers), resp.get_data()
 
-    db_url = "http://mock-database-url/anomalies"
-    monkeypatch.setenv("ANOMALIES_DB_URL", db_url)
-    url = re.compile(rf"^{re.escape(db_url)}/?$")
+    monkeypatch.setenv("ANOMALIES_DB_URL", "http://mock-database-url/anomalies")
+    url = re.compile(r"^http://mock-database-url/anomalies/?$")
 
     with RequestsMock(assert_all_requests_are_fired=False) as rsps:
         for method in (RequestsMock.GET, RequestsMock.POST, RequestsMock.PATCH, RequestsMock.DELETE, RequestsMock.OPTIONS):
