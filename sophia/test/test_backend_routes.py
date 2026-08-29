@@ -164,16 +164,19 @@ class FakeStore:
         return {"ok": True}
 
 
+FAKE_STORE_METHODS = (
+    "list_bills", "get_bill", "update_bill", "create_bill", "delete_bill", "list_bill_payments",
+    "list_payments", "get_payment", "create_payment", "update_payment", "delete_payment",
+    "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
+    "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
+    "update_chat_message", "health",
+)
+
+
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeStore()
-    for name in (
-        "list_bills", "get_bill", "update_bill", "create_bill", "delete_bill", "list_bill_payments",
-        "list_payments", "get_payment", "create_payment", "update_payment", "delete_payment",
-        "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
-        "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
-        "update_chat_message", "health",
-    ):
+    for name in FAKE_STORE_METHODS:
         monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
     monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
     monkeypatch.setattr(transactions_module, "list_transactions", lambda merchant=None, since=None: ([], "stub"))

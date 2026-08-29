@@ -1,6 +1,4 @@
-test/
 __pycache__/
-*.pyc
+*.py[cod]
 *.db
 .venv/
-docs/

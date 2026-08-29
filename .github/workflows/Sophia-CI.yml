@@ -41,7 +41,7 @@ jobs:
       - name: Check database availability
         run: curl --fail http://127.0.0.1:6005/health || exit 1
       - name: Check backend availability
-        run: curl --fail http://127.0.0.1:5005/health || exit 1
+        run: curl --fail --silent http://127.0.0.1:5005/health | grep '"ok":true' || exit 1
       - name: Check frontend availability
         run: curl --fail http://127.0.0.1:3005/ || exit 1
       - run: docker logs bills-db && docker logs bills-backend && docker logs bills-frontend

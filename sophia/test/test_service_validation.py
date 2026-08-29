@@ -8,7 +8,7 @@ from sophia.backend.clients import bills_db as bills_db_module
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import payments as payments_service
 from sophia.backend.services.errors import NotFound, ServiceError
-from test_backend_routes import FakeStore
+from test_backend_routes import FAKE_STORE_METHODS, FakeStore
 
 VALID_BILL = {
     "name": "Fresh Gym", "merchant": "Fresh Gym", "amount_cents": 4200,
@@ -19,9 +19,8 @@ VALID_BILL = {
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeStore()
-    for name in dir(fake):
-        if not name.startswith("_") and callable(getattr(fake, name)):
-            monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
+    for name in FAKE_STORE_METHODS:
+        monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
     monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
     return fake
 

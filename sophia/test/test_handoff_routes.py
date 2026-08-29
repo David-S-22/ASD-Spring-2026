@@ -7,15 +7,14 @@ from sophia.backend import app as backend_app_module
 from sophia.backend import config
 from sophia.backend.clients import bills_db as bills_db_module
 from sophia.backend.clients import transactions as transactions_module
-from test_backend_routes import FakeStore
+from test_backend_routes import FAKE_STORE_METHODS, FakeStore
 
 
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeStore()
-    for name in dir(fake):
-        if not name.startswith("_") and callable(getattr(fake, name)):
-            monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
+    for name in FAKE_STORE_METHODS:
+        monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
     monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
     monkeypatch.setattr(transactions_module, "list_transactions", lambda merchant=None, since=None: ([], "stub"))
     return fake
