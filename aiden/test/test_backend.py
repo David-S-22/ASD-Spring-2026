@@ -46,11 +46,10 @@ def integrate_database(monkeypatch: MonkeyPatch):
     def intercept(request: PreparedRequest):
         with dbapp.test_client() as dbclient:
             resp = dbclient.open(
-                path=request.path_url,
-                method=request.method,
-                headers=dict(request.headers),
-                data=request.body,
-            )
+                path = request.path_url,
+                method = request.method,
+                headers = dict(request.headers),
+                data = request.body)
 
             return resp.status_code, dict(resp.headers), resp.get_data()
 
