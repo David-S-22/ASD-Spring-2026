@@ -1,33 +1,12 @@
-import pytest
-from database.app import app, setup
-from flask.testing import FlaskClient
-from shared.backend import dto
 from typing import Any
-from backend.helpers import serialise, deserialise_safe
 from uuid import UUID, uuid4
 
+from flask.testing import FlaskClient
+from pytest import fixture
 
-# Setup pytest and flask test client
-@pytest.fixture(scope="session", autouse=True)
-def one_time_setup():
-    setup(":memory:")
-
-@pytest.fixture
-def client():
-    with app.test_client() as client:
-        yield client
-
-def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
-    model = dto.Anomaly(**kwargs)
-    response = client.post("/anomalies/", json=serialise(model))
-
-    assert response.status_code == 201, response.text
-    assert isinstance(data := response.json, dict)
-
-    anomaly = deserialise_safe(dto.Anomaly, data)
-    assert anomaly is not None
-
-    return anomaly
+from backend.helpers import deserialise_safe, serialise
+from database.app import app, setup_database
+from shared.backend import dto
 
 
 # Tests
@@ -88,3 +67,24 @@ def test_route_not_found(client: FlaskClient):
     assert isinstance(response.json, dict)
     assert response.json["code"] == 404
     assert response.json["name"] == "Not Found"
+
+
+# Pytest fixtures & helpers
+@fixture
+def client():
+    setup_database(":memory:")
+
+    with app.test_client() as client:
+        yield client
+
+def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
+    model = dto.Anomaly(**kwargs)
+    response = client.post("/anomalies/", json=serialise(model))
+
+    assert response.status_code == 201, response.text
+    assert isinstance(data := response.json, dict)
+
+    anomaly = deserialise_safe(dto.Anomaly, data)
+    assert anomaly is not None
+
+    return anomaly
