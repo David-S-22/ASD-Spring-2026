@@ -1,4 +1,36 @@
 services:
+  transactions-frontend:
+    build: ./janelle/frontend
+    container_name: transactions-frontend
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+    depends_on:
+      - transactions-backend
+  transactions-backend:
+    build: ./janelle/backend
+    container_name: transactions-backend
+    ports:
+      - "5001:5001"
+    environment:
+      FLASK_ENV: production
+      PORT: 5001
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
+    depends_on:
+      - transactions-db
+  transactions-db:
+    build: ./janelle/database
+    container_name: transactions-db
+    ports:
+      - "6001:6001"
+    environment:
+      FLASK_ENV: production
+      PORT: 6001
+      DB_PATH: /app/data/transactions.db
+    volumes:
+      - transactions_data:/app/data
+
   bills-frontend:
     build: ./sophia/frontend
     container_name: bills-frontend
@@ -79,6 +111,7 @@ services:
       - savings_data:/data
 
 volumes:
+  transactions_data:
   bills_data:
   anomalies_data:
   savings_data:
