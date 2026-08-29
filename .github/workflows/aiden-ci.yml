@@ -24,6 +24,7 @@ jobs:
       - uses: tsuyoshicho/action-mypy@v4
         with:
           github_token: ${{ secrets.github_token }}
+          workdir: aiden
       - run: pytest
 
   build-health: # Check docker container health after startup
