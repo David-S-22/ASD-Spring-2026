@@ -1,5 +1,5 @@
 import pytest
-from database.app import app, setup
+from database.app import app, setup_database
 from flask.testing import FlaskClient
 from shared.backend import dto
 from typing import Any
@@ -8,12 +8,10 @@ from uuid import UUID, uuid4
 
 
 # Setup pytest and flask test client
-@pytest.fixture(scope="session", autouse=True)
-def one_time_setup():
-    setup(":memory:")
-
 @pytest.fixture
 def client():
+    setup_database(":memory:")
+
     with app.test_client() as client:
         yield client
 

@@ -1,7 +1,9 @@
 from uuid import UUID
+
 from flask import Blueprint, Flask, json, jsonify, request
 from sqlalchemy import select, inspect
 from werkzeug.exceptions import HTTPException
+
 from .models import Anomaly, db
 from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
 
@@ -89,8 +91,11 @@ def handle_exception(e):
 
     return response
 
-def setup(db_path: str):
-    app.register_blueprint(anomalies, url_prefix="/anomalies")
+app.register_blueprint(anomalies, url_prefix="/anomalies")
+
+def setup_database(db_path: str):
+    if "sqlalchemy" in app.extensions:
+        return
 
     with app.app_context():
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
