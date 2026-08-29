@@ -24,7 +24,10 @@ def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
     assert response.status_code == 201, response.text
     assert isinstance(data := response.json, dict)
 
-    return deserialise_safe(dto.Anomaly, data)
+    anomaly = deserialise_safe(dto.Anomaly, data)
+    assert anomaly is not None
+
+    return anomaly
 
 
 # Tests
