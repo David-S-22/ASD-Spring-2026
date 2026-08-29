@@ -70,7 +70,7 @@ services:
       dockerfile: ./david/database/Dockerfile
     container_name: savings-db
     ports:
-      - "6002:6002"
+      - 6002:6002
     environment:
       FLASK_ENV: production
       PORT: 6002
@@ -89,6 +89,16 @@ services:
       DB_URL: http://savings-db:6002
     depends_on:
       - savings-db
+  savings-frontend:
+    build: ./david/frontend/
+    container_name: savings-frontend
+    ports:
+      - 3002:3002
+    environment:
+      PORT: 3002
+      BACKEND_URL: http://savings-backend:5002
+    depends_on:
+      - savings-backend
 
 volumes:
   bills_data:
