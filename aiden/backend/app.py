@@ -20,7 +20,7 @@ def get_anomaly_rows():
 def create_dummy_anomaly():
     anomaly = dto.Anomaly(
         id=uuid4(),
-        transaction_id=uuid4(),
+        transactfion_id=uuid4(),
         agent_reason_suspected="hello",
         is_confirmed_by_user=random.choice((True, False, None)),
     )

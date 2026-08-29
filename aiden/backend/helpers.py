@@ -58,7 +58,7 @@ def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
             try:
                 field_value = UUID(field_value)
             except ValueError:
-                return
+                return None
 
         kwargs[field_name] = field_value
 

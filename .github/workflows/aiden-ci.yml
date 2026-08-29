@@ -10,7 +10,7 @@ on:
       - shared/**
 
 jobs:
-  test: # Run unit test suite
+  test: # Run static type checks and unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,6 +21,7 @@ jobs:
         with:
           python-version: 3.13
       - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
+      - run: mypy
       - run: pytest
 
   build-health: # Check docker container health after startup
