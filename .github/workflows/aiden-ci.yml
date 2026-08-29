@@ -31,8 +31,7 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v6
-      - run: docker compose build anomalies-frontend anomalies-backend anomalies-db
-      - run: docker compose up -d anomalies-frontend anomalies-backend anomalies-db
+      - run: docker compose up -d anomalies-frontend anomalies-backend anomalies-db --no-deps
       - run: sleep 3
       - name: Check frontend availability
         run: curl --fail http://127.0.0.1:3004/ || exit 1

@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: docker compose build bills-frontend bills-backend bills-db
-      - run: docker compose up -d bills-db bills-backend bills-frontend
+      - run: docker compose up -d bills-db bills-backend bills-frontend --no-deps
       - run: sleep 5
       - name: Check database availability
         run: curl --fail http://127.0.0.1:6005/health || exit 1

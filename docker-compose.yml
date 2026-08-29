@@ -1,4 +1,13 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
   bills-frontend:
     build: ./sophia/frontend
     container_name: bills-frontend
@@ -101,6 +110,7 @@ services:
       - savings-backend
 
 volumes:
+  ollama_data:
   bills_data:
   anomalies_data:
   savings_data:
