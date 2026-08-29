@@ -5,7 +5,7 @@ from shared.backend import dto
 
 db = SQLAlchemy()
 
-class Anomaly(db.Model):
+class Anomaly(db.Model): # type: ignore[name-defined]
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     transaction_id: Mapped[UUID] = mapped_column(unique=True) # One anomaly per transaction
     agent_reason_suspected: Mapped[str] = mapped_column()

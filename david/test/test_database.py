@@ -1,4 +1,3 @@
-from flask import jsonify
 from database.models import Suggestion
 from typing import List
 from typing import List
@@ -169,6 +168,7 @@ def test_update_goal(client: FlaskClient):
     new_date = datetime(2025, 6, 7);
     goals[0].date = new_date
     updated_goal_json = dumps(asdict(goals[0]), default=str)
+    headers = {"Content-type": "application/json"}
     response = client.patch(f"/goal/{goals[0].id}", data=updated_goal_json, content_type="application/json")
     assert response.status_code == 200
 
@@ -269,3 +269,28 @@ def test_create_feedback(client: FlaskClient):
 
     new_feedback = db.session.execute(db.select(Feedback)).scalar_one()
     assert new_feedback.feedback == feedback_to_create.feedback
+
+def test_goal_to_dto():
+    now = datetime(2026, 8, 25)
+    goal = Goal(id=1, name="Goal 1", cost=100, date=now)
+    dto_obj = goal.to_dto()
+    assert dto_obj.id == 1
+    assert dto_obj.name == "Goal 1"
+    assert dto_obj.cost == 100
+    assert dto_obj.date == now
+    assert goal.to_dto() == dto_obj
+
+def test_suggestion_to_dto():
+    suggestion = Suggestion(id=2, suggestion="A suggestion")
+    dto_obj = suggestion.to_dto()
+    assert dto_obj.id == 2
+    assert dto_obj.suggestion == "A suggestion"
+    assert suggestion.to_dto() == dto_obj
+
+def test_feedback_to_dto():
+    feedback = Feedback(id=3, feedback="A feedback")
+    dto_obj = feedback.to_dto()
+    assert dto_obj.id == 3
+    assert dto_obj.feedback == "A feedback"
+    assert feedback.to_dto() == dto_obj
+

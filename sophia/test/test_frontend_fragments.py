@@ -136,3 +136,78 @@ def test_timeline_fragment_actual_vs_predicted_formatting(timeline_client):
     assert "$13.99" in text
     assert "$13.99 " in text or "$13.99<" in text
     assert text.count("Predicted") == 2
+
+
+HANDOFF_QUERY = {
+    "source": "f4",
+    "alert_id": "7",
+    "merchant": "Spotify",
+    "amount": "12.99",
+    "cadence": "monthly",
+    "first_seen": "2026-05-01",
+    "last_seen": "2026-08-01",
+    "occurrences": "4",
+}
+
+
+def _handoff_query(**overrides):
+    query = dict(HANDOFF_QUERY)
+    query.update(overrides)
+    return {key: value for key, value in query.items() if value is not None}
+
+
+def test_handoff_subscription_prefills_add_bill_form(live_client):
+    response = live_client.get("/ui/handoff/subscription", query_string=_handoff_query())
+    assert response.status_code == 200
+    text = _text(response)
+    assert "Add a bill" in text
+    assert 'value="Spotify"' in text
+    assert 'value="12.99"' in text
+    assert '<option value="subscription" selected>' in text
+    assert 'value="2026-09-01"' in text
+    assert 'name="source" value="f4_handoff"' in text
+    assert "Suggested by Spending Alerts — based on 4 charges from 2026-05-01 to 2026-08-01" in text
+    assert "low confidence" not in text
+
+
+def test_handoff_subscription_missing_merchant_is_rejected(live_client):
+    response = live_client.get("/ui/handoff/subscription", query_string=_handoff_query(merchant=None))
+    assert response.status_code == 422
+    assert 'class="error"' in _text(response)
+
+
+def test_handoff_subscription_unknown_cadence_is_rejected(live_client):
+    response = live_client.get("/ui/handoff/subscription", query_string=_handoff_query(cadence="yearly"))
+    assert response.status_code == 422
+    assert 'class="error"' in _text(response)
+
+
+def test_handoff_subscription_reversed_dates_are_rejected(live_client):
+    response = live_client.get(
+        "/ui/handoff/subscription", query_string=_handoff_query(first_seen="2026-08-02", last_seen="2026-08-01")
+    )
+    assert response.status_code == 422
+    assert 'class="error"' in _text(response)
+
+
+def test_handoff_subscription_low_confidence_wording_and_return_link(live_client):
+    response = live_client.get(
+        "/ui/handoff/subscription",
+        query_string=_handoff_query(confidence="low", return_url="http://localhost:3004/alerts"),
+    )
+    text = _text(response)
+    assert "(low confidence — please check the amount and cadence)" in text
+    assert 'href="http://localhost:3004/alerts"' in text
+    assert "Back to alerts" in text
+
+
+@pytest.mark.parametrize(
+    ("last_seen", "cadence", "expected"),
+    [("2026-08-01", "monthly", "2026-09-01"), ("2026-08-19", "weekly", "2026-08-26")],
+)
+def test_handoff_subscription_projects_next_billing_date(live_client, last_seen, cadence, expected):
+    response = live_client.get(
+        "/ui/handoff/subscription", query_string=_handoff_query(last_seen=last_seen, cadence=cadence)
+    )
+    assert response.status_code == 200
+    assert f'value="{expected}"' in _text(response)

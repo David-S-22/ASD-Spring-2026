@@ -10,17 +10,20 @@ on:
       - shared/**
 
 jobs:
-  test: # Run unit test suite
+  test: # Run static type checks and unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: aiden
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.13
       - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
+      - name: Run mypy annotations
+        run: mypy --output=json | jq -r '"::error title=Mypy issue,file=aiden/\(.file),line=\(.line),col=\(.column)::\(.message)"'
+      - run: mypy
       - run: pytest
 
   build-health: # Check docker container health after startup

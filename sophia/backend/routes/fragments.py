@@ -6,16 +6,16 @@ turns a Flask form into plain arguments and turns the result into HTML plus
 an HX-Trigger toast header.
 """
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, make_response, render_template, request
 
 from sophia.backend import config
 from sophia.backend.clients import bills_db
-from sophia.backend.engine import money
+from sophia.backend.engine import Bill, money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.dates import add_months, expected_per_month
-from sophia.backend.engine.projection import timeline as project_timeline
+from sophia.backend.engine.projection import project, timeline as project_timeline
 from sophia.backend.engine.status import derive_status
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import chat as chat_service
@@ -118,7 +118,7 @@ def _render_bills_table():
                 "name": bill.name,
                 "amount": money.format_actual(bill.amount_cents),
                 "cadence_label": CADENCE_LABELS.get(bill.cadence, bill.cadence),
-                "next_occurrence": _short_date(bill.next_billing_date),
+                "next_billing": _short_date(bill.next_billing_date),
                 "payment_method_label": PAYMENT_METHOD_LABELS.get(bill.payment_method, bill.payment_method),
                 "status": status,
                 "status_label": label,
@@ -219,6 +219,79 @@ def bill_new_form():
 def bill_edit_form(bill_id):
     bill = bills_service.get_bill(bill_id)
     return render_template("bill_form.html", bill=bill, action=f"/ui/bills/{bill_id}/edit")
+
+
+def _parse_handoff_subscription(args):
+    """Validate the Feature 4 link-handoff query params into prefill values."""
+    if args.get("source") != "f4":
+        raise ServiceError("This link is missing source=f4 — check it came from Spending Alerts.")
+    merchant = (args.get("merchant") or "").strip()
+    if not merchant:
+        raise ServiceError("The link needs a merchant name.")
+    try:
+        amount = float(args.get("amount", ""))
+    except ValueError:
+        raise ServiceError("The amount in the link isn't a number.")
+    if amount < 0:
+        raise ServiceError("The amount in the link can't be negative.")
+    cadence = args.get("cadence")
+    if cadence not in CADENCE_LABELS:
+        raise ServiceError("Cadence must be weekly, fortnightly or monthly.")
+    try:
+        first_seen = date.fromisoformat(args.get("first_seen", ""))
+        last_seen = date.fromisoformat(args.get("last_seen", ""))
+    except ValueError:
+        raise ServiceError("first_seen and last_seen must be YYYY-MM-DD dates.")
+    if first_seen > last_seen:
+        raise ServiceError("first_seen can't be after last_seen.")
+    try:
+        occurrences = int(args.get("occurrences", ""))
+    except ValueError:
+        raise ServiceError("occurrences must be a whole number.")
+    if occurrences < 1:
+        raise ServiceError("occurrences must be at least 1.")
+    return merchant, round(amount * 100), cadence, first_seen, last_seen, occurrences
+
+
+def _next_billing_from(last_seen, cadence, merchant, amount_cents):
+    """First projected occurrence strictly after last_seen, on the demo clock."""
+    today = config.DEMO_TODAY
+    if last_seen > today:
+        return last_seen
+    bill = Bill(
+        id=0,
+        name=merchant,
+        merchant=merchant,
+        amount_cents=amount_cents,
+        cadence=cadence,
+        next_billing_date=last_seen,
+        type="subscription",
+    )
+    occurrences = project(bill, today, today + timedelta(days=400))
+    return next((occ.date for occ in occurrences if occ.date > last_seen), last_seen)
+
+
+@bp.get("/handoff/subscription")
+def handoff_subscription_form():
+    merchant, amount_cents, cadence, first_seen, last_seen, occurrences = _parse_handoff_subscription(request.args)
+    bill = {
+        "name": merchant,
+        "merchant": merchant,
+        "amount_cents": amount_cents,
+        "cadence": cadence,
+        "next_billing_date": _next_billing_from(last_seen, cadence, merchant, amount_cents).isoformat(),
+        "type": "subscription",
+        "payment_method": None,
+        "source": "f4_handoff",
+    }
+    evidence = {
+        "occurrences": occurrences,
+        "first_seen": first_seen.isoformat(),
+        "last_seen": last_seen.isoformat(),
+        "low_confidence": request.args.get("confidence") == "low",
+        "return_url": request.args.get("return_url"),
+    }
+    return render_template("bill_form.html", bill=bill, action="/ui/bills", evidence=evidence)
 
 
 @bp.post("/bills")

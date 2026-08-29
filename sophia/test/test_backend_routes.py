@@ -164,16 +164,19 @@ class FakeStore:
         return {"ok": True}
 
 
+FAKE_STORE_METHODS = (
+    "list_bills", "get_bill", "update_bill", "create_bill", "delete_bill", "list_bill_payments",
+    "list_payments", "get_payment", "create_payment", "update_payment", "delete_payment",
+    "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
+    "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
+    "update_chat_message", "health",
+)
+
+
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeStore()
-    for name in (
-        "list_bills", "get_bill", "update_bill", "create_bill", "delete_bill", "list_bill_payments",
-        "list_payments", "get_payment", "create_payment", "update_payment", "delete_payment",
-        "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
-        "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
-        "update_chat_message", "health",
-    ):
+    for name in FAKE_STORE_METHODS:
         monkeypatch.setattr(bills_db_module, name, getattr(fake, name))
     monkeypatch.setattr(config, "DEMO_TODAY", date(2026, 8, 20))
     monkeypatch.setattr(transactions_module, "list_transactions", lambda merchant=None, since=None: ([], "stub"))
@@ -312,3 +315,21 @@ def test_barely_using_flags_bills_billed_repeatedly_since_confirmation(client, s
         in reply
     )
     assert "Spotify" not in reply
+
+
+def test_handoff_urls_start_with_configured_frontend_origin(client, store):
+    response = client.post(
+        "/api/handoff/recurring", json={"source": "transactions", "merchant": "Spotify AU", "intent": "end"}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["ui_url"].startswith(config.FRONTEND_ORIGIN)
+
+    created = client.post(
+        "/api/suggestions",
+        json={
+            "source": "alerts", "alert_id": 7, "merchant": "StreamCo", "amount": 1299,
+            "cadence": "monthly", "last_seen": "2026-08-01", "occurrences": 4,
+        },
+    )
+    assert created.status_code == 201
+    assert created.get_json()["confirm_url"].startswith(config.FRONTEND_ORIGIN)

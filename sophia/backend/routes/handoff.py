@@ -6,8 +6,6 @@ from sophia.backend.clients import bills_db
 
 bp = Blueprint("handoff", __name__, url_prefix="/api")
 
-FRONTEND_ORIGIN = "http://localhost:3005"
-
 
 def _op_for_intent(intent, bill_id, merchant, payload):
     if intent == "end":
@@ -36,7 +34,7 @@ def handoff_recurring():
         {
             "preview": preview,
             "apply_url": "/api/chat/apply",
-            "ui_url": f"{FRONTEND_ORIGIN}/#chat?handoff={handoff_id}",
+            "ui_url": f"{config.FRONTEND_ORIGIN}/#chat?handoff={handoff_id}",
         }
     )
 
@@ -61,7 +59,7 @@ def suggestions():
             {
                 "bill_id": bill["id"],
                 "status": bill["status"],
-                "confirm_url": f"{FRONTEND_ORIGIN}/#bills?confirm={bill['id']}",
+                "confirm_url": f"{config.FRONTEND_ORIGIN}/#bills?confirm={bill['id']}",
             }
         ),
         201,

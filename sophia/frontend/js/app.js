@@ -25,7 +25,8 @@ function showModal(onConfirm) {
 function showToast(text) {
   var root = document.getElementById("toast-root");
   root.innerHTML = '<div class="toast">' + text + "</div>";
-  window.setTimeout(function () {
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(function () {
     if (root.firstChild) {
       root.innerHTML = "";
     }
@@ -127,3 +128,37 @@ document.body.addEventListener("click", function (evt) {
     document.getElementById("modal-root").innerHTML = "";
   }
 });
+
+(function () {
+  if (location.pathname.indexOf("/handoff/") === 0) {
+    htmx.ajax("GET", "/ui" + location.pathname + location.search, { target: "#modal-root", swap: "innerHTML" });
+    history.replaceState(null, "", "/");
+    return;
+  }
+  if (location.hash.indexOf("#bills?confirm=") === 0) {
+    var billId = parseInt(location.hash.split("confirm=")[1], 10);
+    activateTab("bills");
+    if (isNaN(billId)) {
+      return;
+    }
+    var scrollToBill = function () {
+      var row = document.querySelector('#bills-table tr[data-bill-id="' + billId + '"]');
+      if (row) {
+        window.clearTimeout(stopLooking);
+        document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+        row.scrollIntoView({ block: "center" });
+      }
+    };
+    var stopLooking = window.setTimeout(function () {
+      document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+    }, 10000);
+    document.body.addEventListener("htmx:afterSettle", scrollToBill);
+    return;
+  }
+  if (location.hash.indexOf("#chat?") === 0) {
+    var chat = document.querySelector(".ask-tally");
+    if (chat) {
+      chat.scrollIntoView({ block: "start" });
+    }
+  }
+})();

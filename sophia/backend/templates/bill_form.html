@@ -1,7 +1,11 @@
 {# Add/edit bill modal form. Submitting it (through the confirm modal) IS the confirmation. #}
 <div class="modal-form" id="bill-form">
-  <h3>{{ "Edit bill" if bill else "Add a bill" }}</h3>
+  <h3>{{ "Edit bill" if bill and bill.id else "Add a bill" }}</h3>
+  {% if evidence %}
+  <p class="evidence-note">Suggested by Spending Alerts — based on {{ evidence.occurrences }} charges from {{ evidence.first_seen }} to {{ evidence.last_seen }}{{ " (low confidence — please check the amount and cadence)" if evidence.low_confidence else "" }}{% if evidence.return_url %} <a href="{{ evidence.return_url }}">Back to alerts</a>{% endif %}</p>
+  {% endif %}
   <form hx-post="{{ action }}" hx-target="#bills-table" hx-swap="outerHTML">
+    <input type="hidden" name="source" value="{{ bill.source if bill and bill.source else 'manual' }}">
     <label>Name
       <input name="name" value="{{ bill.name if bill else '' }}" required>
     </label>
@@ -41,8 +45,8 @@
       Fixed — leave out of the monthly plan
     </label>
     <div class="form-actions">
-      <button type="submit">{{ "Save changes" if bill else "Add bill" }}</button>
-      {% if bill %}
+      <button type="submit">{{ "Save changes" if bill and bill.id else "Add bill" }}</button>
+      {% if bill and bill.id %}
       <button type="button" hx-post="/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML">Delete</button>
       {% endif %}
       <button type="button" data-action="dismiss-modal">Cancel</button>

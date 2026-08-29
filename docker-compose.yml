@@ -46,10 +46,7 @@ services:
     environment:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
-      OLLAMA_URL: http://host.docker.internal:11434
-      DRAFT_MODEL: llama3.1:8b
-      CHAT_MODEL: qwen2.5:0.5b
-      DEMO_TODAY: "2026-08-20"
+      FRONTEND_ORIGIN: http://localhost:3005
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -72,17 +69,19 @@ services:
       - 3004:3004
     environment:
       PORT: 3004
+      ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
     depends_on:
       - anomalies-backend
   anomalies-backend:
-    build: ./aiden/backend
+    build:
+      dockerfile: ./aiden/backend/Dockerfile
     container_name: anomalies-backend
     ports:
       - 5004:5004
     environment:
       FLASK_ENV: production
       PORT: 5004
-      ANOMALIES_DB_URL: http://anomalies-db:6004
+      ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
     depends_on:
       - anomalies-db
   anomalies-db:
@@ -99,16 +98,39 @@ services:
       DB_PATH: /app/data/anomalies.db
 
   savings-db:
-    build: ./david/database
+    build: 
+      dockerfile: ./david/database/Dockerfile
     container_name: savings-db
     ports:
-      - "6002:6002"
+      - 6002:6002
     environment:
       FLASK_ENV: production
       PORT: 6002
       DB_PATH: /app/data/savings.db
     volumes:
-      - savings_data:/data
+      - savings_data:/app/data
+  savings-backend:
+    build: 
+      dockerfile: ./david/backend/Dockerfile
+    container_name: savings-backend
+    ports:
+      - 5002:5002
+    environment:
+      FLASK_ENV: production
+      PORT: 5002
+      DB_URL: http://savings-db:6002
+    depends_on:
+      - savings-db
+  savings-frontend:
+    build: ./david/frontend/
+    container_name: savings-frontend
+    ports:
+      - 3002:3002
+    environment:
+      PORT: 3002
+      BACKEND_URL: http://savings-backend:5002
+    depends_on:
+      - savings-backend
 
 volumes:
   transactions_data:
