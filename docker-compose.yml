@@ -6,7 +6,10 @@ services:
       - 11434:11434
     volumes:
       - ollama_data:/root/.ollama
+      - ./ai-services/setup-ollama.sh:/ai-services/setup-ollama.sh
     restart: unless-stopped
+    entrypoint: [ "/bin/sh", "/ai-services/setup-ollama.sh"]
+
 
   bills-frontend:
     build: ./sophia/frontend
@@ -110,6 +113,7 @@ services:
       - savings-backend
 
 volumes:
+  setup-ollama.sh:
   ollama_data:
   bills_data:
   anomalies_data:
