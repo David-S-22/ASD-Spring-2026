@@ -6,7 +6,15 @@ htmx.config.responseHandling = [
 ];
 
 function showModal(onConfirm) {
-  var root = document.getElementById("modal-root");
+  // The confirm dialog must NOT live in #modal-root: the add/edit/cancel/
+  // payment/dispute forms render there, and replacing them detaches the
+  // form so htmx drops the request it is asking to confirm.
+  var root = document.getElementById("confirm-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "confirm-root";
+    document.body.appendChild(root);
+  }
   root.innerHTML =
     '<div class="modal-backdrop"><div class="modal">' +
     "<p>Confirm this change</p>" +
@@ -51,6 +59,16 @@ document.addEventListener("htmx:confirm", function (evt) {
   showModal(function () {
     evt.detail.issueRequest(true);
   });
+});
+
+document.body.addEventListener("htmx:afterRequest", function (evt) {
+  // A modal form used to be wiped as a side effect of the confirm dialog
+  // replacing it; now the dialog lives elsewhere, close the form once its
+  // request succeeds.
+  var modal = document.getElementById("modal-root");
+  if (evt.detail.successful && modal && evt.detail.elt && modal.contains(evt.detail.elt)) {
+    modal.innerHTML = "";
+  }
 });
 
 document.body.addEventListener("toast", function (evt) {
