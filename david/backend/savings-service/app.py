@@ -70,6 +70,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         return "", 200
+        return get_goals()
 
     @app.route("/suggestions")
     def get_suggestions():
@@ -124,6 +125,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         return "", 200
+        return get_suggestions()
 
     @app.route("/feedback")
     def get_feedback():
@@ -178,6 +180,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         return "", 200
+        return get_feedback()
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
