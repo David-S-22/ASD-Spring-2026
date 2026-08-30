@@ -1,6 +1,9 @@
 <!DOCTYPE HTML>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Savings Dashboard</title>
     <link rel="stylesheet" href="styles/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
       integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" 
@@ -9,15 +12,43 @@
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
   </head>
   <body>
-    <h1>Hello World</h1>
-    <div id="goals" hx-get="/savings/goals" hx-trigger="load" hx-swap="innerHTML">
-      <p>Loading goals...</p>
-    </div>
-    <div id="suggestions" hx-get="/savings/suggestions" hx-trigger="load" hx-swap="innerHTML">
-      <p>Loading suggestions...</p>
-    </div>
-    <div id="feedback" hx-get="/savings/feedback" hx-trigger="load" hx-swap="innerHTML">
-      <p>Loading feedback...</p>
+    <div class="app-container">
+      <header class="app-header">
+        <h1>Savings Dashboard</h1>
+      </header>
+
+      <main class="dashboard-layout">
+        <section class="dashboard-column">
+          <div class="dashboard-panel goals-panel">
+            <div class="panel-header">
+              <h2>Savings Goals</h2>
+            </div>
+            <div id="goals" class="table-scroll-container" hx-get="/savings/goals" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading goals...</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-column">
+          <div class="dashboard-panel suggestions-panel">
+            <div class="panel-header">
+              <h2>Suggestions</h2>
+            </div>
+            <div id="suggestions" class="table-scroll-container" hx-get="/savings/suggestions" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading suggestions...</p>
+            </div>
+          </div>
+
+          <div class="dashboard-panel feedback-panel">
+            <div class="panel-header">
+              <h2>Feedback</h2>
+            </div>
+            <div id="feedback" class="table-scroll-container" hx-get="/savings/feedback" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading feedback...</p>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   </body>
 </html>
