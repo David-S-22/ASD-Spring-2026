@@ -59,8 +59,12 @@ services:
       FLASK_ENV: production
       PORT: 5004
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      OLLAMA_URL: http://ollama:11434/v1
+      OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:0.5b
+      OLLAMA_REVIEW_MODEL: llama3.1:8b
     depends_on:
       - anomalies-db
+      - ollama
   anomalies-db:
     build:
       dockerfile: ./aiden/database/Dockerfile
