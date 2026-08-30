@@ -31,6 +31,17 @@ services:
     volumes:
       - transactions_data:/app/data
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./ai-services/setup-ollama.sh:/ai-services/setup-ollama.sh
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/ai-services/setup-ollama.sh"]
+
   bills-frontend:
     build: ./sophia/frontend
     container_name: bills-frontend
@@ -82,8 +93,12 @@ services:
       FLASK_ENV: production
       PORT: 5004
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      OLLAMA_URL: http://ollama:11434/v1
+      OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:0.5b
+      OLLAMA_REVIEW_MODEL: llama3.1:8b
     depends_on:
       - anomalies-db
+      - ollama
   anomalies-db:
     build:
       dockerfile: ./aiden/database/Dockerfile
@@ -134,6 +149,8 @@ services:
 
 volumes:
   transactions_data:
+  setup-ollama.sh:
+  ollama_data:
   bills_data:
   anomalies_data:
   savings_data:
