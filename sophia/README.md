@@ -59,10 +59,15 @@ Architecture diagrams:
 `sophia/backend/engine/` ever calls `date.today()` or `datetime.now()` —
 every engine function takes `today` as an explicit argument.
 
-Compose sets only `PORT`, `BILLS_DB_API_URL` and `FRONTEND_ORIGIN` for the
-backend — the AI and demo-clock values are in-container defaults from
-`config.py`. Anyone running the backend bare on a machine without Docker
-Desktop should set `OLLAMA_URL=http://localhost:11434`; the demo clock stays
+Compose sets `PORT`, `BILLS_DB_API_URL`, `FRONTEND_ORIGIN` and `OLLAMA_URL`
+for the backend — the model and demo-clock values are in-container defaults
+from `config.py`. In compose, Bills uses the team's shared `ollama` service
+(`OLLAMA_URL=http://ollama:11434`); the first `docker compose up ollama`
+downloads ~5 GB of models into its volume, so start it early on demo day.
+The `config.py` default (`http://host.docker.internal:11434`) remains the
+fallback for running bills-backend without the ollama service, and anyone
+running the backend bare on a machine without Docker Desktop should set
+`OLLAMA_URL=http://localhost:11434`; the demo clock stays
 `DEMO_TODAY=2026-08-20` by default and is overridable per environment.
 
 ## The two AI calls

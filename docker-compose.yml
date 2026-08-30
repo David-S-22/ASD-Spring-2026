@@ -6,9 +6,20 @@ services:
       - 11434:11434
     volumes:
       - ollama_data:/root/.ollama
-      - ./ai-services/setup-ollama.sh:/ai-services/setup-ollama.sh
+      - ./ai-services/entrypoint.sh:/ai-services/entrypoint.sh
+      - ./ai-services/healthcheck.sh:/ai-services/healthcheck.sh
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/ai-services/setup-ollama.sh"]
+    entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
+    environment:
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
+      # Probe every 5s during the first minute, then every 30s for an hour
+      start_period: 60s
+      start_interval: 5s
+      interval: 30s
+      timeout: 5s
+      retries: 120
 
   transactions-frontend:
     build: ./janelle/frontend
@@ -58,10 +69,12 @@ services:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
+      OLLAMA_URL: http://ollama:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - bills-db
+      - ollama
   bills-db:
     build: ./sophia/database
     container_name: bills-db
@@ -97,8 +110,10 @@ services:
       OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:0.5b
       OLLAMA_REVIEW_MODEL: llama3.1:8b
     depends_on:
-      - anomalies-db
-      - ollama
+      anomalies-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   anomalies-db:
     build:
       dockerfile: ./aiden/database/Dockerfile
