@@ -1,0 +1,17 @@
+<tr data-id="{{ feedback.id }}">
+    <td class="cell-id">{{ feedback.id }}</td>
+    <td>{{ feedback.feedback }}</td>
+    <td class="cell-actions">
+        <button type="button" 
+                class="btn-edit" 
+                hx-get="/savings/feedback/{{ feedback.id }}/edit" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML">Edit</button>
+        <button type="button" 
+                class="btn-delete" 
+                hx-delete="/savings/feedback/{{ feedback.id }}" 
+                hx-target="closest tr" 
+                hx-swap="delete">Delete</button>
+    </td>
+</tr>
+

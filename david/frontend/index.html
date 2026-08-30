@@ -1,10 +1,12 @@
 <!DOCTYPE HTML>
 <html>
   <head>
+    <link rel="stylesheet" href="styles/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
       integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" 
       crossorigin="anonymous">
     </script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
   </head>
   <body>
     <h1>Hello World</h1>
@@ -17,8 +19,6 @@
     <div id="feedback" hx-get="/savings/feedback" hx-trigger="load" hx-swap="innerHTML">
       <p>Loading feedback...</p>
     </div>
-    <button type="button" hx-post="/savings/goal" hx-target="#goals" hx-swap="innerHTML">Create-Goal</button>
-    <button type="button" hx-post="/savings/suggestion" hx-target="#suggestions" hx-swap="innerHTML">Create-Suggestion</button>
-    <button type="button" hx-post="/savings/feedback" hx-target="#feedback" hx-swap="innerHTML">Create-Feedback</button>
+    <button type="button" hx-on:click="test(-1)">test</button>
   </body>
 </html>

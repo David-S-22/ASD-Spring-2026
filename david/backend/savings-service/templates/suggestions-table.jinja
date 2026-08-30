@@ -1,12 +1,36 @@
-{% if suggestions %}
 <table>
-    {% for suggestion in suggestions %}
-    <tr>
-        <td>{{ suggestion.id }}</td>
-        <td>{{ suggestion.suggestion }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Suggestion</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for suggestion in suggestions %}
+        {% include "suggestion-row.jinja" %}
+        {% else %}
+        <tr>
+            <td colspan="3">No current suggestions.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="create-row">
+            <td class="cell-id">+</td>
+            <td><input type="text" name="suggestion" placeholder="Suggestion" required></td>
+            <td class="cell-actions">
+                <button type="button" 
+                        class="btn-create" 
+                        hx-post="/savings/suggestion" 
+                        hx-include="closest tr" 
+                        hx-target="#suggestions" 
+                        hx-swap="innerHTML" 
+                        hx-ext="json-enc">Create</button>
+            </td>
+        </tr>
+    </tfoot>
 </table>
-{% else %}
-<p>No current suggestions.</p>
-{% endif %}
+
+
+

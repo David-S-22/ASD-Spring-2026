@@ -1,0 +1,19 @@
+<tr data-id="{{ goal.id }}">
+    <td class="cell-id">{{ goal.id }}</td>
+    <td>{{ goal.name }}</td>
+    <td>{{ goal.cost }}</td>
+    <td>{{ goal.date.strftime("%Y-%m-%d") }}</td>
+    <td class="cell-actions">
+        <button type="button" 
+                class="btn-edit" 
+                hx-get="/savings/goal/{{ goal.id }}/edit" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML">Edit</button>
+        <button type="button" 
+                class="btn-delete" 
+                hx-delete="/savings/goal/{{ goal.id }}" 
+                hx-target="closest tr" 
+                hx-swap="delete">Delete</button>
+    </td>
+</tr>
+

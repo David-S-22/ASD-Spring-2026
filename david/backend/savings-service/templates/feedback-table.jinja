@@ -1,12 +1,36 @@
-{% if feedbacks %}
 <table>
-    {% for feedback in feedbacks %}
-    <tr>
-        <td>{{ feedback.id }}</td>
-        <td>{{ feedback.feedback }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Feedback</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for feedback in feedbacks %}
+        {% include "feedback-row.jinja" %}
+        {% else %}
+        <tr>
+            <td colspan="3">No current feedback.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="create-row">
+            <td class="cell-id">+</td>
+            <td><input type="text" name="feedback" placeholder="Feedback" required></td>
+            <td class="cell-actions">
+                <button type="button" 
+                        class="btn-create" 
+                        hx-post="/savings/feedback" 
+                        hx-include="closest tr" 
+                        hx-target="#feedback" 
+                        hx-swap="innerHTML" 
+                        hx-ext="json-enc">Create</button>
+            </td>
+        </tr>
+    </tfoot>
 </table>
-{% else %}
-<p>No current feedback.</p>
-{% endif %}
+
+
+
