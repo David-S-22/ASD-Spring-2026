@@ -160,7 +160,10 @@ services:
       PORT: 3002
       BACKEND_URL: http://savings-backend:5002
     depends_on:
-      - savings-backend
+      savings-backend:
+        condition: service_started
+      ollama:
+        condition: service_healthy
 
 volumes:
   ollama_data:

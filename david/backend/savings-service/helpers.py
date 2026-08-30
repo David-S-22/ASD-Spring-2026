@@ -2,14 +2,7 @@ from typing import Any, Optional
 from dateutil import parser
 from shared.backend import dto
 
-
 def try_parse_bool(value: Any) -> Optional[bool]:
-    """
-    Parses a value into a boolean if possible.
-    Returns True for True or case-insensitive 'true'.
-    Returns False for False or case-insensitive 'false'.
-    Returns None for any other value.
-    """
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -39,5 +32,7 @@ def object_to_hook(d: dict):
         return dto.Feedback(id=d.get("id"), feedback=d["feedback"])
     return d
 
+def load_prompt(prompt_to_load) -> str:
+    return ""
 
 object_hook = object_to_hook
