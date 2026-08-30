@@ -5,16 +5,14 @@ on:
     branches:
       - "main"
     paths:
-      - ".github/workflows/janelle-ci.yml"
-      - "docker-compose.yml"
-      - "janelle/**"
-      - "shared/**"
+      - .github/workflows/janelle-ci.yml
+      - janelle/**
+      - shared/**
   push:
     branches:
       - "main"
     paths:
       - ".github/workflows/janelle-ci.yml"
-      - "docker-compose.yml"
       - "janelle/**"
       - "shared/**"
 
@@ -26,8 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: docker compose build transactions-frontend transactions-backend transactions-db
-      - run: docker compose up -d transactions-frontend transactions-backend transactions-db
+      - run: docker compose up --no-deps --detach transactions-frontend transactions-backend transactions-db
       - run: sleep 3
       - name: Check frontend availability
         run: curl --fail http://127.0.0.1:3001/ || exit 1
