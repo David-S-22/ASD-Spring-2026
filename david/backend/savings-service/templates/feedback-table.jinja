@@ -1,0 +1,12 @@
+{% if feedbacks %}
+<table>
+    {% for feedback in feedbacks %}
+    <tr>
+        <td>{{ feedback.id }}</td>
+        <td>{{ feedback.feedback }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No current feedback.</p>
+{% endif %}

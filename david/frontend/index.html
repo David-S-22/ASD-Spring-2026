@@ -8,5 +8,17 @@
   </head>
   <body>
     <h1>Hello World</h1>
+    <div id="goals" hx-get="/savings/goals" hx-trigger="load" hx-swap="innerHTML">
+      <p>Loading goals...</p>
+    </div>
+    <div id="suggestions" hx-get="/savings/suggestions" hx-trigger="load" hx-swap="innerHTML">
+      <p>Loading suggestions...</p>
+    </div>
+    <div id="feedback" hx-get="/savings/feedback" hx-trigger="load" hx-swap="innerHTML">
+      <p>Loading feedback...</p>
+    </div>
+    <button type="button" hx-post="/savings/goal" hx-target="#goals" hx-swap="innerHTML">Create-Goal</button>
+    <button type="button" hx-post="/savings/suggestion" hx-target="#suggestions" hx-swap="innerHTML">Create-Suggestion</button>
+    <button type="button" hx-post="/savings/feedback" hx-target="#feedback" hx-swap="innerHTML">Create-Feedback</button>
   </body>
 </html>

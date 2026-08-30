@@ -1,0 +1,12 @@
+{% if suggestions %}
+<table>
+    {% for suggestion in suggestions %}
+    <tr>
+        <td>{{ suggestion.id }}</td>
+        <td>{{ suggestion.suggestion }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No current suggestions.</p>
+{% endif %}

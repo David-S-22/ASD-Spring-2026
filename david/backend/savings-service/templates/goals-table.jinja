@@ -1,3 +1,4 @@
+{% if goals %}
 <table>
     {% for goal in goals %}
     <tr>
@@ -8,3 +9,6 @@
     </tr>
     {% endfor %}
 </table>
+{% else %}
+<p>No current goals.</p>
+{% endif %}

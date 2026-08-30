@@ -37,8 +37,7 @@ def setup_app() -> Flask:
         }
         resp = requests.post(f"{db_url}/goal", json=payload)
         resp.raise_for_status()
-        created_goal = resp.json(object_hook=object_to_hook)
-        return jsonify(created_goal), 201
+        return get_goals()
 
     @app.route("/feedback")
     def get_feedback():
@@ -46,7 +45,7 @@ def setup_app() -> Flask:
         resp = requests.get(f"{db_url}/feedbacks")
         resp.raise_for_status()
         feedbacks = resp.json(object_hook=object_to_hook)
-        return jsonify(feedbacks), 200
+        return render_template("feedback-table.jinja", feedbacks=feedbacks), 200
 
     @app.route("/feedback", methods=["POST"])
     def create_dummy_feedback():
@@ -60,8 +59,7 @@ def setup_app() -> Flask:
         }
         resp = requests.post(f"{db_url}/feedback", json=payload)
         resp.raise_for_status()
-        created_feedback = resp.json(object_hook=object_to_hook)
-        return jsonify(created_feedback), 201
+        return get_feedback()
 
     @app.route("/suggestions")
     def get_suggestion():
@@ -69,7 +67,7 @@ def setup_app() -> Flask:
         resp = requests.get(f"{db_url}/suggestions")
         resp.raise_for_status()
         suggestions = resp.json(object_hook=object_to_hook)
-        return jsonify(suggestions), 200
+        return render_template("suggestions-table.jinja", suggestions=suggestions), 200
 
     @app.route("/suggestion", methods=["POST"])
     def create_dummy_suggestion():
@@ -83,8 +81,7 @@ def setup_app() -> Flask:
         }
         resp = requests.post(f"{db_url}/suggestion", json=payload)
         resp.raise_for_status()
-        created_suggestion = resp.json(object_hook=object_to_hook)
-        return jsonify(created_suggestion), 201
+        return get_suggestion()
 
     return app
 
