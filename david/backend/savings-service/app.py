@@ -69,7 +69,6 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return "", 200
         return get_goals()
 
     @app.route("/suggestions")
@@ -124,7 +123,6 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return "", 200
         return get_suggestions()
 
     @app.route("/feedback")
@@ -179,7 +177,6 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return "", 200
         return get_feedback()
 
     @app.route("/ai-suggestion")

@@ -12,8 +12,6 @@
         <button type="button" 
                 class="btn-delete" 
                 hx-delete="/savings/goal/{{ goal.id }}" 
-                hx-target="closest tr" 
-                hx-swap="delete">Delete</button>
                 hx-target="#goals" 
                 hx-swap="innerHTML">Delete</button>
     </td>
