@@ -8,17 +8,5 @@
         <span class="status-badge status-rejected">Rejected</span>
         {% endif %}
     </td>
-    <td class="cell-actions">
-        <button type="button" 
-                class="btn-edit" 
-                hx-get="/savings/suggestion/{{ suggestion.id }}/edit" 
-                hx-target="closest tr" 
-                hx-swap="outerHTML">Edit</button>
-        <button type="button" 
-                class="btn-delete" 
-                hx-delete="/savings/suggestion/{{ suggestion.id }}" 
-                hx-target="closest tr" 
-                hx-swap="delete">Delete</button>
-    </td>
 </tr>
 

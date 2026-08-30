@@ -179,6 +179,41 @@ def setup_app(db_url: str) -> Flask:
         resp.raise_for_status()
         return "", 200
 
+    @app.route("/ai-suggestion")
+    def get_ai_suggestion():
+        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
+        return render_template("ai-suggestion.jinja", suggestion=stub_suggestion), 200
+
+    @app.route("/ai-suggestion/accept", methods=["POST"])
+    def accept_ai_suggestion():
+        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
+        requests.post(
+            f"{db_url}/suggestion",
+            json={"suggestion": stub_suggestion, "accepted": True},
+        )
+        resp = requests.get(f"{db_url}/suggestions")
+        suggestions = resp.json(object_hook=object_to_hook) if resp.ok else []
+        return render_template(
+            "ai-suggestion.jinja",
+            suggestion="Suggestion accepted! Added to the Suggestions table.",
+            suggestions=suggestions,
+        ), 200
+
+    @app.route("/ai-suggestion/reject", methods=["POST"])
+    def reject_ai_suggestion():
+        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
+        requests.post(
+            f"{db_url}/suggestion",
+            json={"suggestion": stub_suggestion, "accepted": False},
+        )
+        resp = requests.get(f"{db_url}/suggestions")
+        suggestions = resp.json(object_hook=object_to_hook) if resp.ok else []
+        return render_template(
+            "ai-suggestion.jinja",
+            suggestion="Suggestion rejected. Recorded in the Suggestions table.",
+            suggestions=suggestions,
+        ), 200
+
     return app
 
 if __name__ == "__main__":

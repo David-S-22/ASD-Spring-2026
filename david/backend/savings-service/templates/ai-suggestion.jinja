@@ -1,0 +1,19 @@
+<div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container">
+    <div class="panel-header">
+        <h2>AI Suggestion</h2>
+    </div>
+    <div class="ai-suggestion-body" id="ai-suggestion">
+        <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
+        <div class="ai-suggestion-actions">
+            <button type="button" class="btn-accept" hx-post="/savings/ai-suggestion/accept" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
+            <button type="button" class="btn-cancel" hx-post="/savings/ai-suggestion/reject" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
+        </div>
+    </div>
+</div>
+{% if suggestions is defined and suggestions is not none %}
+<div id="suggestions" hx-swap-oob="innerHTML">
+    {% include "suggestions-table.jinja" %}
+</div>
+{% endif %}
+
+

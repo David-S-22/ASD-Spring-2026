@@ -237,14 +237,44 @@ button {
   line-height: 1;
 }
 
-input:invalid {
-  border-color: #dc3545;
+.ai-suggestion-panel {
+  flex: none;
 }
 
-input:invalid:focus {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25);
+.ai-suggestion-body {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+
+.ai-suggestion-textbox {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 70px;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  resize: vertical;
+  background-color: #f8f9fa;
+  color: #333;
+}
+
+.ai-suggestion-textbox:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+.ai-suggestion-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 
 .status-badge {
   display: inline-block;

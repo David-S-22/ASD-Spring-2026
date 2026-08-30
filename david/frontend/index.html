@@ -33,6 +33,19 @@
               <p class="loading-state">Loading goals...</p>
             </div>
           </div>
+
+          <div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container">
+            <div class="panel-header">
+              <h2>AI Suggestion</h2>
+            </div>
+            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
+              <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">Based on your recent savings goals, you are on track to save an extra $200 by end of quarter.</textarea>
+              <div class="ai-suggestion-actions">
+                <button type="button" class="btn-accept" hx-post="/savings/ai-suggestion/accept" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
+                <button type="button" class="btn-cancel" hx-post="/savings/ai-suggestion/reject" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="dashboard-column">

@@ -16,27 +16,6 @@
         </tr>
         {% endfor %}
     </tbody>
-    <tfoot>
-        <tr class="create-row">
-            <td class="cell-id">+</td>
-            <td><input type="text" name="suggestion" placeholder="Suggestion" required></td>
-            <td>
-                <select name="accepted">
-                    <option value="true" selected>Accepted</option>
-                    <option value="false">Rejected</option>
-                </select>
-            </td>
-            <td class="cell-actions">
-                <button type="button" 
-                        class="btn-create" 
-                        hx-post="/savings/suggestion" 
-                        hx-include="closest tr" 
-                        hx-target="#suggestions" 
-                        hx-swap="innerHTML" 
-                        hx-ext="json-enc">Create</button>
-            </td>
-        </tr>
-    </tfoot>
 </table>
 
 
