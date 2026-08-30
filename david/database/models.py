@@ -24,9 +24,10 @@ class Goal(db.Model):
 class Suggestion(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     suggestion: Mapped[str] = mapped_column(nullable=False)
+    accepted: Mapped[bool] = mapped_column(nullable=False)
 
     def to_dto(self):
-        return dto.Suggestion(self.id, self.suggestion)
+        return dto.Suggestion(self.id, self.suggestion, self.accepted)
 
 @dataclass
 class Feedback(db.Model):

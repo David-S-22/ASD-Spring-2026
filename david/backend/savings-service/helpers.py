@@ -1,5 +1,24 @@
+from typing import Any, Optional
 from dateutil import parser
 from shared.backend import dto
+
+
+def try_parse_bool(value: Any) -> Optional[bool]:
+    """
+    Parses a value into a boolean if possible.
+    Returns True for True or case-insensitive 'true'.
+    Returns False for False or case-insensitive 'false'.
+    Returns None for any other value.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        val_lower = value.strip().lower()
+        if val_lower == "true":
+            return True
+        if val_lower == "false":
+            return False
+    return None
 
 
 def object_to_hook(d: dict):
@@ -10,8 +29,12 @@ def object_to_hook(d: dict):
             cost=d["cost"],
             date=parser.parse(d["date"]),
         )
-    if "suggestion" in d:
-        return dto.Suggestion(id=d.get("id"), suggestion=d["suggestion"])
+    if "suggestion" in d and "accepted" in d and (accepted_val := try_parse_bool(d["accepted"])) is not None:
+        return dto.Suggestion(
+            id=d.get("id"),
+            suggestion=d["suggestion"],
+            accepted=accepted_val,
+        )
     if "feedback" in d:
         return dto.Feedback(id=d.get("id"), feedback=d["feedback"])
     return d

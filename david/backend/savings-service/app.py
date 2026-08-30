@@ -75,10 +75,12 @@ def setup_app() -> Flask:
         dummy_suggestion = dto.Suggestion(
             id=0,
             suggestion="Save 10% of income every month",
+            accepted=True,
         )
         db_url = os.environ.get("DB_URL", "http://localhost:6002")
         payload = {
             "suggestion": dummy_suggestion.suggestion,
+            "accepted": dummy_suggestion.accepted,
         }
         resp = requests.post(f"{db_url}/suggestion", json=payload)
         resp.raise_for_status()

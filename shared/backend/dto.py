@@ -34,6 +34,7 @@ class Goal:
 class Suggestion:
     id: int
     suggestion: str
+    accepted: bool
 
 @dataclass(frozen=True)
 class Feedback:
