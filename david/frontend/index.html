@@ -17,6 +17,11 @@
         <h1>Savings Dashboard</h1>
       </header>
 
+      <div id="error-alert" class="error-alert hidden">
+        <span id="error-message"></span>
+        <button type="button" class="btn-close-error" onclick="hideError()">×</button>
+      </div>
+
       <main class="dashboard-layout">
         <section class="dashboard-column">
           <div class="dashboard-panel goals-panel">
@@ -50,5 +55,49 @@
         </section>
       </main>
     </div>
+
+    <script>
+      function showError(msg) {
+        const el = document.getElementById('error-alert');
+        const text = document.getElementById('error-message');
+        if (el && text) {
+          text.textContent = msg;
+          el.classList.remove('hidden');
+        }
+      }
+
+      function hideError() {
+        const el = document.getElementById('error-alert');
+        if (el) {
+          el.classList.add('hidden');
+        }
+      }
+
+      document.addEventListener('htmx:configRequest', function(evt) {
+        const row = evt.detail.elt.closest('tr');
+        if (row) {
+          const inputs = row.querySelectorAll('input');
+          for (const input of inputs) {
+            if (!input.checkValidity()) {
+              input.reportValidity();
+              showError('Please provide all required values before submitting.');
+              evt.preventDefault();
+              return;
+            }
+          }
+        }
+        hideError();
+      });
+
+      document.addEventListener('htmx:responseError', function(evt) {
+        const status = evt.detail.xhr.status;
+        const resp = evt.detail.xhr.responseText;
+        showError('Request failed (' + status + '): ' + (resp || 'Invalid request or server error'));
+      });
+
+      document.addEventListener('htmx:sendError', function() {
+        showError('Network error: Unable to communicate with the server.');
+      });
+    </script>
   </body>
 </html>

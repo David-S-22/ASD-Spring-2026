@@ -1,7 +1,7 @@
 <tr data-id="{{ goal.id }}">
     <td class="cell-id">{{ goal.id }}</td>
     <td><input type="text" name="name" value="{{ goal.name }}" required></td>
-    <td><input type="number" name="cost" value="{{ goal.cost }}" required></td>
+    <td><input type="number" name="cost" value="{{ goal.cost }}" min="0" required></td>
     <td><input type="date" name="date" value="{{ goal.date.strftime('%Y-%m-%d') }}" required></td>
     <td class="cell-actions">
         <button type="button" 

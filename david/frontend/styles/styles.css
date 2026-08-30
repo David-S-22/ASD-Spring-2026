@@ -209,3 +209,40 @@ button {
   font-style: italic;
   margin: 0;
 }
+
+.error-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8d7da;
+  color: #842029;
+  border: 1px solid #f5c2c7;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+}
+
+.error-alert.hidden {
+  display: none;
+}
+
+.btn-close-error {
+  background: transparent;
+  border: none;
+  color: #842029;
+  font-size: 1.25rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+input:invalid {
+  border-color: #dc3545;
+}
+
+input:invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25);
+}
+
