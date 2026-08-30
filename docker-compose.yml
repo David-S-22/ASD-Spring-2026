@@ -8,7 +8,7 @@ services:
       - ollama_data:/root/.ollama
       - ./ai-services/setup-ollama.sh:/ai-services/setup-ollama.sh
     restart: unless-stopped
-    entrypoint: [ "/bin/sh", "/ai-services/setup-ollama.sh"]
+    entrypoint: ["/bin/sh", "/ai-services/setup-ollama.sh"]
 
 
   bills-frontend:
