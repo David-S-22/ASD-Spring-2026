@@ -69,12 +69,10 @@ def setup_app(database_path) -> Flask:
 
         if not payload or "suggestion" not in payload:
             return jsonify({"error": "Missing suggestion field"}), 400
-        if "accepted" not in payload or payload["accepted"] is None:
-            return jsonify({"error": "Missing accepted field"}), 400
 
-        accepted_val = try_parse_bool(payload["accepted"])
+        accepted_val = try_parse_bool(payload.get("accepted"))
         if accepted_val is None:
-            return jsonify({"error": "Invalid accepted field"}), 400
+            return jsonify({"error": "Missing accepted field"}), 400
 
         suggestion = Suggestion(
             suggestion=payload["suggestion"],

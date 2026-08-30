@@ -82,8 +82,8 @@ def setup_app(db_url: str) -> Flask:
     def create_suggestion():
         payload = request.get_json(silent=True) or request.form.to_dict()
         suggestion = object_to_hook(payload)
-        if not isinstance(suggestion, dto.Suggestion) or not str(suggestion.suggestion).strip():
-            return jsonify({"error": "Missing suggestion field"}), 400
+        if not isinstance(suggestion, dto.Suggestion):
+            return jsonify({"error": "Missing suggestion fields"}), 400
 
         resp = requests.post(f"{db_url}/suggestion", json=payload)
         resp.raise_for_status()

@@ -3,6 +3,7 @@
         <tr>
             <th>ID</th>
             <th>Suggestion</th>
+            <th>Accepted</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -11,7 +12,7 @@
         {% include "suggestion-row.jinja" %}
         {% else %}
         <tr>
-            <td colspan="3">No current suggestions.</td>
+            <td colspan="4">No current suggestions.</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -19,6 +20,12 @@
         <tr class="create-row">
             <td class="cell-id">+</td>
             <td><input type="text" name="suggestion" placeholder="Suggestion" required></td>
+            <td>
+                <select name="accepted">
+                    <option value="true" selected>Accepted</option>
+                    <option value="false">Rejected</option>
+                </select>
+            </td>
             <td class="cell-actions">
                 <button type="button" 
                         class="btn-create" 
