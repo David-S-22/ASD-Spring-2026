@@ -57,10 +57,12 @@ def setup_feedback() -> List[Feedback]:
 def setup_suggestions() -> List[Suggestion]:
     suggestion1 = Suggestion()
     suggestion1.suggestion = "I can't do this :("
+    suggestion1.accepted = True
     db.session.add(suggestion1)
 
     suggestion2 = Suggestion()
     suggestion2.suggestion = "I can't do this :("
+    suggestion2.accepted = False
     db.session.add(suggestion2)
 
     db.session.commit()
@@ -101,8 +103,10 @@ def test_get_all_suggestions(client: FlaskClient):
     response_json = response.get_json()
     assert len(response_json) == 2
     assert expected_suggestions[0].suggestion == response_json[0]["suggestion"]
+    assert expected_suggestions[0].accepted == response_json[0]["accepted"]
 
     assert expected_suggestions[1].suggestion == response_json[1]["suggestion"]
+    assert expected_suggestions[1].accepted == response_json[1]["accepted"]
 
 @pytest.mark.usefixtures("app_ctx")
 def test_get_specific_goals(client: FlaskClient):
@@ -121,6 +125,7 @@ def test_get_specific_suggestion(client: FlaskClient):
     assert response.status_code == 200
     response_json = response.get_json()
     assert expected_suggestion[0].suggestion == response_json["suggestion"]
+    assert expected_suggestion[0].accepted == response_json["accepted"]
 
 @pytest.mark.usefixtures("app_ctx")
 def test_get_specific_feedback(client: FlaskClient):
@@ -182,12 +187,24 @@ def test_update_suggestion(client: FlaskClient):
     suggestions = setup_suggestions()
     new_suggestion = "two schmickles"
     suggestions[0].suggestion = new_suggestion
+    suggestions[0].accepted = False
     updated_suggestion_json = dumps(asdict(suggestions[0]), default=str)
     response = client.patch(f"/suggestion/{suggestions[0].id}", data=updated_suggestion_json, content_type="application/json")
     assert response.status_code == 200
 
     updated_suggestion = db.session.execute(db.select(Suggestion).where(Suggestion.id == suggestions[0].id)).scalar_one()
     assert updated_suggestion.suggestion == new_suggestion
+    assert updated_suggestion.accepted is False
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_suggestion_partial_update(client: FlaskClient):
+    suggestions = setup_suggestions()
+    response = client.patch(f"/suggestion/{suggestions[0].id}", json={"accepted": False})
+    assert response.status_code == 200
+
+    updated_suggestion = db.session.execute(db.select(Suggestion).where(Suggestion.id == suggestions[0].id)).scalar_one()
+    assert updated_suggestion.accepted is False
+    assert updated_suggestion.suggestion == suggestions[0].suggestion
 
 @pytest.mark.usefixtures("app_ctx")
 def test_update_feedback(client: FlaskClient):
@@ -252,12 +269,19 @@ def test_create_goal(client: FlaskClient):
 def test_create_suggestion(client: FlaskClient):
     suggestion_to_create = Suggestion()
     suggestion_to_create.suggestion = "Borgr"
+    suggestion_to_create.accepted = True
     updated_suggestion_json = dumps(asdict(suggestion_to_create), default=str)
     response = client.post("/suggestion", content_type="application/json", data=updated_suggestion_json)
     assert response.status_code == 201
 
     new_suggestion = db.session.execute(db.select(Suggestion)).scalar_one()
     assert new_suggestion.suggestion == suggestion_to_create.suggestion
+    assert new_suggestion.accepted == suggestion_to_create.accepted
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_suggestion_missing_accepted(client: FlaskClient):
+    response = client.post("/suggestion", content_type="application/json", data=dumps({"suggestion": "Borgr"}))
+    assert response.status_code == 400
 
 @pytest.mark.usefixtures("app_ctx")
 def test_create_feedback(client: FlaskClient):
@@ -281,10 +305,11 @@ def test_goal_to_dto():
     assert goal.to_dto() == dto_obj
 
 def test_suggestion_to_dto():
-    suggestion = Suggestion(id=2, suggestion="A suggestion")
+    suggestion = Suggestion(id=2, suggestion="A suggestion", accepted=True)
     dto_obj = suggestion.to_dto()
     assert dto_obj.id == 2
     assert dto_obj.suggestion == "A suggestion"
+    assert dto_obj.accepted is True
     assert suggestion.to_dto() == dto_obj
 
 def test_feedback_to_dto():
@@ -293,4 +318,17 @@ def test_feedback_to_dto():
     assert dto_obj.id == 3
     assert dto_obj.feedback == "A feedback"
     assert feedback.to_dto() == dto_obj
+
+def test_try_parse_bool():
+    from database.helpers import try_parse_bool
+    assert try_parse_bool(True) is True
+    assert try_parse_bool(False) is False
+    assert try_parse_bool("True") is True
+    assert try_parse_bool("true") is True
+    assert try_parse_bool("False") is False
+    assert try_parse_bool("false") is False
+    assert try_parse_bool("invalid") is None
+    assert try_parse_bool(123) is None
+    assert try_parse_bool(None) is None
+
 
