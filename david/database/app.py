@@ -131,9 +131,7 @@ def setup_app(database_path) -> Flask:
         if "name" in updated_goal:
             goal_to_update.name = updated_goal["name"]
         if "cost" in updated_goal:
-            goal_to_update.cost = updated_goal["cost"]
-        elif "amount" in updated_goal:
-            goal_to_update.cost = updated_goal["amount"]
+            goal_to_update.cost = int(updated_goal["cost"])
         if "date" in updated_goal:
             goal_to_update.date = datetime.datetime.fromisoformat(updated_goal["date"])
 

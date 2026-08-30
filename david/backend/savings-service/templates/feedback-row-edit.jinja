@@ -5,7 +5,7 @@
         <button type="button" 
                 class="btn-accept" 
                 title="Accept" 
-                hx-post="/savings/feedback/{{ feedback.id }}" 
+                hx-patch="/savings/feedback/{{ feedback.id }}" 
                 hx-include="closest tr" 
                 hx-target="closest tr" 
                 hx-swap="outerHTML" 
