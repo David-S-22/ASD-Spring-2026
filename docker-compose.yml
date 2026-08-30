@@ -69,10 +69,12 @@ services:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
+      OLLAMA_URL: http://ollama:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - bills-db
+      - ollama
   bills-db:
     build: ./sophia/database
     container_name: bills-db
