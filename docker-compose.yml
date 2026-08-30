@@ -148,7 +148,6 @@ services:
       - savings-backend
 
 volumes:
-  setup-ollama.sh:
   ollama_data:
   transactions_data:
   bills_data:
