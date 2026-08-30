@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tally — Dashboard</title>
+    <link rel="stylesheet" href="styles/theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+            crossorigin="anonymous"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="brand"><span class="logo">◆</span> Tally</div>
+        <nav class="navbar" id="navbar">
+            <button type="button" class="nav-tab"
+                    hx-get="/transactions-frontend/" hx-target="#content" hx-swap="innerHTML">
+                Transactions
+            </button>
+            <button type="button" class="nav-tab active"
+                    hx-get="/anomalies-frontend/" hx-target="#content" hx-swap="innerHTML">
+                Anomalies
+            </button>
+            <button type="button" class="nav-tab"
+                    hx-get="/savings-frontend/" hx-target="#content" hx-swap="innerHTML">
+                Savings
+            </button>
+            <button type="button" class="nav-tab"
+                    hx-get="/bills-frontend/" hx-target="#content" hx-swap="innerHTML">
+                Bills
+            </button>
+        </nav>
+    </header>
+
+    <main class="content" id="content"
+          hx-get="/anomalies-frontend/" hx-trigger="load" hx-swap="innerHTML">
+        <p class="loading-state">Loading…</p>
+    </main>
+
+    <script>
+        // Highlight the tab that was clicked.
+        document.getElementById('navbar').addEventListener('click', function (evt) {
+            const tab = evt.target.closest('.nav-tab');
+            if (!tab) return;
+            for (const el of this.querySelectorAll('.nav-tab')) {
+                el.classList.remove('active');
+            }
+            tab.classList.add('active');
+        });
+    </script>
+</body>
+</html>
