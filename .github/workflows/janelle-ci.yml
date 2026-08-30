@@ -1,0 +1,38 @@
+name: Janelle-CI
+
+on:
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - .github/workflows/janelle-ci.yml
+      - janelle/**
+      - shared/**
+  push:
+    branches:
+      - "main"
+    paths:
+      - ".github/workflows/janelle-ci.yml"
+      - "janelle/**"
+      - "shared/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-health: # Check docker container health after startup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: docker compose up --no-deps --detach transactions-frontend transactions-backend transactions-db
+      - run: sleep 3
+      - name: Check frontend availability
+        run: curl --fail http://127.0.0.1:3001/ || exit 1
+      - name: Check backend availability
+        run: curl --fail http://127.0.0.1:5001/ || exit 1
+      - name: Check database availability
+        run: curl --fail http://127.0.0.1:6001/ || exit 1
+      - run: docker logs transactions-frontend transactions-backend transactions-db
+        if: failure()
+      - run: docker rm --force --volumes transactions-frontend transactions-backend transactions-db
+        if: always()
