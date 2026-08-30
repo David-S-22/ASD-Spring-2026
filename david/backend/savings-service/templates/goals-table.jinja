@@ -1,0 +1,39 @@
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Cost</th>
+            <th>Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for goal in goals %}
+        {% include "goal-row.jinja" %}
+        {% else %}
+        <tr>
+            <td colspan="5">No current goals.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="create-row">
+            <td class="cell-id">+</td>
+            <td><input type="text" name="name" placeholder="Name" required></td>
+            <td><input type="number" name="cost" placeholder="Cost" min="0" required></td>
+            <td><input type="date" name="date" required></td>
+            <td class="cell-actions">
+                <button type="button" 
+                        class="btn-create" 
+                        hx-post="/savings/goal" 
+                        hx-include="closest tr" 
+                        hx-target="#goals" 
+                        hx-swap="innerHTML" 
+                        hx-ext="json-enc">Create</button>
+            </td>
+        </tr>
+    </tfoot>
+</table>
+
+

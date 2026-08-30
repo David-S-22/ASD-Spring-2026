@@ -1,0 +1,22 @@
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Suggestion</th>
+            <th>Accepted</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for suggestion in suggestions %}
+        {% include "suggestion-row.jinja" %}
+        {% else %}
+        <tr>
+            <td colspan="4">No current suggestions.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+

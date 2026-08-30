@@ -1,0 +1,21 @@
+<tr data-id="{{ feedback.id }}">
+    <td class="cell-id">{{ feedback.id }}</td>
+    <td><input type="text" name="feedback" value="{{ feedback.feedback }}" required></td>
+    <td class="cell-actions">
+        <button type="button" 
+                class="btn-accept" 
+                title="Accept" 
+                hx-patch="/savings/feedback/{{ feedback.id }}" 
+                hx-include="closest tr" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML" 
+                hx-ext="json-enc">✓</button>
+        <button type="button" 
+                class="btn-cancel" 
+                title="Cancel" 
+                hx-get="/savings/feedback/{{ feedback.id }}" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML">✗</button>
+    </td>
+</tr>
+

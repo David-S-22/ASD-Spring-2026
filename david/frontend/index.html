@@ -1,37 +1,117 @@
 <!DOCTYPE HTML>
 <html lang="en">
+<html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Savings Advisor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Savings Dashboard</title>
+    <link rel="stylesheet" href="styles/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
       integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" 
       crossorigin="anonymous">
     </script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
   </head>
   <body>
-    <h1>Savings Advisor</h1>
+    <div class="app-container">
+      <header class="app-header">
+        <h1>Savings Dashboard</h1>
+      </header>
 
-    <section>
-      <h2>Suggestions</h2>
-      <button type="button"
-              hx-post="/savings/suggestion"
-              hx-target="#suggestions"
-              hx-swap="innerHTML">
-          Create dummy suggestion
-      </button>
-      <table>
-          <thead>
-              <tr>
-                  <th>ID</th>
-                  <th>Suggestion</th>
-                  <th>Accepted</th>
-              </tr>
-          </thead>
-          <tbody id="suggestions" hx-get="/savings/suggestions" hx-trigger="load" hx-swap="innerHTML">
-              <tr><td colspan="3">Loading suggestions…</td></tr>
-          </tbody>
-      </table>
-    </section>
+      <div id="error-alert" class="error-alert hidden">
+        <span id="error-message"></span>
+        <button type="button" class="btn-close-error" onclick="hideError()">×</button>
+      </div>
+
+      <main class="dashboard-layout">
+        <section class="dashboard-column">
+          <div class="dashboard-panel goals-panel">
+            <div class="panel-header">
+              <h2>Savings Goals</h2>
+            </div>
+            <div id="goals" class="table-scroll-container" hx-get="/savings/goals" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading goals...</p>
+            </div>
+          </div>
+
+          <div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container">
+            <div class="panel-header">
+              <h2>AI Suggestion</h2>
+            </div>
+            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
+              <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">Based on your recent savings goals, you are on track to save an extra $200 by end of quarter.</textarea>
+              <div class="ai-suggestion-actions">
+                <button type="button" class="btn-accept" hx-post="/savings/ai-suggestion/accept" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
+                <button type="button" class="btn-cancel" hx-post="/savings/ai-suggestion/reject" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-column">
+          <div class="dashboard-panel suggestions-panel">
+            <div class="panel-header">
+              <h2>Suggestions</h2>
+            </div>
+            <div id="suggestions" class="table-scroll-container" hx-get="/savings/suggestions" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading suggestions...</p>
+            </div>
+          </div>
+
+          <div class="dashboard-panel feedback-panel">
+            <div class="panel-header">
+              <h2>Feedback</h2>
+            </div>
+            <div id="feedback" class="table-scroll-container" hx-get="/savings/feedback" hx-trigger="load" hx-swap="innerHTML">
+              <p class="loading-state">Loading feedback...</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      function showError(msg) {
+        const el = document.getElementById('error-alert');
+        const text = document.getElementById('error-message');
+        if (el && text) {
+          text.textContent = msg;
+          el.classList.remove('hidden');
+        }
+      }
+
+      function hideError() {
+        const el = document.getElementById('error-alert');
+        if (el) {
+          el.classList.add('hidden');
+        }
+      }
+
+      document.addEventListener('htmx:configRequest', function(evt) {
+        const row = evt.detail.elt.closest('tr');
+        if (row) {
+          const inputs = row.querySelectorAll('input');
+          for (const input of inputs) {
+            if (!input.checkValidity()) {
+              input.reportValidity();
+              showError('Please provide all required values before submitting.');
+              evt.preventDefault();
+              return;
+            }
+          }
+        }
+        hideError();
+      });
+
+      document.addEventListener('htmx:responseError', function(evt) {
+        const status = evt.detail.xhr.status;
+        const resp = evt.detail.xhr.responseText;
+        showError('Request failed (' + status + '): ' + (resp || 'Invalid request or server error'));
+      });
+
+      document.addEventListener('htmx:sendError', function() {
+        showError('Network error: Unable to communicate with the server.');
+      });
+    </script>
   </body>
 </html>
