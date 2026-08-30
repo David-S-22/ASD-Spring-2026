@@ -1,22 +1,22 @@
-import os
-import requests
-from dataclasses import asdict
 from typing import List
+
+from requests import get, post
+
 from shared.backend import dto
-from ..helpers import serialise, deserialise_or_abort
+from ..helpers import deserialise_or_abort, serialise, get_env
 
 
 def get_all_anomalies() -> List[dto.Anomaly]:
-    resp = requests.get(url("/"))
+    resp = get(_url("/"))
     resp.raise_for_status()
 
     return [deserialise_or_abort(dto.Anomaly, item) for item in resp.json()]
 
 def create_anomaly(anomaly: dto.Anomaly) -> dto.Anomaly:
-    resp = requests.post(url("/"), json=serialise(anomaly))
+    resp = post(_url("/"), json=serialise(anomaly))
     resp.raise_for_status()
 
     return deserialise_or_abort(dto.Anomaly, resp.json())
 
-def url(path: str):
-    return os.environ["ANOMALIES_DB_URL"] + path
+def _url(path: str):
+    return get_env("ANOMALIES_DB_URL") + path

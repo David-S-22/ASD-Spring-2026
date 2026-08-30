@@ -8,5 +8,8 @@ if __name__ == "__main__":
 
     # Frontload env to ensure they're set
     get_env("ANOMALIES_DB_URL")
+    get_env("OLLAMA_URL")
+    get_env("OLLAMA_IMPLEMENTATION_MODEL")
+    get_env("OLLAMA_REVIEW_MODEL")
 
     app.run(host="0.0.0.0", port=port)
