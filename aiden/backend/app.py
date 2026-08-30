@@ -29,11 +29,17 @@ def check_transaction():
     data = request.get_json() or {}
     transaction = deserialise_or_abort(dto.Transaction, data)
 
+    app.logger.warning("Checking transaction %s (merchant=%r, amount=%s)",
+                       transaction.id, transaction.merchant, transaction.amount)
+
     anomaly = agent_api.review_transaction(transaction)
 
     if anomaly is None:
+        app.logger.warning("Transaction %s cleared (no anomaly) -> 204", transaction.id)
         return empty()
 
+    app.logger.warning("Transaction %s flagged as anomalous: %s",
+                       transaction.id, anomaly.agent_reason_suspected)
     return render_template("alert.jinja", anomaly=anomaly)
 
 @app.post("/dummy-anomaly")

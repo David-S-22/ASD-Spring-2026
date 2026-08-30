@@ -22,7 +22,7 @@
     <button type="button"
             hx-post="/anomalies/check-transaction"
             hx-ext="json-enc"
-            hx-vals="js:dummyTransaction()"
+            hx-vals="js:{...dummyTransaction()}"
             hx-target="#alert"
             hx-swap="innerHTML">
         Check dummy transaction

@@ -2,14 +2,17 @@ from json import JSONDecodeError, loads
 from typing import Optional
 from uuid import uuid4
 
+from flask import current_app
+
 from shared.backend import dto
 from .ollama_api import prompt
 from ..helpers import serialise
 
 _detect_system_prompt = """
 
-You are a transaction anomaly-review agent.
-Your task is to determine whether a single financial transaction appears suspicious based ONLY on the information provided in the transaction.
+You are a skeptical transaction anomaly-detection agent.
+Your task is to decide whether a single financial transaction looks suspicious based ONLY on the information provided in the transaction.
+You are the FIRST line of screening. A second, stricter reviewer will double-check anything you flag, so you should lean towards flagging anything that looks even somewhat unusual. Prefer false positives over missing a genuine anomaly.
 
 You have these fields:
 
@@ -22,32 +25,26 @@ Use a simple Plan → Act → Observe → Act process:
 
 1. PLAN
    Identify which properties of the transaction could indicate an anomaly:
-   - unusually large or small amount
-   - unusual merchant characteristics
-   - unusual or potentially inconsistent date/time information
-   - combinations of the available properties that appear anomalous
+   - unusually large or round amounts (e.g. very high values, or suspiciously round numbers)
+   - cash-like, high-risk, generic, or unfamiliar merchant names (e.g. ATMs, cash transfers, gift cards, crypto, vague names)
+   - unusual or inconsistent date/time information (e.g. odd hours, future dates)
+   - combinations of the above that together look anomalous
 
 2. ACT
-   Analyze the transaction using only the supplied properties.
-   Consider whether the transaction is plausibly unusual or suspicious.
+   Analyze the transaction using only the supplied properties and decide whether it is plausibly unusual or suspicious.
 
 3. OBSERVE
-   Critically inspect your initial conclusion.
-   Ask whether the evidence actually supports suspicion, or whether the transaction is merely unusual.
-   Do not invent facts about the customer, merchant, location, previous transactions, account history, or expected spending patterns.
+   Re-read your reasoning. If your explanation describes ANY unusual, risky, or noteworthy characteristic, then the transaction IS suspicious and you MUST set "is_suspicious": true.
+   Never describe something as unusual or risky while also marking it not suspicious — that is a contradiction.
 
 4. ACT
-   Make a final determination.
+   Make a final determination, erring on the side of flagging.
 
-A transaction should be marked suspicious only when there is a meaningful reason to believe it is anomalous based on the supplied data.
-
-Important rules:
-- Do not claim fraud as a fact.
-- Do not invent missing context.
-- Do not assume that a high transaction amount is fraudulent.
-- Do not assume that an unfamiliar merchant is fraudulent.
-- If there is insufficient evidence to identify a meaningful anomaly, classify the transaction as not suspicious.
-- Your explanation must describe the evidence that caused the transaction to be considered suspicious.
+Guidance:
+- A large amount is a legitimate reason to flag a transaction.
+- A cash-like, generic, or unfamiliar merchant is a legitimate reason to flag a transaction.
+- Only mark a transaction not suspicious when nothing about the supplied fields stands out as unusual.
+- Do not claim fraud as a fact and do not invent missing context; describe only what the supplied fields show.
 - Keep the explanation concise and factual.
 
 Return ONLY valid JSON matching this schema:
@@ -138,18 +135,27 @@ def review_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
     # First pass: the implementation model looks for a possible anomaly.
     detect_user_prompt = _detect_user_prompt.format(serialise(transaction))
     detection = _prompt_json(_detect_system_prompt, detect_user_prompt, review=False)
+    current_app.logger.warning("Detection model response for %s: %s", transaction.id, detection)
 
-    if not detection.get("is_suspicious"):
+    # The small detection model is unreliable at keeping "is_suspicious" consistent
+    # with its own written reason. We therefore treat the transaction as a candidate
+    # if it either sets the flag OR supplies a non-empty reason, and let the stronger
+    # review model be the real gate that filters out false positives.
+    reason = (detection.get("agent_reason_suspected") or "").strip()
+    is_candidate = bool(detection.get("is_suspicious")) or bool(reason)
+
+    if not is_candidate:
+        current_app.logger.warning("Detection model did not flag %s as suspicious", transaction.id)
         return None
-
-    reason = detection.get("agent_reason_suspected", "")
 
     # Second pass: the stronger, lower-temperature review model verifies that the
     # first model's finding is actually accurate, filtering out false positives.
     review_user_prompt = _review_user_prompt.format(serialise(transaction), reason)
     review = _prompt_json(_review_system_prompt, review_user_prompt, review=True)
+    current_app.logger.warning("Review model response for %s: %s", transaction.id, review)
 
     if not review.get("is_accurate"):
+        current_app.logger.warning("Review model rejected finding for %s as inaccurate", transaction.id)
         return None
 
     return dto.Anomaly(
