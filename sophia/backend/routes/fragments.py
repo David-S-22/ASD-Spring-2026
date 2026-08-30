@@ -6,6 +6,7 @@ turns a Flask form into plain arguments and turns the result into HTML plus
 an HX-Trigger toast header.
 """
 import json
+import math
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, make_response, render_template, request
@@ -232,6 +233,8 @@ def _parse_handoff_subscription(args):
         amount = float(args.get("amount", ""))
     except ValueError:
         raise ServiceError("The amount in the link isn't a number.")
+    if not math.isfinite(amount):
+        raise ServiceError("The amount in the link isn't a usable number.")
     if amount < 0:
         raise ServiceError("The amount in the link can't be negative.")
     cadence = args.get("cadence")
