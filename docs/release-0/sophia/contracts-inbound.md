@@ -4,6 +4,13 @@ Assumptions this feature makes about other students' services, written down so a
 
 ## 1. Transactions service (Janelle, :6003)
 
+> **Port note (30 Aug):** Janelle's #59 deployed her containers on
+> 3001/5001/6001, which collides with the student-1 convention block; the
+> team is settling which allocation wins. Bills addresses her DB API by
+> container name via `TRANSACTIONS_DB_API_URL` (e.g.
+> `http://transactions-db:6001`), so whichever port the team lands on is a
+> one-variable change here, not a code change.
+
 Assumed contract: `GET /transactions?merchant=&since=` returning a list of rows with `date`, `merchant`, `description`, `amount`, `category_id`, `ai_confidence`. The field shape is Janelle's call as the data owner; `sophia/backend/fixtures/transactions_stub.json` is the worked example Bills currently codes against. `sophia/backend/clients/transactions.py` normalises every row through one `_normalise()` function, so a differing real contract is a one-function change. When `TRANSACTIONS_DB_API_URL` is unset, or the real service errors, the client falls back to `sophia/backend/fixtures/transactions_stub.json` (~25 rows across the seed merchants) and reports `source="stub"`.
 
 ## 2. Recurring-bill handoff
