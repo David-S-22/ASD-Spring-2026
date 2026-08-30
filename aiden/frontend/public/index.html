@@ -7,6 +7,9 @@
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
             integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
             crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx-ext-json-enc@2.0.1/json-enc.js"
+            crossorigin="anonymous"></script>
+    <script src="js/dummy-transaction.js"></script>
 </head>
 <body>
     <h1>Anomalies</h1>
@@ -16,6 +19,15 @@
             hx-swap="innerHTML">
         Create dummy anomaly
     </button>
+    <button type="button"
+            hx-post="/anomalies/check-transaction"
+            hx-ext="json-enc"
+            hx-vals="js:dummyTransaction()"
+            hx-target="#alert"
+            hx-swap="innerHTML">
+        Check dummy transaction
+    </button>
+    <div id="alert"></div>
     <table>
         <thead>
             <tr>

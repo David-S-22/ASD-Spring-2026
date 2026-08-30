@@ -3,9 +3,12 @@ from typing import Any, Optional, Type, TypeVar, get_args, get_origin, Union
 from uuid import UUID
 import os
 
-from flask import abort
+from flask import abort, Response
 
 T = TypeVar("T")
+
+def empty() -> Response:
+    return Response(status=204)
 
 def serialise(dto: Any) -> dict:
     """Serializes a flat dataclass into a dict, converting all UUIDs to strings."""
