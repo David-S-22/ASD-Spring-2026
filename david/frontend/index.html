@@ -38,11 +38,11 @@
             <div class="panel-header">
               <h2>AI Suggestion</h2>
             </div>
-            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings-backend/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
-              <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">Based on your recent savings goals, you are on track to save an extra $200 by end of quarter.</textarea>
+            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings-backend/ai-suggestion" hx-trigger="load, feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
+              <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion...">Loading personalized AI savings advice...</textarea>
               <div class="ai-suggestion-actions">
-                <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/accept" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
-                <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/reject" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
+                <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/accept" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
+                <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/reject" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
               </div>
             </div>
           </div>
