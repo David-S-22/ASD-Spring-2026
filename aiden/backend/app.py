@@ -16,7 +16,7 @@ def get_index():
 
 @app.get("/fact")
 def get_fact():
-    return ollama_api.prompt("You are a helpful assistant", "tell me a random fact")
+    return ollama_api.prompt("You are a helpful assistant", "tell me a random fact") # TODO fix
 
 @app.get("/anomalies")
 def get_anomaly_rows():

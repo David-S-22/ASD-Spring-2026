@@ -4,15 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anomalies</title>
+</head>
+<body>
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
             integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
             crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/htmx-ext-json-enc@2.0.1/json-enc.js"
             crossorigin="anonymous"></script>
-    <script src="js/dummy-transaction.js"></script>
-</head>
-<body>
-    <h1>Anomalies</h1>
+
+            <h1>Anomalies</h1>
     <button type="button"
             hx-post="/anomalies-backend/dummy-anomaly"
             hx-target="#anomalies"
@@ -20,9 +20,9 @@
         Create dummy anomaly
     </button>
     <button type="button"
-            hx-post="/anomalies/check-transaction"
+            hx-post="/anomalies-backend/check-transaction"
             hx-ext="json-enc"
-            hx-vals="js:{...dummyTransaction()}"
+            hx-vals="js:window.dummyTransaction()"
             hx-target="#alert"
             hx-swap="innerHTML">
         Check dummy transaction
@@ -41,5 +41,18 @@
             <tr><td colspan="4">Loading…</td></tr>
         </tbody>
     </table>
+
+    <script>
+        // Provides a dummy transaction payload for the anomaly checker.
+        window.dummyTransaction = function () {
+            const merchants = ["Corner Store", "MegaMart", "Unknown LLC", "Cafe 42", "QuickCash ATM"];
+            return {
+                id: crypto.randomUUID(),
+                amount: Math.round(Math.random() * 500000) / 100,
+                merchant: merchants[Math.floor(Math.random() * merchants.length)],
+                date: new Date().toISOString(),
+            };
+        }
+    </script>
 </body>
 </html>
