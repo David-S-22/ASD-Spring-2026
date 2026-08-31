@@ -14,7 +14,7 @@
 <body>
     <h1>Anomalies</h1>
     <button type="button"
-            hx-post="/anomalies/dummy-anomaly"
+            hx-post="/anomalies-backend/dummy-anomaly"
             hx-target="#anomalies"
             hx-swap="innerHTML">
         Create dummy anomaly
@@ -37,7 +37,7 @@
                 <th>Status</th>
             </tr>
         </thead>
-        <tbody id="anomalies" hx-get="/anomalies/anomalies" hx-trigger="load" hx-swap="innerHTML">
+        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load" hx-swap="innerHTML">
             <tr><td colspan="4">Loading…</td></tr>
         </tbody>
     </table>

@@ -23,6 +23,23 @@ services:
       timeout: 5s
       retries: 120
 
+  shared-frontend:
+    build: ./shared/frontend
+    container_name: shared-frontend
+    ports:
+      - 3000:3000
+    environment:
+      PORT: 3000
+      TRANSACTIONS_FRONTEND_URL: http://transactions-frontend:3001
+      ANOMALIES_FRONTEND_URL: http://anomalies-frontend:3004
+      SAVINGS_FRONTEND_URL: http://savings-frontend:3002
+      BILLS_FRONTEND_URL: http://bills-frontend:80
+    depends_on:
+      - transactions-frontend
+      - anomalies-frontend
+      - savings-frontend
+      - bills-frontend
+
   transactions-frontend:
     build: ./janelle/frontend
     container_name: transactions-frontend
@@ -41,6 +58,7 @@ services:
       FLASK_ENV: production
       PORT: 5001
       TRANSACTIONS_DB_URL: http://transactions-db:6001
+      DATABASE_TIMEOUT_SECONDS: 20
     depends_on:
       - transactions-db
   transactions-db:

@@ -1,0 +1,401 @@
+:root {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-alt: #273449;
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-primary: #38bdf8;
+  --color-primary-hover: #0ea5e9;
+  --color-accent: #a78bfa;
+  --color-danger: #f87171;
+  --color-success: #4ade80;
+  --radius: 8px;
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+/* Expand main content container to utilize more of the screen */
+main.content {
+  max-width: 1600px !important;
+  padding: 1.25rem 2rem !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 16px;
+  max-width: 100%;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.3px;
+}
+
+.dashboard-layout {
+  display: grid !important;
+  grid-template-columns: 1.2fr 1fr !important;
+  gap: 18px !important;
+  align-items: start !important;
+  width: 100%;
+}
+
+.dashboard-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.dashboard-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 11px 18px;
+  background-color: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.3px;
+}
+
+.table-scroll-container {
+  max-height: 310px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.suggestions-panel .table-scroll-container,
+.feedback-panel .table-scroll-container {
+  max-height: 220px;
+}
+
+.dashboard-panel table,
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 !important;
+  margin-top: 0 !important;
+}
+
+.dashboard-panel th,
+.dashboard-panel td,
+th, td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.dashboard-panel th,
+th {
+  position: sticky;
+  top: 0;
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 2;
+  border-bottom: 2px solid var(--color-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-panel tfoot,
+tfoot {
+  position: sticky;
+  bottom: 0;
+  background-color: var(--color-surface);
+  border-top: 2px solid var(--color-border);
+  z-index: 2;
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-panel tfoot td,
+tfoot td {
+  padding: 6px 12px;
+  background-color: var(--color-surface);
+}
+
+tbody tr:hover {
+  background-color: var(--color-surface-alt);
+}
+
+tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.cell-id {
+  width: 40px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.cell-actions {
+  white-space: nowrap;
+  width: 1%;
+  text-align: center;
+}
+
+.cell-status {
+  width: 105px;
+  text-align: center;
+}
+
+.dashboard-panel td input,
+.dashboard-panel td select,
+td input,
+td select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 4px 8px;
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+td input::placeholder {
+  color: var(--color-text-muted);
+}
+
+td input:focus,
+td select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+td input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Button styling with high specificity to override theme.css button:not(.nav-tab) */
+button.btn-edit,
+button.btn-delete,
+button.btn-accept,
+button.btn-cancel,
+button.btn-create,
+.app-container button:not(.nav-tab) {
+  padding: 4px 11px;
+  margin: 0 2px;
+  cursor: pointer;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+}
+
+button.btn-edit,
+.app-container button.btn-edit {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+button.btn-edit:hover,
+.app-container button.btn-edit:hover {
+  background-color: #0369a1 !important;
+}
+
+button.btn-delete,
+.app-container button.btn-delete {
+  background-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+button.btn-delete:hover,
+.app-container button.btn-delete:hover {
+  background-color: #bb2d3b !important;
+}
+
+button.btn-accept,
+.app-container button.btn-accept {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+}
+
+button.btn-accept:hover,
+.app-container button.btn-accept:hover {
+  background-color: #157347 !important;
+}
+
+button.btn-cancel,
+.app-container button.btn-cancel {
+  background-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+button.btn-cancel:hover,
+.app-container button.btn-cancel:hover {
+  background-color: #334155 !important;
+}
+
+button.btn-create,
+.app-container button.btn-create {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+  padding: 4px 16px;
+}
+
+button.btn-create:hover,
+.app-container button.btn-create:hover {
+  background-color: #157347 !important;
+}
+
+.ai-suggestion-panel {
+  flex: none;
+}
+
+.ai-suggestion-body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-suggestion-textbox {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 68px !important;
+  height: 68px !important;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  resize: none;
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-suggestion-textbox:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+.ai-suggestion-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ai-suggestion-actions button {
+  padding: 5px 18px !important;
+  font-size: 0.88rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.status-accepted {
+  background-color: rgba(74, 222, 128, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.status-rejected {
+  background-color: rgba(248, 113, 113, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.loading-state {
+  padding: 12px 16px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.error-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(248, 113, 113, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.error-alert.hidden {
+  display: none !important;
+}
+
+.btn-close-error,
+button.btn-close-error,
+.app-container button.btn-close-error {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-danger) !important;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 4px !important;
+  line-height: 1;
+  box-shadow: none !important;
+}
+
+

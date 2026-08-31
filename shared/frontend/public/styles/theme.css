@@ -1,0 +1,254 @@
+:root {
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-surface-alt: #273449;
+    --color-border: #334155;
+    --color-text: #e2e8f0;
+    --color-text-muted: #94a3b8;
+    --color-primary: #38bdf8;
+    --color-primary-hover: #0ea5e9;
+    --color-accent: #a78bfa;
+    --color-danger: #f87171;
+    --color-success: #4ade80;
+    --radius: 10px;
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.5;
+}
+
+.app-header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow);
+}
+
+.app-header .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1rem 1.5rem 0.5rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.app-header .brand .logo {
+    color: var(--color-primary);
+}
+
+.navbar {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 1rem;
+    overflow-x: auto;
+}
+
+.navbar .nav-tab {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--color-text-muted);
+    padding: 0.75rem 1.1rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.navbar .nav-tab:hover {
+    color: var(--color-text);
+}
+
+.navbar .nav-tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+main.content {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+}
+
+.panel h1,
+.panel h2 {
+    margin-top: 0;
+}
+
+.stub {
+    text-align: center;
+    color: var(--color-text-muted);
+    padding: 2.5rem 1rem;
+}
+
+.stub .stub-icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.loading-state {
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+thead th {
+    text-align: left;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    padding: 0.6rem 0.75rem;
+    border-bottom: 2px solid var(--color-border);
+}
+
+tbody td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+tbody tr:hover {
+    background: var(--color-surface-alt);
+}
+
+.btn {
+    appearance: none;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.55rem 1.1rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    color: #062430;
+}
+
+.btn-primary:hover {
+    background: var(--color-primary-hover);
+}
+
+/* Generic form / interactive elements — so UIs pulled into the shell via htmx pick up
+   the shared theme even when their own stylesheet isn't loaded. */
+button,
+input,
+textarea,
+select {
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+
+button:not(.nav-tab) {
+    appearance: none;
+    background: var(--color-primary);
+    color: #062430;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.55rem 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+button:not(.nav-tab):hover {
+    background: var(--color-primary-hover);
+}
+
+button:not(.nav-tab):disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.7rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--color-text-muted);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+/* Checkboxes and radios shouldn't stretch full-width like text inputs. */
+input[type="checkbox"],
+input[type="radio"] {
+    width: auto;
+    accent-color: var(--color-primary);
+}
+
+label {
+    display: inline-block;
+    margin-bottom: 0.3rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+code {
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.85em;
+}

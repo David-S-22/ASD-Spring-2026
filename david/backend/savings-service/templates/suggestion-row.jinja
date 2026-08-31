@@ -1,0 +1,18 @@
+<tr data-id="{{ suggestion.id }}">
+    <td class="cell-id">{{ suggestion.id }}</td>
+    <td>{{ suggestion.suggestion }}</td>
+    <td class="cell-status">
+        {% if suggestion.accepted %}
+        <span class="status-badge status-accepted">Accepted</span>
+        {% else %}
+        <span class="status-badge status-rejected">Rejected</span>
+        {% endif %}
+    </td>
+    <td class="cell-actions">
+        <button type="button" 
+                class="btn-delete" 
+                hx-delete="/savings-backend/suggestion/{{ suggestion.id }}" 
+                hx-target="#suggestions" 
+                hx-swap="innerHTML">Delete</button>
+    </td>
+</tr>
