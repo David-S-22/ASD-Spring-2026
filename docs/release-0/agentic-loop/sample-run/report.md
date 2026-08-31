@@ -1,0 +1,88 @@
+# Agentic loop run record
+
+Run started: 2026-08-31T02:33:16
+
+## DB (2026-08-31T02:33:16 → 2026-08-31T02:33:18)
+
+Models: implementation=qwen2.5:0.5b
+Prompts: service/implementation/system_prompt.txt, service/implementation/task_prompt.txt, service/implementation/context_prompt.txt
+
+### Evidence (OBSERVE)
+
+Database evidence: Compose defines 4 database service(s) (spec expects 5, one per student): anomalies-db, bills-db, savings-db, transactions-db. anomalies-db (:6004): health 404; /anomalies has 0 rows (BELOW the 10-row seed minimum). bills-db (:6005): health 200; /bills has 13 rows (meets the 10-row seed minimum). savings-db (:6002): UNREACHABLE — service not running or no /health route. transactions-db (:6001): UNREACHABLE — service not running or no /health route.
+
+### Model finding (ACT)
+
+- **Seed data completeness**: The database has 10 rows, which is the minimum required for every table. This is a valid state. - **Input validation**: No input validation is needed as the database is seeded with 10 rows. - **Error handling**: No error handling is required as the database is seeded with 10 rows. - **Response formatting**: No response formatting is needed as the database is seeded with 10 rows. - **Integration state**: The database is fully functional and ready for use. No integration state is needed.
+
+### Human decision (ADAPT): rejected
+
+Edited finding:
+
+Model missed the real findings: anomalies-db /health returns 404 and /anomalies has 0 seeded rows (below the 10-row minimum); savings-db and transactions-db are unreachable on their published ports. bills-db is the only database API currently meeting the seed minimum.
+
+## Endpoints (2026-08-31T02:33:18 → 2026-08-31T02:33:22)
+
+Models: implementation=qwen2.5:0.5b
+Prompts: service/implementation/system_prompt.txt, service/implementation/task_prompt.txt, service/implementation/context_prompt.txt
+
+### Evidence (OBSERVE)
+
+Live endpoint evidence: anomalies-backend (:5004): GET /health returned 404 in 23ms; bills-backend (:5005): GET /health returned 200 in 19ms; bills-backend: GET /api/bills returned 200 in 30ms; bills-backend: GET /api/timeline?days=60 returned 200 in 29ms; bills-backend: GET /api/upcoming?days=60 returned 200 in 6ms; bills-backend: GET /api/calendar/2026-09 returned 200 in 23ms; bills-backend: GET /api/disputes returned 200 in 3ms; bills-backend: GET /api/chat/history returned 200 in 3ms; bills-backend: GET /ui/bills returned 200 in 5ms; bills-backend: GET /ui/calendar returned 200 in 5ms; bills-backend: GET /ui/timeline?days=60 returned 200 in 6ms; bills-backend: GET /ui/disputes returned 200 in 19ms; bills-backend: GET /ui/chat returned 200 in 28ms; savings-backend (:5002): GET /health returned 404 in 2ms; transactions-backend (:5001): GET /health returned 404 in 2ms.
+
+### Model finding (ACT)
+
+- **Seed data completeness**: The evidence shows that the bills database tables are seeded with rows at :5005, :5002, and :5001. This is sufficient for the purpose of the application, but it does not address the seed data completeness requirement. To ensure complete seed data, additional rows should be added to the bills database tables. - **Input validation**: The bills-backend endpoints return 200 OK responses for GET /api/bills, GET /api/timeline?days=60, GET /api/upcoming?days=60, GET /api/calendar/2026-09, GET /api/disputes, GET /api/chat/history, GET /ui/bills, GET /ui/calendar, GET /ui/timeline?days=60, GET /ui/disputes, GET /ui/chat. This indicates that the endpoints validate the input data correctly. However, the evidence does not provide any input validation checks for the other endpoints. To ensure input validation, additional checks should be ...
+
+### Human decision (ADAPT): edited
+
+Edited finding:
+
+Only bills-backend serves /health (200, 3-26ms across its 13 documented GET routes, all 200). anomalies-backend, savings-backend and transactions-backend return 404 on /health. Recommend each member adds the agreed /health route before the 2 Sep freeze.
+
+## Architecture (2026-08-31T02:33:22 → 2026-08-31T02:33:39)
+
+Models: implementation=qwen2.5:0.5b, review=llama3.1:8b
+Prompts: architecture/implementation/system_prompt.txt, architecture/implementation/task_prompt.txt, architecture/review/review_prompt.txt
+
+### Evidence (OBSERVE)
+
+Architecture evidence: compose defines 13 services: anomalies-backend, anomalies-db, anomalies-frontend, bills-backend, bills-db, bills-frontend, ollama, savings-backend, savings-db, savings-frontend, transactions-backend, transactions-db, transactions-frontend. Dependency edges: transactions-frontend->transactions-backend, transactions-backend->transactions-db, bills-frontend->bills-backend, bills-backend->bills-db, bills-backend->ollama, anomalies-frontend->anomalies-backend, anomalies-backend->anomalies-db, anomalies-backend->ollama, savings-backend->savings-db, savings-frontend->savings-backend. Student directories: aiden (frontend, backend, database); david (frontend, backend, database); janelle (frontend, backend, database); sophia (frontend, backend, database); student-3 (EMPTY — no service directories). Required directories: .github/workflows populated; docs populated; shared populated; ai-services populated; scripts present but EMPTY. Shared entry point: shared/index.html MISSING — no shared containerised entry point routing to the five frontends.
+
+### Model finding (ACT)
+
+The shared index.html entry point is missing, indicating a potential issue with the shared Docker-compose.yml file. This suggests that the shared entry point is not being properly defined or referenced in the shared Docker-compose.yml file.
+
+### Review model verdict
+
+**Critique:** The recommendation is based on the absence of a shared index.html entry point, but the evidence only shows that it's missing, not that it's causing an issue. The architecture and dependency edges suggest a complex system, but there's no evidence that the shared entry point is necessary or that its absence is causing problems. **Assumption:** The shared entry point is required for the system to function correctly. **Missing evidence:** Impact of missing shared entry point on system functionality.
+
+### Human decision (ADAPT): edited
+
+Edited finding:
+
+Confirmed: shared/index.html is missing, scripts/ is empty, and the fifth student's services are absent from docker-compose.yml. Recommend the team adds the shared containerised entry point before the 2 Sep freeze.
+
+## DevOps (2026-08-31T02:33:39 → 2026-08-31T02:34:01)
+
+Models: implementation=qwen2.5:0.5b, review=llama3.1:8b
+Prompts: devops/implementation/system_prompt.txt, devops/implementation/task_prompt.txt, devops/review/review_prompt.txt
+
+### Evidence (OBSERVE)
+
+DevOps evidence: aiden-ci.yml: student mapping student ? (Aiden, anomalies); jobs [build-health, test]; latest run on main: no runs on main | David-CI.yml: student mapping student ? (David, savings); jobs [build]; latest run on main: success (2026-08-30T12:38:36Z) | janelle-ci.yml: student mapping student ? (Janelle, transactions); jobs [build-health]; latest run on main: success (2026-08-30T12:02:36Z) | Sophia-CI.yml: student mapping student 5 (Sophia, bills); jobs [docker-health, test]; latest run on main: success (2026-08-30T13:31:05Z) | NAMING DEVIATION: no workflow follows the spec's student-N.yml convention — the team uses per-first-name files (declared in the report). Only 4 workflow file(s) for 5 students — at least one student has no CI workflow.
+
+### Model finding (ACT)
+
+- **Workflow Status**: 5 students have a workflow, while the rest do not. - **Jobs**: - **build**: builds the microservices. - **build-health**: validates the health of the microservices. - **test**: runs tests on the microservices. - **Latest Run Outcome**: - **build**: no runs on main. - **build-health**: success (2026-08-30T12:38:36Z). - **test**: success (2026-08-30T12:02:36Z). - **Observations**: - The team uses per-first-name files for naming the workflows. - Only 4 workflows are listed for 5 students, with 1 student having no CI workflow. - The team is using a naming convention that does not follow the specified student-N.yml convention. - **Recommendations**: - Ensure that the team follows the specified student-N.yml convention for naming workflows. - Consider using a naming convention that follows ...
+
+### Review model verdict
+
+**Critique**: The recommendation to follow the specified student-N.yml convention is supported by the DevOps evidence, which shows that the team is currently deviating from this convention. However, the recommendation to consider an alternative naming convention is unsupported by the evidence and appears to be an assumption. **Improvement Suggestion**: Clarify the purpose of the alternative naming convention recommendation and provide evidence to support it.
+
+### Human decision (ADAPT): edited
+
+Edited finding:
+
+aiden-ci.yml has no runs on main yet; David-CI, janelle-ci and Sophia-CI are green on main (30 Aug). Only four workflows exist for five students and none follow student-N.yml naming (a declared deviation). Recommend a workflow for the fifth student.
+
