@@ -1,0 +1,22 @@
+{% autoescape true %}
+{% if error %}
+<tr>
+    <td colspan="6">{{ error }}</td>
+</tr>
+{% else %}
+{% for transaction in transactions %}
+<tr>
+    <td>{{ transaction.get("id", "") }}</td>
+    <td>{{ transaction.get("date", "") }}</td>
+    <td>{{ transaction.get("merchant", "") }}</td>
+    <td>{{ transaction.get("description", "") }}</td>
+    <td>{{ transaction.get("amount", "") }}</td>
+    <td>{{ transaction.get("category_name") or transaction.get("category_id") or "Uncategorised" }}</td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6">No transactions found.</td>
+</tr>
+{% endfor %}
+{% endif %}
+{% endautoescape %}
