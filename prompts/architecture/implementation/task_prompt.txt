@@ -1,0 +1,10 @@
+Review the group application's microservices architecture: five student features, each meant to ship a frontend, backend and database service in one shared docker-compose.yml, plus a shared ollama AI service and a shared containerised index.html entry point.
+Use the evidence below to identify:
+- which features are integrated and which are absent
+- dependency edges and coupling between services
+- required repository directories that are missing or empty
+- whether the shared entry point exists
+Distinguish clearly between observed evidence and assumptions.
+Provide a concise review and at most one or two practical recommendations.
+If something cannot be assessed from the evidence, mention that limitation explicitly.
+Reply in at most 60 words.
