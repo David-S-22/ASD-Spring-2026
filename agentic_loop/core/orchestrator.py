@@ -1,13 +1,15 @@
 from pathlib import Path
 
-from ..collectors import architecture_collector
+from ..collectors import architecture_collector, db_collector, endpoints_collector
 from ..config.review_config import ModeConfig
-from ..pipelines import architecture_pipeline
+from ..pipelines import architecture_pipeline, db_pipeline, endpoints_pipeline
 from .ai_runner import AIRunner
 from .prompt_registry import PromptRegistry
 from .recorder import RunRecorder
 
 COLLECTORS = {
+    "db": db_collector.collect,
+    "endpoints": endpoints_collector.collect,
     "architecture": architecture_collector.collect,
 }
 
@@ -68,6 +70,29 @@ def run_mode(mode: ModeConfig, app_dir: Path, repo_root: Path, prompts: PromptRe
         recorder.prompt_used(mode.prompt_family, filename)
     recorder.set(models={"implementation": ai.implementation_model,
                          **({"review": ai.review_model} if mode.review_prompts else {})})
+
+    if mode.key in {"db", "endpoints"}:
+        system_prompt = prompts.read(mode.prompt_family, mode.implementation_prompts[0])
+        task_prompt = prompts.read(mode.prompt_family, mode.implementation_prompts[1])
+        context_prompt = prompts.read(mode.prompt_family, mode.implementation_prompts[2])
+        pipeline = db_pipeline if mode.key == "db" else endpoints_pipeline
+        user_prompt = pipeline.build_user_prompt(task_prompt, context_prompt, evidence)
+        _stage(recorder, mode.label, "PLAN", "Implementation prompt set loaded")
+
+        _stage(recorder, mode.label, "ACT", f"Running implementation model ({ai.implementation_model})")
+        output, err = ai.call(system_prompt, user_prompt, review=False)
+        if err:
+            _stage(recorder, mode.label, "ACT", "Failed")
+            recorder.set(implementation_output=err)
+            recorder.end_mode()
+            return f"MODEL FAILED: {err}"
+        recorder.set(implementation_output=output)
+        _stage(recorder, mode.label, "ACT", "Complete")
+
+        decision, edit = _adapt(recorder, mode.label, output)
+        recorder.end_mode()
+        final = edit if decision == "edited" else output
+        return f"OBSERVE: {evidence}\n\nREVIEW: {final}\n\nHUMAN DECISION: {decision}"
 
     pipeline = TWO_STAGE_PIPELINES[mode.key]
     system_prompt = prompts.read(mode.prompt_family, mode.implementation_prompts[0])

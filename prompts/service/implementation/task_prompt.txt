@@ -1,0 +1,27 @@
+Review Target: {{REVIEW_TARGET}}
+
+The group application should be running via docker compose. The evidence below comes from live HTTP requests against the services discovered in docker-compose.yml.
+
+Live Validation Evidence:
+{{VALIDATION_EVIDENCE}}
+
+Task:
+Analyze the evidence above. Identify ONE precise, evidence-backed improvement for:
+- Seed data completeness (every table needs at least 10 rows)
+- Input validation
+- Error handling
+- Response formatting
+- Integration state (services that are unreachable or missing routes)
+
+If a service is unreachable, that IS a reportable finding: name the service and what it blocks.
+If no improvement is supported by the evidence: Say "No evidence-backed improvement identified."
+
+Forbidden recommendations (reject these before writing your answer):
+- Any new endpoint, field, table, or feature.
+- Any change to another student's endpoint contract.
+- Anything not visible in the evidence above.
+
+Output Format:
+- Return exactly two bullet points (Issue + Recommendation), or the no-evidence sentence.
+- Maximum 60 words total.
+- No explanations, no reasoning.

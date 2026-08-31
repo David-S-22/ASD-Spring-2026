@@ -9,6 +9,8 @@ def print_menu() -> None:
     print("=" * 70)
     print("AGENTIC REVIEW MENU  (Plan -> Act -> Observe -> Adapt)")
     print("1 - Architecture (compose topology + repo layout)")
+    print("2 - Database (row counts per student DB API)")
+    print("3 - Endpoints (live status + latency sweep)")
     print("5 - Run All")
     print("0 - Exit")
     print("=" * 70)

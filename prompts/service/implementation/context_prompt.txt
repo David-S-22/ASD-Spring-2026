@@ -1,0 +1,21 @@
+Application Name:
+ASD group 21 personal-finance application (Release 0)
+
+Shape:
+Five student features, each a three-container microservice slice (frontend, backend/API, database API) plus one shared Ollama service. All services are defined in a single docker-compose.yml at the repository root.
+
+Features and owners:
+- transactions (Janelle): transactions-frontend / transactions-backend / transactions-db
+- bills (Sophia): bills-frontend / bills-backend / bills-db
+- anomalies (Aiden): anomalies-frontend / anomalies-backend / anomalies-db
+- savings (David): savings-frontend / savings-backend / savings-db
+- fifth feature: not yet present in the repository
+
+Team rules that matter for review:
+- Cross-feature data access is HTTP to a feature's database API only; never a shared database file, never backend-to-backend writes.
+- Every database table must be seeded with at least 10 rows.
+- Ports are whatever docker-compose.yml publishes; they are read from the file at run time, not assumed.
+- AI calls go to the shared ollama service with approved local models only.
+
+Bills (the fully documented feature) database tables:
+bills, payments, disputes, dispute_drafts, chat_messages — stored rows are served at :<bills-db port>/bills; projected occurrences come from the backend's /api/upcoming because the date engine lives there.

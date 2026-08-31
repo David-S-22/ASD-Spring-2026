@@ -13,6 +13,26 @@ class ModeConfig:
 
 def build_mode_config() -> dict[str, ModeConfig]:
     return {
+        "db": ModeConfig(
+            key="db",
+            label="DB",
+            prompt_family="service",
+            implementation_prompts=(
+                "implementation/system_prompt.txt",
+                "implementation/task_prompt.txt",
+                "implementation/context_prompt.txt",
+            ),
+        ),
+        "endpoints": ModeConfig(
+            key="endpoints",
+            label="Endpoints",
+            prompt_family="service",
+            implementation_prompts=(
+                "implementation/system_prompt.txt",
+                "implementation/task_prompt.txt",
+                "implementation/context_prompt.txt",
+            ),
+        ),
         "architecture": ModeConfig(
             key="architecture",
             label="Architecture",
