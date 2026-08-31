@@ -1,11 +1,10 @@
 <!DOCTYPE HTML>
 <html lang="en">
-<html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Savings Dashboard</title>
-    <link rel="stylesheet" href="styles/styles.css">
+    <link rel="stylesheet" href="/savings-frontend/styles/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
       integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" 
       crossorigin="anonymous">
@@ -14,11 +13,12 @@
   </head>
   <body>
     <div class="app-container">
-      <header class="app-header">
+      <link rel="stylesheet" href="/savings-frontend/styles/styles.css">
+      <header class="dashboard-header">
         <h1>Savings Dashboard</h1>
       </header>
 
-      <div id="error-alert" class="error-alert hidden">
+      <div id="error-alert" class="error-alert hidden" style="display: none;">
         <span id="error-message"></span>
         <button type="button" class="btn-close-error" onclick="hideError()">×</button>
       </div>
@@ -39,7 +39,7 @@
               <h2>AI Suggestion</h2>
             </div>
             <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings-backend/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
-              <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">Based on your recent savings-backend goals, you are on track to save an extra $200 by end of quarter.</textarea>
+              <textarea class="ai-suggestion-textbox" readonly placeholder="Waiting for AI suggestion...">Based on your recent savings goals, you are on track to save an extra $200 by end of quarter.</textarea>
               <div class="ai-suggestion-actions">
                 <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/accept" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
                 <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/reject" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
