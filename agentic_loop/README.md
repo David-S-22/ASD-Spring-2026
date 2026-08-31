@@ -105,6 +105,24 @@ Adding a mode does not require touching or understanding the engine:
 The parked live-probing modes (database, endpoints, devops) are a complete
 worked example of this pattern.
 
+## Lab traceability
+
+The loop is a port of the reference implementation from Labs 04–05
+([asd-labs](https://github.com/Georges034302/asd-labs)): same package
+layout, same filenames, same roles — Lab 04 defines the engine, collectors,
+pipelines and externalised prompts; Lab 05 adds the DevOps mode and the
+three `reports/` files.
+
+Known deviations from the labs, both deliberate:
+
+- **Evidence scope.** The labs' db and endpoints collectors gather live
+  evidence (real HTTP requests, database row checks). By team decision
+  (31 Aug) the shared loop is file-based; the live-probing collectors are
+  parked as individual work and can return as an R1 proposal.
+- **Database access.** The lab db collector opens the SQLite file
+  directly. The parked port reads each student's database API over HTTP
+  instead, respecting service data ownership.
+
 ## Environment variables
 
 There is no `.env` in the repo; a root-level `.env` is loaded if you create
