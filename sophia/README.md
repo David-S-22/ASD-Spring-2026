@@ -147,7 +147,7 @@ See `docs/release-0/sophia/schema-adoption.md` for the four additive schema item
 python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 ```
 
-155 passed; coverage 88% across `sophia/backend` (measured 29 Aug 2026).
+159 passed; coverage 88% across `sophia/backend` (measured 30 Aug 2026).
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
@@ -171,7 +171,7 @@ repository layout, nothing under `sophia/` is documentation.
 
 ## Pull requests
 
-All Bills PRs are merged to `main` — 21 in total, each squash-merged after
+All Bills PRs are merged to `main` — 29 in total, each squash-merged after
 review:
 
 - Scaffold #6, #7 · engine #8 · DB API #13 · backend #10 · frontend #11 ·
@@ -179,9 +179,10 @@ review:
 - Defect fixes: #14, #15, #16, #17, #18, #31
 - Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33
 - Requirements split: #34
+- Release 0 hardening: #47, #49, #50, #51, #52, #56, #68, #69
 
 Actions evidence — Sophia-CI run on `main`:
-<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/32573962576>
+<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33309346244>
 
 ## Workflow note
 
