@@ -59,10 +59,15 @@ Architecture diagrams:
 `sophia/backend/engine/` ever calls `date.today()` or `datetime.now()` —
 every engine function takes `today` as an explicit argument.
 
-Compose sets only `PORT`, `BILLS_DB_API_URL` and `FRONTEND_ORIGIN` for the
-backend — the AI and demo-clock values are in-container defaults from
-`config.py`. Anyone running the backend bare on a machine without Docker
-Desktop should set `OLLAMA_URL=http://localhost:11434`; the demo clock stays
+Compose sets `PORT`, `BILLS_DB_API_URL`, `FRONTEND_ORIGIN` and `OLLAMA_URL`
+for the backend — the model and demo-clock values are in-container defaults
+from `config.py`. In compose, Bills uses the team's shared `ollama` service
+(`OLLAMA_URL=http://ollama:11434`); the first `docker compose up ollama`
+downloads ~5 GB of models into its volume, so start it early on demo day.
+The `config.py` default (`http://host.docker.internal:11434`) remains the
+fallback for running bills-backend without the ollama service, and anyone
+running the backend bare on a machine without Docker Desktop should set
+`OLLAMA_URL=http://localhost:11434`; the demo clock stays
 `DEMO_TODAY=2026-08-20` by default and is overridable per environment.
 
 ## The two AI calls
@@ -142,7 +147,7 @@ See `docs/release-0/sophia/schema-adoption.md` for the four additive schema item
 python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 ```
 
-155 passed; coverage 88% across `sophia/backend` (measured 29 Aug 2026).
+159 passed; coverage 88% across `sophia/backend` (measured 30 Aug 2026).
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
@@ -166,7 +171,7 @@ repository layout, nothing under `sophia/` is documentation.
 
 ## Pull requests
 
-All Bills PRs are merged to `main` — 21 in total, each squash-merged after
+All Bills PRs are merged to `main` — 29 in total, each squash-merged after
 review:
 
 - Scaffold #6, #7 · engine #8 · DB API #13 · backend #10 · frontend #11 ·
@@ -174,9 +179,10 @@ review:
 - Defect fixes: #14, #15, #16, #17, #18, #31
 - Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33
 - Requirements split: #34
+- Release 0 hardening: #47, #49, #50, #51, #52, #56, #68, #69
 
 Actions evidence — Sophia-CI run on `main`:
-<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/32573962576>
+<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33309346244>
 
 ## Workflow note
 

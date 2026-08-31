@@ -6,9 +6,37 @@ services:
       - 11434:11434
     volumes:
       - ollama_data:/root/.ollama
-      - ./ai-services/setup-ollama.sh:/ai-services/setup-ollama.sh
+      - ./ai-services/entrypoint.sh:/ai-services/entrypoint.sh
+      - ./ai-services/healthcheck.sh:/ai-services/healthcheck.sh
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/ai-services/setup-ollama.sh"]
+    entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
+    environment:
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
+      # Probe every 5s during the first minute, then every 30s for an hour
+      start_period: 60s
+      start_interval: 5s
+      interval: 30s
+      timeout: 5s
+      retries: 120
+
+  shared-frontend:
+    build: ./shared/frontend
+    container_name: shared-frontend
+    ports:
+      - 3000:3000
+    environment:
+      PORT: 3000
+      TRANSACTIONS_FRONTEND_URL: http://transactions-frontend:3001
+      ANOMALIES_FRONTEND_URL: http://anomalies-frontend:3004
+      SAVINGS_FRONTEND_URL: http://savings-frontend:3002
+      BILLS_FRONTEND_URL: http://bills-frontend:80
+    depends_on:
+      - transactions-frontend
+      - anomalies-frontend
+      - savings-frontend
+      - bills-frontend
 
   transactions-frontend:
     build: ./janelle/frontend
@@ -59,10 +87,12 @@ services:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
+      OLLAMA_URL: http://ollama:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - bills-db
+      - ollama
   bills-db:
     build: ./sophia/database
     container_name: bills-db
@@ -98,8 +128,10 @@ services:
       OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:0.5b
       OLLAMA_REVIEW_MODEL: llama3.1:8b
     depends_on:
-      - anomalies-db
-      - ollama
+      anomalies-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   anomalies-db:
     build:
       dockerfile: ./aiden/database/Dockerfile
@@ -149,7 +181,6 @@ services:
       - savings-backend
 
 volumes:
-  setup-ollama.sh:
   ollama_data:
   transactions_data:
   bills_data:

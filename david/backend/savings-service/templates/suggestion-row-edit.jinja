@@ -1,0 +1,27 @@
+<tr data-id="{{ suggestion.id }}">
+    <td class="cell-id">{{ suggestion.id }}</td>
+    <td><input type="text" name="suggestion" value="{{ suggestion.suggestion }}" required></td>
+    <td>
+        <select name="accepted">
+            <option value="true" {% if suggestion.accepted %}selected{% endif %}>Accepted</option>
+            <option value="false" {% if not suggestion.accepted %}selected{% endif %}>Rejected</option>
+        </select>
+    </td>
+    <td class="cell-actions">
+        <button type="button" 
+                class="btn-accept" 
+                title="Accept" 
+                hx-patch="/savings/suggestion/{{ suggestion.id }}" 
+                hx-include="closest tr" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML" 
+                hx-ext="json-enc">✓</button>
+        <button type="button" 
+                class="btn-cancel" 
+                title="Cancel" 
+                hx-get="/savings/suggestion/{{ suggestion.id }}" 
+                hx-target="closest tr" 
+                hx-swap="outerHTML">✗</button>
+    </td>
+</tr>
+

@@ -2,6 +2,7 @@ from flask import abort
 from flask import jsonify
 from flask import request
 from .models import Goal, Feedback, Suggestion, db
+from .helpers import try_parse_bool
 from flask import Flask
 import os
 import datetime
@@ -66,10 +67,17 @@ def setup_app(database_path) -> Flask:
     def add_suggestion_route():
         payload = request.get_json()
 
-        if "suggestion" not in payload:
+        if not payload or "suggestion" not in payload:
             return jsonify({"error": "Missing suggestion field"}), 400
 
-        suggestion = Suggestion(suggestion=payload["suggestion"])
+        accepted_val = try_parse_bool(payload.get("accepted"))
+        if accepted_val is None:
+            return jsonify({"error": "Missing accepted field"}), 400
+
+        suggestion = Suggestion(
+            suggestion=payload["suggestion"],
+            accepted=accepted_val,
+        )
         db.session.add(suggestion)
         db.session.commit()
         return jsonify(suggestion.to_dto()), 201
@@ -110,10 +118,18 @@ def setup_app(database_path) -> Flask:
             return abort(404)
 
         updated_suggestion = request.get_json() or {}
-        if "suggestion" not in updated_suggestion:
-            return jsonify({"error": "Missing suggestion field"}), 400
+        if "suggestion" not in updated_suggestion and "accepted" not in updated_suggestion:
+            return jsonify({"error": "Missing suggestion or accepted field"}), 400
 
-        suggestion_to_update.suggestion = updated_suggestion["suggestion"]
+        if "suggestion" in updated_suggestion:
+            suggestion_to_update.suggestion = updated_suggestion["suggestion"]
+
+        if "accepted" in updated_suggestion:
+            accepted_val = try_parse_bool(updated_suggestion["accepted"])
+            if accepted_val is None:
+                return jsonify({"error": "Invalid accepted field"}), 400
+            suggestion_to_update.accepted = accepted_val
+
         db.session.commit()
         return jsonify(suggestion_to_update.to_dto()), 200
 
@@ -131,9 +147,7 @@ def setup_app(database_path) -> Flask:
         if "name" in updated_goal:
             goal_to_update.name = updated_goal["name"]
         if "cost" in updated_goal:
-            goal_to_update.cost = updated_goal["cost"]
-        elif "amount" in updated_goal:
-            goal_to_update.cost = updated_goal["amount"]
+            goal_to_update.cost = int(updated_goal["cost"])
         if "date" in updated_goal:
             goal_to_update.date = datetime.datetime.fromisoformat(updated_goal["date"])
 
