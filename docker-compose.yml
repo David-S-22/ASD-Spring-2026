@@ -126,6 +126,7 @@ services:
       FLASK_ENV: production
       PORT: 5004
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
       OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:3b
       OLLAMA_REVIEW_MODEL: qwen2.5:7b

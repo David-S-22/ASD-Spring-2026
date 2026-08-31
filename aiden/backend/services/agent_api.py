@@ -1,12 +1,13 @@
 from json import JSONDecodeError, loads
-from typing import Optional
+from typing import List, Optional, Tuple
 from uuid import uuid4
+from dataclasses import dataclass
 
 from flask import current_app
 
 from shared.backend import dto
 from .ollama_api import prompt
-from ..helpers import serialise
+from ..helpers import serialise, get_env
 
 _detect_system_prompt = """
 
@@ -137,56 +138,63 @@ Determine whether the first agent's finding is accurate according to your instru
 class CouldNotParseAgentResponseException(Exception):
     pass
 
-def review_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
-    # First pass: the implementation model looks for a possible anomaly.
-    detect_user_prompt = _detect_user_prompt.format(serialise(transaction))
-    detection = _prompt_json(_detect_system_prompt, detect_user_prompt, review=False)
-    current_app.logger.warning("Detection model response for %s: %s", transaction.id, detection)
+def review_new_transaction(transaction: dto.Transaction, all_transactions: List[dto.Transaction]) -> Optional[dto.Anomaly]:
+    iteration = 1
+    serialised = serialise(transaction)
+    detect_user_prompt = _detect_user_prompt.format(serialised)
+    impl_model = get_env("OLLAMA_IMPLEMENTATION_MODEL")
+    # TODO: fill in transactions from all_transactions as additional context
 
-    # The small detection model is unreliable at keeping "is_suspicious" consistent
-    # with its own written reason. We therefore treat the transaction as a candidate
-    # if it either sets the flag OR supplies a non-empty reason, and let the stronger
-    # review model be the real gate that filters out false positives.
-    reason = (detection.get("agent_reason_suspected") or "").strip()
-    is_candidate = bool(detection.get("is_suspicious")) or bool(reason)
+    current_app.logger.info("Scan new transaction %s", serialised)
 
-    if not is_candidate:
-        current_app.logger.warning("Detection model did not flag %s as suspicious", transaction.id)
+    while iteration < 5:
+        temperature = 0.2 * iteration # increase as it gets iterated
+        response = prompt(
+            system_prompt=_detect_system_prompt,
+            user_prompt=detect_user_prompt,
+            model=impl_model,
+            temperature=temperature,
+            output_tokens=500)
+
+        if (review_finding := parse_review_finding(response)) is None:
+            current_app.logger.info("Response is not acceptable json %s", response)
+            continue
+
+        current_app.logger.info("Response was formatted into finding %s", review_finding)
+
+        # TODO: have senior model review it
+
+        break
+
+    if review_finding is None:
+        raise CouldNotParseAgentResponseException()
+
+    if not review_finding.is_suspicious:
+        current_app.logger.info("Not classified suspicious, no anomaly")
         return None
-
-    # Second pass: the stronger, lower-temperature review model verifies that the
-    # first model's finding is actually accurate, filtering out false positives.
-    # TEMPORARILY BYPASSED: return the implementation model's finding directly so we
-    # can see its raw output without the review model gating (and re-enable later).
-    # review_user_prompt = _review_user_prompt.format(serialise(transaction), reason)
-    # review = _prompt_json(_review_system_prompt, review_user_prompt, review=True)
-    # current_app.logger.warning("Review model response for %s: %s", transaction.id, review)
-    #
-    # if not review.get("is_accurate"):
-    #     current_app.logger.warning("Review model rejected finding for %s as inaccurate", transaction.id)
-    #     return None
-    current_app.logger.warning("Review model BYPASSED for %s; returning detection result", transaction.id)
 
     return dto.Anomaly(
         id=uuid4(),
         transaction_id=transaction.id,
-        agent_reason_suspected=reason,
+        agent_reason_suspected=review_finding.agent_reason_suspected,
         is_confirmed_by_user=None
     )
 
-def _prompt_json(system_prompt: str, user_prompt: str, review: bool) -> dict:
-    """Prompts a model and parses its JSON response, retrying on malformed output."""
+@dataclass(frozen=True)
+class ReviewFinding:
+    is_suspicious: bool
+    agent_reason_suspected: str
 
-    attempts = 5
+def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:
+    try:
+        data = current_app.json.loads(model_response)
+    except JSONDecodeError:
+        return None
 
-    while attempts > 0:
-        attempts -= 1
+    if (
+        isinstance(is_suspicious := data.get("is_suspicious"), bool) and
+        isinstance(agent_reason_suspected := data.get("agent_reason_suspected"), str)
+    ):
+        return ReviewFinding(is_suspicious, agent_reason_suspected)
 
-        response = prompt(system_prompt, user_prompt, review=review)
-
-        try:
-            return loads(response)
-        except JSONDecodeError:
-            continue
-
-    raise CouldNotParseAgentResponseException()
+    return None

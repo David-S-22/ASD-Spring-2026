@@ -18,5 +18,5 @@ def create_anomaly(anomaly: dto.Anomaly) -> dto.Anomaly:
 
     return deserialise_or_abort(dto.Anomaly, resp.json())
 
-def _url(path: str):
+def _url(path: str) -> str:
     return get_env("ANOMALIES_DB_URL") + path
