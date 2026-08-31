@@ -4,12 +4,12 @@
     <td class="cell-actions">
         <button type="button" 
                 class="btn-edit" 
-                hx-get="/savings/feedback/{{ feedback.id }}/edit" 
+                hx-get="/savings-backend/feedback/{{ feedback.id }}/edit" 
                 hx-target="closest tr" 
                 hx-swap="outerHTML">Edit</button>
         <button type="button" 
                 class="btn-delete" 
-                hx-delete="/savings/feedback/{{ feedback.id }}" 
+                hx-delete="/savings-backend/feedback/{{ feedback.id }}" 
                 hx-target="#feedback" 
                 hx-swap="innerHTML">Delete</button>
     </td>
