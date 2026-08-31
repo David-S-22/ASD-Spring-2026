@@ -43,6 +43,16 @@ def build_mode_config() -> dict[str, ModeConfig]:
             ),
             review_prompts=("review/review_prompt.txt",),
         ),
+        "devops": ModeConfig(
+            key="devops",
+            label="DevOps",
+            prompt_family="devops",
+            implementation_prompts=(
+                "implementation/system_prompt.txt",
+                "implementation/task_prompt.txt",
+            ),
+            review_prompts=("review/review_prompt.txt",),
+        ),
     }
 
 

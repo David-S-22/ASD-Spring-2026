@@ -9,7 +9,7 @@ from .core.prompt_registry import PromptRegistry
 from .core.recorder import RunRecorder
 from .core.reporter import print_menu, print_prompt_map, print_result
 
-ALL_MODES = ("architecture", "db", "endpoints")
+ALL_MODES = ("architecture", "db", "endpoints", "devops")
 
 
 def _resolve_roots() -> tuple[Path, Path]:
@@ -25,6 +25,7 @@ def _menu_choice_to_key(choice: str) -> str | None:
         "1": "architecture",
         "2": "db",
         "3": "endpoints",
+        "4": "devops",
     }.get(choice)
 
 
@@ -33,6 +34,7 @@ def _print_mode_mapping(app_dir: Path) -> None:
         "Architecture": app_dir / "prompts" / "architecture",
         "DB": app_dir / "prompts" / "service",
         "Endpoints": app_dir / "prompts" / "service",
+        "DevOps": app_dir / "prompts" / "devops",
     }
     print_prompt_map({key: str(path) for key, path in prompt_map.items()})
 
@@ -68,7 +70,7 @@ def main() -> None:
 
         mode_key = _menu_choice_to_key(choice)
         if not mode_key:
-            print("Invalid choice. Select 0, 1, 2, 3, or 5.")
+            print("Invalid choice. Select 0, 1, 2, 3, 4, or 5.")
             continue
 
         result = run_mode(mode_config[mode_key], app_dir, repo_root, prompts, ai, recorder)

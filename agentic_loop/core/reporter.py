@@ -11,6 +11,7 @@ def print_menu() -> None:
     print("1 - Architecture (compose topology + repo layout)")
     print("2 - Database (row counts per student DB API)")
     print("3 - Endpoints (live status + latency sweep)")
+    print("4 - DevOps (GitHub Actions workflows)")
     print("5 - Run All")
     print("0 - Exit")
     print("=" * 70)

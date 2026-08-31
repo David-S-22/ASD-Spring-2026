@@ -1,0 +1,10 @@
+Review the repository's GitHub Actions setup: each of the five students is meant to have a workflow that builds and validates their assigned microservices.
+Use the evidence below to identify:
+- which students have a workflow and which do not
+- what each workflow's jobs actually validate (tests, container health, linting)
+- the latest run outcome per workflow on main, where available
+- deviations from the spec's student-N.yml naming
+Distinguish clearly between observed evidence and assumptions.
+Provide a concise review and at most one or two practical recommendations.
+If something cannot be assessed from the evidence, mention that limitation explicitly.
+Reply in at most 60 words.

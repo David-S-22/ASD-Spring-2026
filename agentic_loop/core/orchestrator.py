@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from ..collectors import architecture_collector, db_collector, endpoints_collector
+from ..collectors import architecture_collector, db_collector, devops_collector, endpoints_collector
 from ..config.review_config import ModeConfig
-from ..pipelines import architecture_pipeline, db_pipeline, endpoints_pipeline
+from ..pipelines import architecture_pipeline, db_pipeline, devops_pipeline, endpoints_pipeline
 from .ai_runner import AIRunner
 from .prompt_registry import PromptRegistry
 from .recorder import RunRecorder
@@ -11,10 +11,12 @@ COLLECTORS = {
     "db": db_collector.collect,
     "endpoints": endpoints_collector.collect,
     "architecture": architecture_collector.collect,
+    "devops": devops_collector.collect,
 }
 
 TWO_STAGE_PIPELINES = {
     "architecture": architecture_pipeline,
+    "devops": devops_pipeline,
 }
 
 
