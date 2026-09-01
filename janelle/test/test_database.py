@@ -2,7 +2,6 @@ import sqlite3
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from uuid import UUID, uuid4
 
 from flask.testing import FlaskClient
 from pytest import fixture, mark, raises
@@ -11,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 
 import janelle.database.seed as database_seed
 from janelle.database.app import setup_app
-from janelle.database.helpers import seed_category_id, seed_transaction_id
 from janelle.database.models import Category, Transaction, db
 from shared.backend import dto
 
@@ -19,7 +17,7 @@ from shared.backend import dto
 SEED_CATEGORY_COUNT = 15
 SEED_TRANSACTION_COUNT = 34
 SEED_CORRECTION_COUNT = 3
-MISSING_CATEGORY_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+MISSING_CATEGORY_ID = 9999
 
 
 @fixture
@@ -45,14 +43,6 @@ def get_connection(database_path):
 	return connection
 
 
-def stored_uuid(value):
-	return UUID(str(value)).hex
-
-
-def seeded_category_id(seed_key):
-	return str(seed_category_id(seed_key))
-
-
 def response_datetime(value):
 	return parsedate_to_datetime(value).replace(tzinfo=None)
 
@@ -63,7 +53,7 @@ def _transaction_payload(**overrides):
 		"merchant": "Atomic Cafe",
 		"description": "Team lunch",
 		"amount": 24.5,
-		"category_id": seeded_category_id(80),
+		"category_id": 80,
 	}
 	payload.update(overrides)
 	return payload
@@ -127,23 +117,25 @@ def test_setup_creates_schema_indexes_and_foreign_keys(database_client):
 			row["name"]: row["type"]
 			for row in connection.execute("PRAGMA table_info(transactions)").fetchall()
 		}
+		assert transaction_column_types["id"] == "INTEGER"
 		assert transaction_column_types["date"] == "DATETIME"
-		assert transaction_column_types["category_id"] == "CHAR(32)"
+		assert transaction_column_types["category_id"] == "INTEGER"
 		assert transaction_column_types["created_at"] == "DATETIME"
 		assert transaction_column_types["updated_at"] == "DATETIME"
 		category_column_types = {
 			row["name"]: row["type"]
 			for row in connection.execute("PRAGMA table_info(categories)").fetchall()
 		}
-		assert category_column_types["id"] == "CHAR(32)"
+		assert category_column_types["id"] == "INTEGER"
 		correction_column_types = {
 			row["name"]: row["type"]
 			for row in connection.execute(
 				"PRAGMA table_info(category_corrections)"
 			).fetchall()
 		}
-		assert correction_column_types["previous_category_id"] == "CHAR(32)"
-		assert correction_column_types["user_category_id"] == "CHAR(32)"
+		assert correction_column_types["transaction_id"] == "INTEGER"
+		assert correction_column_types["previous_category_id"] == "INTEGER"
+		assert correction_column_types["user_category_id"] == "INTEGER"
 		assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 	finally:
 		connection.close()
@@ -162,7 +154,7 @@ def test_transactions_return_seeded_public_contract_in_newest_first_order(
 	connection = get_connection(database_path)
 	try:
 		expected_ids = [
-			str(UUID(hex=row["id"]))
+			row["id"]
 			for row in connection.execute(
 				"""
 				SELECT id
@@ -174,7 +166,7 @@ def test_transactions_return_seeded_public_contract_in_newest_first_order(
 	finally:
 		connection.close()
 	assert [row["id"] for row in transactions] == expected_ids
-	assert all(UUID(row["category_id"]) for row in transactions)
+	assert all(isinstance(row["category_id"], int) for row in transactions)
 	assert set(transactions[0]) == {
 		"id",
 		"date",
@@ -203,7 +195,7 @@ def test_startup_does_not_reseed_a_database_that_contains_data(database_client):
 			for row in transactions
 			if row["merchant"] == merchant
 		)
-		for merchant in ("Sydney Trains", "Mystery Merchant")
+		for merchant in ("Sydney Trains", "Woolworths")
 	]
 	for transaction_id in deleted_ids:
 		assert client.delete(f"/transactions/{transaction_id}").status_code == 204
@@ -216,8 +208,8 @@ def test_startup_does_not_reseed_a_database_that_contains_data(database_client):
 		"/transactions",
 		json=_transaction_payload(merchant="Replacement Two"),
 	).get_json()
-	assert UUID(first_user_row["id"])
-	assert UUID(second_user_row["id"])
+	assert isinstance(first_user_row["id"], int)
+	assert isinstance(second_user_row["id"], int)
 	assert first_user_row["id"] != second_user_row["id"]
 
 	setup_app(str(database_path))
@@ -234,7 +226,7 @@ def test_startup_does_not_reseed_a_database_that_contains_data(database_client):
 	try:
 		assert connection.execute(
 			"SELECT COUNT(*) FROM category_corrections WHERE transaction_id = ?",
-			(stored_uuid(deleted_ids[0]),),
+			(deleted_ids[0],),
 		).fetchone()[0] == 0
 	finally:
 		connection.close()
@@ -243,7 +235,7 @@ def test_startup_does_not_reseed_a_database_that_contains_data(database_client):
 def test_startup_seed_skips_a_partially_populated_database(tmp_path):
 	database_path = tmp_path / "partial-data" / "transactions.db"
 	database_path.parent.mkdir(parents=True)
-	category_id = uuid4()
+	category_id = 99
 	engine = create_engine(f"sqlite:///{database_path.as_posix()}")
 	try:
 		db.metadata.create_all(engine)
@@ -253,7 +245,7 @@ def test_startup_seed_skips_a_partially_populated_database(tmp_path):
 				INSERT INTO categories (id, name, type)
 				VALUES (?, 'User category', 'want')
 				""",
-				(category_id.hex,),
+				(category_id,),
 			)
 	finally:
 		engine.dispose()
@@ -261,7 +253,7 @@ def test_startup_seed_skips_a_partially_populated_database(tmp_path):
 	application = setup_app(str(database_path))
 	with application.test_client() as client:
 		assert client.get("/categories").get_json() == [
-			{"id": str(category_id), "name": "User category", "type": "want"}
+			{"id": category_id, "name": "User category", "type": "want"}
 		]
 		assert client.get("/transactions").get_json() == []
 		assert client.get("/category-corrections").get_json() == []
@@ -274,12 +266,10 @@ def test_transaction_crud_round_trip(database_client):
 
 	assert create_response.status_code == 201
 	created = create_response.get_json()
-	assert UUID(created["id"])
-	assert UUID(created["id"])
-	assert UUID(created["category_id"])
+	assert isinstance(created["id"], int)
 	assert created["amount"] == 24.5
 	assert response_datetime(created["date"]) == datetime(2026, 8, 31, 14, 30)
-	assert created["category_id"] == seeded_category_id(80)
+	assert created["category_id"] == 80
 	assert set(created) == {
 		"id",
 		"amount",
@@ -333,22 +323,22 @@ def test_transaction_model_uses_shared_transaction_dto(database_client):
 	client, _database_path = database_client
 
 	with client.application.app_context():
-		transaction = db.session.get(Transaction, seed_transaction_id(1))
+		transaction = db.session.get(Transaction, 1)
 		assert isinstance(transaction.date, datetime)
 		assert isinstance(transaction.created_at, datetime)
 		assert isinstance(transaction.updated_at, datetime)
 		transaction_dto = transaction.to_dto()
 
 	assert isinstance(transaction_dto, dto.Transaction)
-	assert transaction_dto.id == seed_transaction_id(1)
+	assert transaction_dto.id == 1
 	assert transaction_dto.date == datetime(2026, 6, 10)
 	assert transaction_dto.amount == 1100.0
-	assert transaction_dto.category_id == seed_category_id(30)
+	assert transaction_dto.category_id == 30
 
 
 def test_shared_transaction_dto_retains_original_constructor():
-	transaction_id = uuid4()
-	category_id = uuid4()
+	transaction_id = 123
+	category_id = 80
 
 	transaction = dto.Transaction(
 		transaction_id,
@@ -372,7 +362,7 @@ def test_shared_transaction_dto_retains_original_constructor():
 		(_transaction_payload(date="31-08-2026"), "invalid_date"),
 		(_transaction_payload(amount=12.345), "invalid_amount"),
 		(
-			_transaction_payload(category_id=str(MISSING_CATEGORY_ID)),
+			_transaction_payload(category_id=MISSING_CATEGORY_ID),
 			"category_not_found",
 		),
 		(_transaction_payload(unexpected=True), "unsupported_fields"),
@@ -457,15 +447,9 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 		for row in since
 	)
 
-	dining = client.get(
-		"/transactions",
-		query_string={"category_id": seeded_category_id(80)},
-	).get_json()
+	dining = client.get("/transactions?category_id=80").get_json()
 	assert len(dining) == 5
-	assert all(
-		row["category_id"] == seeded_category_id(80)
-		for row in dining
-	)
+	assert all(row["category_id"] == 80 for row in dining)
 
 	client.post(
 		"/transactions",
@@ -496,7 +480,7 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 		"/transactions",
 		query_string={
 			"merchant": "MERIVALE",
-			"category_id": seeded_category_id(80),
+			"category_id": 80,
 			"date_from": "2026-08-10",
 			"date_to": "2026-08-31",
 			"min_amount": "50",
@@ -605,12 +589,12 @@ def test_category_model_uses_shared_category_dto(database_client):
 	client, _database_path = database_client
 
 	with client.application.app_context():
-		category = db.session.get(Category, seed_category_id(80))
+		category = db.session.get(Category, 80)
 		category_dto = category.to_dto()
 
 	assert isinstance(category_dto, dto.Category)
 	assert category_dto == dto.Category(
-		id=seed_category_id(80),
+		id=80,
 		name="Dining",
 		type="want",
 	)
@@ -626,7 +610,7 @@ def test_categories_reject_invalid_type_and_unsafe_deletion(database_client):
 	assert invalid_type.status_code == 422
 	assert invalid_type.get_json()["code"] == "invalid_category_type"
 
-	protected_category_id = seeded_category_id(1)
+	protected_category_id = 1
 	protected_delete = client.delete(f"/categories/{protected_category_id}")
 	assert protected_delete.status_code == 409
 	assert protected_delete.get_json()["code"] == "protected_category"
@@ -638,7 +622,7 @@ def test_categories_reject_invalid_type_and_unsafe_deletion(database_client):
 	assert protected_patch.status_code == 409
 	assert protected_patch.get_json()["code"] == "protected_category"
 
-	in_use = client.delete(f"/categories/{seeded_category_id(80)}")
+	in_use = client.delete("/categories/80")
 	assert in_use.status_code == 409
 	assert in_use.get_json()["code"] == "category_in_use"
 
@@ -655,7 +639,7 @@ def test_database_constraint_conflicts_return_409(database_client):
 			f"""
 			CREATE TRIGGER reference_category_before_delete
 			BEFORE DELETE ON categories
-			WHEN OLD.id = '{stored_uuid(category["id"])}'
+			WHEN OLD.id = {category["id"]}
 			BEGIN
 				INSERT INTO transactions (
 					id,
@@ -668,7 +652,7 @@ def test_database_constraint_conflicts_return_409(database_client):
 					updated_at
 				)
 				VALUES (
-					'00000000000000000000000000000001',
+					999999,
 					'2026-08-31',
 					'Concurrent writer',
 					'Late category reference',
@@ -738,12 +722,12 @@ def test_category_correction_records_and_applies_atomically(database_client):
 
 	response = client.post(
 		f"/transactions/{created['id']}/category-correction",
-		json={"category_id": seeded_category_id(81)},
+		json={"category_id": 81},
 	)
 
 	assert response.status_code == 201
 	result = response.get_json()
-	assert result["transaction"]["category_id"] == seeded_category_id(81)
+	assert result["transaction"]["category_id"] == 81
 	assert set(result["transaction"]) == {
 		"id",
 		"amount",
@@ -752,16 +736,16 @@ def test_category_correction_records_and_applies_atomically(database_client):
 		"description",
 		"category_id",
 	}
-	assert result["correction"]["previous_category_id"] == seeded_category_id(80)
+	assert result["correction"]["previous_category_id"] == 80
 	assert result["correction"]["previous_category_name"] == "Dining"
-	assert result["correction"]["user_category_id"] == seeded_category_id(81)
+	assert result["correction"]["user_category_id"] == 81
 	assert result["correction"]["user_category_name"] == "Groceries"
 
 	connection = get_connection(database_path)
 	try:
 		stored = connection.execute(
 			"SELECT category_id FROM transactions WHERE id = ?",
-			(stored_uuid(created["id"]),),
+			(created["id"],),
 		).fetchone()
 		correction = connection.execute(
 			"""
@@ -769,14 +753,12 @@ def test_category_correction_records_and_applies_atomically(database_client):
 			FROM category_corrections
 			WHERE transaction_id = ?
 			""",
-			(stored_uuid(created["id"]),),
+			(created["id"],),
 		).fetchone()
-		assert dict(stored) == {
-			"category_id": stored_uuid(seed_category_id(81)),
-		}
+		assert dict(stored) == {"category_id": 81}
 		assert dict(correction) == {
-			"previous_category_id": stored_uuid(seed_category_id(80)),
-			"user_category_id": stored_uuid(seed_category_id(81)),
+			"previous_category_id": 80,
+			"user_category_id": 81,
 		}
 	finally:
 		connection.close()
@@ -786,7 +768,7 @@ def test_category_correction_records_and_applies_atomically(database_client):
 	try:
 		assert connection.execute(
 			"SELECT COUNT(*) FROM category_corrections WHERE transaction_id = ?",
-			(stored_uuid(created["id"]),),
+			(created["id"],),
 		).fetchone()[0] == 0
 	finally:
 		connection.close()
@@ -801,7 +783,7 @@ def test_failed_category_correction_leaves_transaction_unchanged(database_client
 
 	response = client.post(
 		f"/transactions/{created['id']}/category-correction",
-		json={"category_id": str(MISSING_CATEGORY_ID)},
+		json={"category_id": MISSING_CATEGORY_ID},
 	)
 
 	assert response.status_code == 422
@@ -810,11 +792,11 @@ def test_failed_category_correction_leaves_transaction_unchanged(database_client
 	try:
 		assert connection.execute(
 			"SELECT category_id FROM transactions WHERE id = ?",
-			(stored_uuid(created["id"]),),
-		).fetchone()["category_id"] == stored_uuid(seed_category_id(80))
+			(created["id"],),
+		).fetchone()["category_id"] == 80
 		assert connection.execute(
 			"SELECT COUNT(*) FROM category_corrections WHERE transaction_id = ?",
-			(stored_uuid(created["id"]),),
+			(created["id"],),
 		).fetchone()[0] == 0
 	finally:
 		connection.close()
@@ -861,7 +843,7 @@ def test_database_connection_enforces_foreign_keys(database_client):
 					'2026-08-31T00:00:00+00:00'
 				)
 				""",
-				(uuid4().hex, MISSING_CATEGORY_ID.hex),
+				(999999, MISSING_CATEGORY_ID),
 			)
 		connection.rollback()
 	finally:

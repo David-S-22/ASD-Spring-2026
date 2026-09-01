@@ -13,11 +13,11 @@ class Transaction:
     merchant: str
     date: datetime
     description: str
-    category_id: UUID
+    category_id: int
 
 @dataclass(frozen=True)
 class Category:
-    id: UUID
+    id: int
     name: str
     type: Optional[str]
 

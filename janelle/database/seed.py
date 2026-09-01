@@ -3,7 +3,6 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from .helpers import seed_category_id, seed_transaction_id
 from .models import Category, CategoryCorrection, Transaction, db
 
 
@@ -108,7 +107,7 @@ def seed_database_if_empty():
 		for category_row in CATEGORIES:
 			db.session.add(
 				Category(
-					id=seed_category_id(category_row[0]),
+					id=category_row[0],
 					name=category_row[1],
 					type=category_row[2],
 				)
@@ -117,12 +116,12 @@ def seed_database_if_empty():
 		for transaction_row in TRANSACTIONS:
 			db.session.add(
 				Transaction(
-					id=seed_transaction_id(transaction_row[0]),
+					id=transaction_row[0],
 					date=_seed_datetime(transaction_row[1]),
 					merchant=transaction_row[2],
 					description=transaction_row[3],
 					amount=Decimal(transaction_row[4]),
-					category_id=seed_category_id(transaction_row[5]),
+					category_id=transaction_row[5],
 					created_at=_seed_datetime(transaction_row[6]),
 					updated_at=_seed_datetime(transaction_row[7]),
 				)
@@ -132,9 +131,9 @@ def seed_database_if_empty():
 			db.session.add(
 				CategoryCorrection(
 					id=correction_row[0],
-					transaction_id=seed_transaction_id(correction_row[1]),
-					previous_category_id=seed_category_id(correction_row[2]),
-					user_category_id=seed_category_id(correction_row[3]),
+					transaction_id=correction_row[1],
+					previous_category_id=correction_row[2],
+					user_category_id=correction_row[3],
 					corrected_at=correction_row[4],
 				)
 			)

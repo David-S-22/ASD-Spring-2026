@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
 
 from flask import Flask, jsonify, request
 from sqlalchemy import case, func, select
@@ -22,8 +21,8 @@ from .validation import (
 	parse_transaction_filters,
 	validate_category_payload,
 	validate_correction_payload,
+	validate_path_identifier,
 	validate_transaction_payload,
-	validate_uuid_identifier,
 )
 
 
@@ -70,15 +69,7 @@ def _require_category(category_id):
 
 
 def _resolve_transaction(transaction_identifier):
-	try:
-		transaction_id = UUID(transaction_identifier)
-	except (TypeError, ValueError, AttributeError):
-		raise ApiError(
-			"transaction not found",
-			"transaction_not_found",
-			404,
-		)
-
+	transaction_id = validate_path_identifier(transaction_identifier, "transaction")
 	transaction = db.session.get(Transaction, transaction_id)
 	if transaction is None:
 		raise ApiError("transaction not found", "transaction_not_found", 404)
@@ -222,7 +213,7 @@ def _register_routes(application):
 
 	@application.get("/categories/<category_id>")
 	def get_category(category_id):
-		category_id = validate_uuid_identifier(category_id, "category")
+		category_id = validate_path_identifier(category_id, "category")
 		category = db.session.get(Category, category_id)
 		if category is None:
 			raise ApiError("category not found", "category_not_found", 404)
@@ -230,7 +221,7 @@ def _register_routes(application):
 
 	@application.patch("/categories/<category_id>")
 	def patch_category(category_id):
-		category_id = validate_uuid_identifier(category_id, "category")
+		category_id = validate_path_identifier(category_id, "category")
 		category = db.session.get(Category, category_id)
 		if category is None:
 			raise ApiError("category not found", "category_not_found", 404)
@@ -258,7 +249,7 @@ def _register_routes(application):
 
 	@application.delete("/categories/<category_id>")
 	def delete_category(category_id):
-		category_id = validate_uuid_identifier(category_id, "category")
+		category_id = validate_path_identifier(category_id, "category")
 		category = db.session.get(Category, category_id)
 		if category is None:
 			raise ApiError("category not found", "category_not_found", 404)

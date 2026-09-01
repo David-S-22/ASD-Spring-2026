@@ -4,7 +4,6 @@ import sqlite3
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID, uuid4
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
@@ -15,7 +14,6 @@ from sqlalchemy import (
 	Integer,
 	Numeric,
 	String,
-	Uuid,
 	event,
 	func,
 )
@@ -48,11 +46,7 @@ def configure_sqlite_connection(database_connection, _connection_record):
 class Category(db.Model):
 	__tablename__ = "categories"
 
-	id: Mapped[UUID] = mapped_column(
-		Uuid(as_uuid=True),
-		primary_key=True,
-		default=uuid4,
-	)
+	id: Mapped[int] = mapped_column(Integer, primary_key=True)
 	name: Mapped[str] = mapped_column(
 		String(80, collation="NOCASE"),
 		nullable=False,
@@ -83,16 +77,12 @@ class Category(db.Model):
 class Transaction(db.Model):
 	__tablename__ = "transactions"
 
-	id: Mapped[UUID] = mapped_column(
-		Uuid(as_uuid=True),
-		primary_key=True,
-		default=uuid4,
-	)
+	id: Mapped[int] = mapped_column(Integer, primary_key=True)
 	date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 	merchant: Mapped[str] = mapped_column(String(200), nullable=False)
 	description: Mapped[str] = mapped_column(String(500), nullable=False)
 	amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-	category_id: Mapped[UUID] = mapped_column(
+	category_id: Mapped[int] = mapped_column(
 		ForeignKey("categories.id", ondelete="RESTRICT", onupdate="CASCADE"),
 		nullable=False,
 	)
@@ -130,16 +120,15 @@ class CategoryCorrection(db.Model):
 	__tablename__ = "category_corrections"
 
 	id: Mapped[int] = mapped_column(Integer, primary_key=True)
-	transaction_id: Mapped[UUID] = mapped_column(
-		Uuid(as_uuid=True),
+	transaction_id: Mapped[int] = mapped_column(
 		ForeignKey("transactions.id", ondelete="CASCADE"),
 		nullable=False,
 	)
-	previous_category_id: Mapped[UUID] = mapped_column(
+	previous_category_id: Mapped[int] = mapped_column(
 		ForeignKey("categories.id", ondelete="RESTRICT", onupdate="CASCADE"),
 		nullable=False,
 	)
-	user_category_id: Mapped[UUID] = mapped_column(
+	user_category_id: Mapped[int] = mapped_column(
 		ForeignKey("categories.id", ondelete="RESTRICT", onupdate="CASCADE"),
 		nullable=False,
 	)

@@ -44,7 +44,7 @@ def align_transactions_with_corresponding_category_names(transactions, categorie
     category_names = {
         category["id"]: category["name"]
         for category in categories
-        if isinstance(category.get("id"), str)
+        if isinstance(category.get("id"), int)
         and isinstance(category.get("name"), str)
     }
     return [

@@ -1,6 +1,5 @@
 from datetime import date, datetime, time, timezone
 from decimal import Decimal, DecimalException
-from uuid import UUID
 
 
 CATEGORY_TYPES = {"need", "want", "saving"}
@@ -82,23 +81,19 @@ def _parse_datetime(value, field_name, status=422, code=None, end_of_day=False):
 	return parsed
 
 
-def _parse_uuid(value, field_name, status=422, code=None):
-	if isinstance(value, UUID):
-		return value
-	if not isinstance(value, str):
+def _parse_integer_id(value, field_name, status=422, code=None):
+	if (
+		isinstance(value, bool)
+		or not isinstance(value, int)
+		or value <= 0
+		or value > MAX_SQLITE_INTEGER
+	):
 		raise ApiError(
-			f"{field_name} must be a UUID",
+			f"{field_name} must be a supported positive integer",
 			code or f"invalid_{field_name}",
 			status,
 		)
-	try:
-		return UUID(value)
-	except ValueError as error:
-		raise ApiError(
-			f"{field_name} must be a UUID",
-			code or f"invalid_{field_name}",
-			status,
-		) from error
+	return value
 
 
 def _parse_amount(value, field_name, status, code, require_number):
@@ -163,7 +158,7 @@ def validate_transaction_payload(data, partial=False):
 			require_number=True,
 		)
 	if "category_id" in data:
-		values["category_id"] = _parse_uuid(data["category_id"], "category_id")
+		values["category_id"] = _parse_integer_id(data["category_id"], "category_id")
 	return values
 
 
@@ -205,12 +200,12 @@ def validate_correction_payload(data):
 			422,
 		)
 	parsed_category_id = (
-		_parse_uuid(category_id, "category_id")
+		_parse_integer_id(category_id, "category_id")
 		if category_id is not None
 		else None
 	)
 	parsed_user_category_id = (
-		_parse_uuid(user_category_id, "user_category_id")
+		_parse_integer_id(user_category_id, "user_category_id")
 		if user_category_id is not None
 		else None
 	)
@@ -238,7 +233,7 @@ def parse_transaction_filters(arguments):
 			end_of_day=True,
 		),
 		"since": parse_query_date(arguments.get("since"), "since"),
-		"category_id": parse_query_uuid(
+		"category_id": parse_query_positive_integer(
 			arguments.get("category_id"),
 			"category_id",
 		),
@@ -301,12 +296,6 @@ def parse_query_amount(value, field_name):
 	)
 
 
-def parse_query_uuid(value, field_name):
-	if value in (None, ""):
-		return None
-	return _parse_uuid(value, field_name, 400, "invalid_query")
-
-
 def parse_query_positive_integer(value, field_name, maximum=None):
 	if value in (None, ""):
 		return None
@@ -333,17 +322,24 @@ def parse_query_positive_integer(value, field_name, maximum=None):
 	return parsed
 
 
-def validate_uuid_identifier(value, entity_name):
-	try:
-		return _parse_uuid(
-			value,
-			f"{entity_name}_id",
-			404,
-			f"{entity_name}_not_found",
-		)
-	except ApiError:
+def validate_path_identifier(value, entity_name):
+	if isinstance(value, str):
+		if len(value) > 19 or not value.isascii() or not value.isdigit():
+			raise ApiError(
+				f"{entity_name} not found",
+				f"{entity_name}_not_found",
+				404,
+			)
+		value = int(value)
+	if (
+		isinstance(value, bool)
+		or not isinstance(value, int)
+		or value <= 0
+		or value > MAX_SQLITE_INTEGER
+	):
 		raise ApiError(
 			f"{entity_name} not found",
 			f"{entity_name}_not_found",
 			404,
 		)
+	return value

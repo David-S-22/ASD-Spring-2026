@@ -1,18 +1,6 @@
-from uuid import UUID, uuid5
-
 from sqlalchemy import func, or_, select
 
 from .models import Category, CategoryCorrection, Transaction, db
-
-
-# ensures that the same UUID is generated for transactions and categories.
-SEED_NAMESPACE = UUID("de6f13c5-1f1a-4ce8-a937-c119ff8c2bbc")
-
-def seed_transaction_id(seed_key):
-	return uuid5(SEED_NAMESPACE, f"release-0:{seed_key}")
-
-def seed_category_id(seed_key):
-	return uuid5(SEED_NAMESPACE, f"release-0:category:{seed_key}")
 
 
 def filtered_transactions(filters):

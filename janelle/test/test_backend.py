@@ -34,17 +34,17 @@ def test_transaction_rows_are_loaded_from_database(
 ):
     database_response = response_with_json([
         {
-            "id": "11111111-1111-1111-1111-111111111111",
+            "id": 1,
             "date": "Mon, 31 Aug 2026 14:30:00 GMT",
             "merchant": "<script>alert('xss')</script>",
             "description": "Lunch",
             "amount": 18.5,
-            "category_id": "80808080-8080-4080-8080-808080808080",
+            "category_id": 80,
         }
     ])
     category_response = response_with_json([
         {
-            "id": "80808080-8080-4080-8080-808080808080",
+            "id": 80,
             "name": "Dining",
             "type": "want",
         }
