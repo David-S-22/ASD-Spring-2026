@@ -44,6 +44,10 @@ def check_transaction():
 
     app.logger.warning("Transaction %s flagged as anomalous: %s",
                        transaction.id, anomaly.agent_reason_suspected)
+
+    # Save new anomaly to the database
+    anomalies_api.create_anomaly(anomaly)
+
     return render_template("alert.jinja", anomaly=anomaly)
 
 @app.post("/dummy-anomaly")
