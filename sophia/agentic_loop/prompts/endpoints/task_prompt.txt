@@ -1,7 +1,20 @@
 The evidence below is a status-and-latency sweep of every backend health route
-plus the documented read-only Bills routes.
+plus the documented read-only Bills routes. Each probe carries a service name,
+a route, a status code and a timing in milliseconds.
 
-Report which endpoints are healthy, which failed, and anything notable about
-the latencies. Call out any route returning an unexpected status. If every
-probe succeeded, say so and note the slowest route rather than inventing a
-problem.
+List every probe whose status is not 200, giving its service, its route and
+its status. If every probe returned 200, say so plainly.
+
+Then name the slowest probe: the one with the largest millisecond value
+anywhere in the evidence, whether or not it returned 200.
+
+Then give how many probes returned 200, out of the total number of probes in
+the evidence.
+
+Each probe's service, route, status and timing belong to one entry; never take
+the status or timing from one entry and attach it to the service named in
+another. A probe that returned 200 has not failed, so never name the same probe
+as both passing and failing.
+
+Finish with one sentence on whether the failures, if there are any, share a
+single cause.
