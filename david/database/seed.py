@@ -72,8 +72,3 @@ def seed_database_if_empty():
     except Exception:
         db.session.rollback()
         raise
-
-
-def seed_database():
-    """Seed the database if empty."""
-    seed_database_if_empty()
