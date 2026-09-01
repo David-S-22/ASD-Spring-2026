@@ -1,5 +1,4 @@
 from typing import Any, Callable, Optional
-from uuid import UUID
 
 from flask import Response, abort
 from flask_sqlalchemy.model import Model
@@ -32,12 +31,15 @@ def _set_field(model: Model, data: dict, field_name: str, field_parser: Callable
 
     setattr(model, field_name, value)
 
-def try_parse_uuid(value: Any) -> Optional[UUID]:
-    if isinstance(value, UUID):
+def try_parse_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
         return value
 
     try:
-        return UUID(value)
+        return int(value)
     except:
         return None
 

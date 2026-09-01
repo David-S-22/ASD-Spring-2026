@@ -1,5 +1,4 @@
-from random import choice
-from uuid import uuid4
+from random import choice, randint
 
 from flask import Flask, jsonify, render_template, request
 
@@ -54,8 +53,8 @@ def check_transaction():
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
     anomaly = dto.Anomaly(
-        id=uuid4(),
-        transaction_id=uuid4(),
+        id=0,
+        transaction_id=randint(1, 1_000_000_000),
         agent_reason_suspected="hello",
         is_confirmed_by_user=choice((True, False, None)),
     )

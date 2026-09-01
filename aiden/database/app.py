@@ -1,11 +1,9 @@
-from uuid import UUID
-
 from flask import Blueprint, Flask, json, jsonify, request
 from sqlalchemy import select, inspect
 from werkzeug.exceptions import HTTPException
 
 from .models import Anomaly, db
-from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_uuid
+from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_int
 
 
 app = Flask(__name__)
@@ -27,7 +25,7 @@ def post_anomaly():
     data = request.get_json() or {}
     anomaly = Anomaly()
 
-    set_mandatory_field(anomaly, data, "transaction_id", try_parse_uuid)
+    set_mandatory_field(anomaly, data, "transaction_id", try_parse_int)
     set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
     set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
 
@@ -37,14 +35,14 @@ def post_anomaly():
 
     return jsonify(anomaly.to_dto()), 201
 
-@anomalies.get("/<uuid:id>")
-def get_anomaly(id: UUID):
+@anomalies.get("/<int:id>")
+def get_anomaly(id: int):
     anomaly = db.get_or_404(Anomaly, id)
 
     return jsonify(anomaly.to_dto())
 
-@anomalies.patch("/<uuid:id>")
-def patch_anomaly(id: UUID):
+@anomalies.patch("/<int:id>")
+def patch_anomaly(id: int):
     anomaly = db.get_or_404(Anomaly, id)
     data = request.get_json() or {}
 
@@ -59,8 +57,8 @@ def patch_anomaly(id: UUID):
 
     return jsonify(anomaly.to_dto())
 
-@anomalies.delete("/<uuid:id>")
-def delete_anomaly(id: UUID):
+@anomalies.delete("/<int:id>")
+def delete_anomaly(id: int):
     deleted_count = db.session.query(Anomaly).where(Anomaly.id == id).delete()
 
     assert deleted_count in (0, 1)
@@ -68,8 +66,8 @@ def delete_anomaly(id: UUID):
 
     return empty()
 
-@anomalies.delete("/by-transaction/<uuid:id>")
-def delete_anomaly_by_id(id: UUID):
+@anomalies.delete("/by-transaction/<int:id>")
+def delete_anomaly_by_id(id: int):
     deleted_count = db.session.query(Anomaly).where(Anomaly.transaction_id == id).delete()
 
     assert deleted_count in (0, 1)

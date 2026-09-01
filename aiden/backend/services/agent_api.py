@@ -1,6 +1,5 @@
 from json import JSONDecodeError, loads
 from typing import List, Optional, Tuple
-from uuid import uuid4
 from dataclasses import dataclass
 
 from flask import current_app
@@ -115,7 +114,7 @@ def review_new_transaction(
         return None
 
     return dto.Anomaly(
-        id=uuid4(),
+        id=0,
         transaction_id=transaction.id,
         agent_reason_suspected=review_finding.justification,
         is_confirmed_by_user=None
