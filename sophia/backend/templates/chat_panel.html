@@ -15,14 +15,14 @@
     <div class="preview-card applied">Applied</div>
     {% else %}
     <div class="preview-card">
-      <button class="confirm" hx-post="/ui/chat/apply" hx-vals='{{ message.preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
+      <button class="confirm" hx-post="/bills-backend/ui/chat/apply" hx-vals='{{ message.preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
       <button class="keep-it" type="button" data-action="dismiss-preview">Keep it</button>
     </div>
     {% endif %}
     {% endif %}
     {% endfor %}
   </div>
-  <form hx-post="/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()" hx-disabled-elt="find button[type=submit]">
+  <form hx-post="/bills-backend/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()" hx-disabled-elt="find button[type=submit]">
     <input name="message" placeholder="Ask" required>
     <button type="submit">Ask</button>
     <span class="htmx-indicator working">Tally is thinking…</span>

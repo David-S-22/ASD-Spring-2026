@@ -1,0 +1,4 @@
+# Agentic-loop run records are generated per run and not committed.
+# A committed sample run lives at docs/release-0/agentic-loop/sample-run/.
+*
+!.gitignore

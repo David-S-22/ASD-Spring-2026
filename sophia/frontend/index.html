@@ -4,39 +4,54 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tally — Bills &amp; subscriptions</title>
-<link rel="stylesheet" href="/css/theme.css">
-<link rel="stylesheet" href="/css/bills.css">
-<script src="/js/htmx-2.0.4.min.js"></script>
+<!-- htmx stays in the head deliberately. The shared shell swaps this whole
+     document into #content with hx-swap="innerHTML", and htmx drops the head
+     when it parses a full document, so this tag is skipped there -- which is
+     what we want: inside the shell htmx is already loaded and shared, and a
+     second copy would overwrite it for every other feature's tab. Standalone
+     on :3005 the head is honoured and this is the only htmx on the page. -->
+<script src="/bills-frontend/js/htmx-2.0.4.min.js"></script>
 </head>
 <body>
-<div class="app-shell">
-  <div class="tab-panel">
-    <div class="tabs">
-      <button type="button" class="active" data-tab="bills">Bills</button>
-      <button type="button" data-tab="calendar">Calendar</button>
-      <button type="button" data-tab="timeline">Coming up</button>
-      <button type="button" data-tab="disputes">Disputes</button>
+<!-- The stylesheets sit in the body for the opposite reason: they are dropped
+     with the head inside the shell, and unlike htmx nothing there replaces
+     them. The shell's own theme.css defines a completely different set of
+     custom properties (--color-bg, --color-text) from the ones this feature
+     consumes (--bg, --ink, --mut), so without these two links every var() in
+     bills.css resolves to nothing. Body-level <link> is applied on insertion
+     in every browser we target, and survives the fragment swap. -->
+<link rel="stylesheet" href="/bills-frontend/css/theme.css">
+<link rel="stylesheet" href="/bills-frontend/css/bills.css">
+<div id="bills-root">
+  <div class="app-shell">
+    <div class="tab-panel">
+      <div class="tabs">
+        <button type="button" class="active" data-tab="bills">Bills</button>
+        <button type="button" data-tab="calendar">Calendar</button>
+        <button type="button" data-tab="timeline">Coming up</button>
+        <button type="button" data-tab="disputes">Disputes</button>
+      </div>
+      <div class="tab-page active" data-tab-page="bills">
+        <div id="bills-table" class="card" hx-get="/bills-backend/ui/bills" hx-trigger="load" hx-swap="outerHTML"></div>
+      </div>
+      <div class="tab-page" data-tab-page="calendar">
+        <div id="calendar-card" class="card" hx-get="/bills-backend/ui/calendar" hx-trigger="load" hx-swap="outerHTML"></div>
+      </div>
+      <div class="tab-page" data-tab-page="timeline">
+        <div id="timeline" class="card" hx-get="/bills-backend/ui/timeline" hx-trigger="load" hx-swap="outerHTML"></div>
+      </div>
+      <div class="tab-page" data-tab-page="disputes">
+        <div id="disputes-tab" class="card" hx-get="/bills-backend/ui/disputes-tab" hx-trigger="load"></div>
+      </div>
     </div>
-    <div class="tab-page active" data-tab-page="bills">
-      <div id="bills-table" class="card" hx-get="/ui/bills" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="tab-page" data-tab-page="calendar">
-      <div id="calendar-card" class="card" hx-get="/ui/calendar" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="tab-page" data-tab-page="timeline">
-      <div id="timeline" class="card" hx-get="/ui/timeline" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="tab-page" data-tab-page="disputes">
-      <div id="disputes-tab" class="card" hx-get="/ui/disputes-tab" hx-trigger="load"></div>
+    <div class="ask-tally card">
+      <h3>Ask Tally</h3>
+      <div id="chat-panel" hx-get="/bills-backend/ui/chat" hx-trigger="load"></div>
     </div>
   </div>
-  <div class="ask-tally card">
-    <h3>Ask Tally</h3>
-    <div id="chat-panel" hx-get="/ui/chat" hx-trigger="load"></div>
-  </div>
+  <div id="modal-root"></div>
+  <div class="toast-holder" id="toast-root"></div>
 </div>
-<div id="modal-root"></div>
-<div class="toast-holder" id="toast-root"></div>
-<script src="/js/app.js"></script>
+<script src="/bills-frontend/js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,20 @@
+The evidence below describes the compose topology and repository layout:
+the service inventory with published host ports, the dependency edges, the
+student feature directories present, any missing required directories, and
+whether the shared frontend entry point exists.
+
+Answer these four questions in order, one or two lines each, quoting the value
+from the evidence that gives you the answer.
+
+1. How many services are defined, and does the evidence say the shared
+   frontend entry point is present?
+2. Are any required directories missing?
+3. Which services have no dependency edge pointing at them? The shared
+   frontend is the entry point, so having no dependants is expected for it
+   and is not a fault.
+4. Every edge here should run frontend -> backend, backend -> database, or
+   backend -> ollama. Name each edge that breaks that pattern. If every edge
+   fits one of the three shapes, write exactly: all edges fit.
+
+Finish with one sentence naming the thing a marker would most likely comment
+on. If every check came back clean, say that instead.

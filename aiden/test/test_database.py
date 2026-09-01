@@ -1,5 +1,4 @@
 from typing import Any
-from uuid import UUID, uuid4
 
 from flask.testing import FlaskClient
 from pytest import fixture
@@ -18,7 +17,7 @@ def test_index(client: FlaskClient):
     assert resp.json["container"] == "anomalies-db"
 
 def test_create_anomaly(client: FlaskClient):
-    json = dict(transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
+    json = dict(transaction_id=101, agent_reason_suspected="beans", is_confirmed_by_user=False)
 
     # Check we can create the object
     resp = client.post("/anomalies/", json=json)
@@ -27,35 +26,35 @@ def test_create_anomaly(client: FlaskClient):
     assert isinstance(create_json := resp.json, dict)
 
     # Check we can fetch the object we just created
-    resp = client.get("/anomalies/" + create_json["id"])
+    resp = client.get("/anomalies/" + str(create_json["id"]))
 
     assert resp.status_code == 200
     assert isinstance(resp.json, dict)
     assert resp.json == create_json
 
     # Check the expected keys
-    assert UUID(resp.json["id"])
-    assert UUID(resp.json["transaction_id"])
+    assert isinstance(resp.json["id"], int)
+    assert isinstance(resp.json["transaction_id"], int)
     assert resp.json["is_confirmed_by_user"] == False
     assert resp.json["agent_reason_suspected"] == "beans"
 
 def test_delete_anomaly(client: FlaskClient):
-    anomaly = create_anomaly(client, id=uuid4(), transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
+    anomaly = create_anomaly(client, id=0, transaction_id=201, agent_reason_suspected="beans", is_confirmed_by_user=False)
     response = client.delete(f"/anomalies/{anomaly.id}")
 
     assert response.status_code == 204
     assert client.get(f"/anomalies/{anomaly.id}").status_code == 404
 
 def test_delete_anomaly_by_transaction(client: FlaskClient):
-    anomaly = create_anomaly(client, id=uuid4(), transaction_id=uuid4(), agent_reason_suspected="beans", is_confirmed_by_user=False)
+    anomaly = create_anomaly(client, id=0, transaction_id=301, agent_reason_suspected="beans", is_confirmed_by_user=False)
     response = client.delete(f"/anomalies/by-transaction/{anomaly.transaction_id}")
 
     assert response.status_code == 204
     assert client.get(f"/anomalies/{anomaly.id}").status_code == 404
 
 def test_delete_anomaly_that_doesnt_exist(client: FlaskClient):
-    by_id = client.delete(f"/anomalies/{uuid4()}")
-    by_transaction = client.delete(f"/anomalies/by-transaction/{uuid4()}")
+    by_id = client.delete("/anomalies/999999")
+    by_transaction = client.delete("/anomalies/by-transaction/999999")
 
     assert by_id.status_code == 204
     assert by_transaction.status_code == 204

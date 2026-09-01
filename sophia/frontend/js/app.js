@@ -1,9 +1,35 @@
-htmx.config.responseHandling = [
-  { code: "204", swap: false },
-  { code: "[23]..", swap: true },
-  { code: "422", swap: true, error: false },
-  { code: "[45]..", swap: true, error: false },
-];
+// Everything below binds to Bills' own root rather than to document or
+// document.body, and that is load-bearing rather than tidiness.
+//
+// The shared shell (:3000) swaps this whole document into its #content, and
+// htmx re-executes scripts in swapped content -- so this file runs there,
+// against the shell's htmx instance, which every other feature's tab shares.
+// Anything set globally here would silently change behaviour for Transactions,
+// Anomalies and Savings, and nothing ever sets it back. Scoping to #bills-root
+// also means a second visit to the Bills tab rebinds a fresh subtree instead of
+// stacking a duplicate listener on a document that is never replaced.
+var billsRoot = document.getElementById("bills-root");
+if (!billsRoot) {
+  throw new Error("#bills-root is missing -- Bills' handlers cannot bind.");
+}
+
+// Bills' write routes answer invalid input with a 422 and an HTML error
+// fragment, so error responses have to swap into the target instead of being
+// discarded. htmx's default drops 4xx/5xx bodies and raises htmx:responseError.
+//
+// This used to be done with htmx.config.responseHandling, which is global: in
+// the shell that one assignment would make every feature swap error bodies and
+// stop firing htmx:responseError. The same result is achieved per-event here,
+// on Bills' subtree only. 204 and 2xx/3xx are left to htmx's defaults, which
+// already match what the old config asked for -- 4xx/5xx was the only
+// difference, so behaviour standalone is unchanged.
+billsRoot.addEventListener("htmx:beforeSwap", function (evt) {
+  var xhr = evt.detail && evt.detail.xhr;
+  if (xhr && xhr.status >= 400) {
+    evt.detail.shouldSwap = true;
+    evt.detail.isError = false;
+  }
+});
 
 function showModal(onConfirm) {
   // The confirm dialog must NOT live in #modal-root: the add/edit/cancel/
@@ -13,7 +39,10 @@ function showModal(onConfirm) {
   if (!root) {
     root = document.createElement("div");
     root.id = "confirm-root";
-    document.body.appendChild(root);
+    // Into Bills' root, not document.body: in the shell, body is outside the
+    // #content the shell replaces on a tab switch, so a dialog appended there
+    // would outlive Bills and sit over whichever feature came next.
+    billsRoot.appendChild(root);
   }
   root.innerHTML =
     '<div class="modal-backdrop"><div class="modal">' +
@@ -50,7 +79,7 @@ function activateTab(name) {
   });
 }
 
-document.addEventListener("htmx:confirm", function (evt) {
+billsRoot.addEventListener("htmx:confirm", function (evt) {
   var verb = (evt.detail.verb || "get").toLowerCase();
   if (verb === "get") {
     return;
@@ -61,7 +90,7 @@ document.addEventListener("htmx:confirm", function (evt) {
   });
 });
 
-document.body.addEventListener("htmx:afterRequest", function (evt) {
+billsRoot.addEventListener("htmx:afterRequest", function (evt) {
   // A modal form used to be wiped as a side effect of the confirm dialog
   // replacing it; now the dialog lives elsewhere, close the form once its
   // request succeeds.
@@ -71,13 +100,13 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
   }
 });
 
-document.body.addEventListener("toast", function (evt) {
+billsRoot.addEventListener("toast", function (evt) {
   var detail = evt.detail || {};
   var text = typeof detail.value === "string" ? detail.value : detail;
   showToast(typeof text === "string" ? text : "Done.");
 });
 
-document.body.addEventListener("switchTab", function (evt) {
+billsRoot.addEventListener("switchTab", function (evt) {
   var detail = evt.detail || {};
   var name = typeof detail.value === "string" ? detail.value : detail;
   if (typeof name === "string") {
@@ -85,7 +114,7 @@ document.body.addEventListener("switchTab", function (evt) {
   }
 });
 
-document.body.addEventListener("click", function (evt) {
+billsRoot.addEventListener("click", function (evt) {
   var tab = evt.target.closest(".tabs button");
   if (tab) {
     activateTab(tab.getAttribute("data-tab"));
@@ -149,7 +178,7 @@ document.body.addEventListener("click", function (evt) {
 
 (function () {
   if (location.pathname.indexOf("/handoff/") === 0) {
-    htmx.ajax("GET", "/ui" + location.pathname + location.search, { target: "#modal-root", swap: "innerHTML" });
+    htmx.ajax("GET", "/bills-backend/ui" + location.pathname + location.search, { target: "#modal-root", swap: "innerHTML" });
     history.replaceState(null, "", "/");
     return;
   }
@@ -163,14 +192,14 @@ document.body.addEventListener("click", function (evt) {
       var row = document.querySelector('#bills-table tr[data-bill-id="' + billId + '"]');
       if (row) {
         window.clearTimeout(stopLooking);
-        document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+        billsRoot.removeEventListener("htmx:afterSettle", scrollToBill);
         row.scrollIntoView({ block: "center" });
       }
     };
     var stopLooking = window.setTimeout(function () {
-      document.body.removeEventListener("htmx:afterSettle", scrollToBill);
+      billsRoot.removeEventListener("htmx:afterSettle", scrollToBill);
     }, 10000);
-    document.body.addEventListener("htmx:afterSettle", scrollToBill);
+    billsRoot.addEventListener("htmx:afterSettle", scrollToBill);
     return;
   }
   if (location.hash.indexOf("#chat?") === 0) {

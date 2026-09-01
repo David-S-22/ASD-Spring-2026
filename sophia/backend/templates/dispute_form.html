@@ -1,7 +1,7 @@
 {# Open-a-dispute modal form: reason only, creates the dispute and drafts a letter (AI call 1). #}
 <div class="modal-form" id="dispute-form">
   <h3>Dispute {{ bill.name }}</h3>
-  <form hx-post="/ui/disputes" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  <form hx-post="/bills-backend/ui/disputes" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     <input type="hidden" name="bill_id" value="{{ bill.id }}">
     <label>Reason
       <textarea name="reason" required placeholder="What looks wrong about this charge?"></textarea>

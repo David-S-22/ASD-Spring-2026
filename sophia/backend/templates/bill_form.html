@@ -47,7 +47,7 @@
     <div class="form-actions">
       <button type="submit">{{ "Save changes" if bill and bill.id else "Add bill" }}</button>
       {% if bill and bill.id %}
-      <button type="button" hx-post="/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML">Delete</button>
+      <button type="button" hx-post="/bills-backend/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML">Delete</button>
       {% endif %}
       <button type="button" data-action="dismiss-modal">Cancel</button>
     </div>
