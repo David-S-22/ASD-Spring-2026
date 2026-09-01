@@ -166,23 +166,25 @@ what this small sample does and doesn't demonstrate.
 `docs/release-0/sophia/evidence/compose/` holds the `docker compose`
 verification run and the curl transcripts of the `/ui/*` write routes.
 Diagrams are in `docs/architecture/` and app screenshots in
-`docs/release-0/sophia/screenshots/` (see the README there). Per the spec's
-repository layout, nothing under `sophia/` is documentation.
+`docs/release-0/sophia/screenshots/`, each described in
+`docs/release-0/sophia/README.md`. Per the spec's repository layout, nothing
+under `sophia/` is documentation.
 
 ## Pull requests
 
-All Bills PRs are merged to `main` — 29 in total, each squash-merged after
+All Bills PRs are merged to `main` — 34 in total, each squash-merged after
 review:
 
 - Scaffold #6, #7 · engine #8 · DB API #13 · backend #10 · frontend #11 ·
   AI #12
-- Defect fixes: #14, #15, #16, #17, #18, #31
-- Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33
+- Defect fixes: #14, #15, #16, #17, #18, #31, #73
+- Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33, #71, #75
 - Requirements split: #34
 - Release 0 hardening: #47, #49, #50, #51, #52, #56, #68, #69
+- Shared-shell integration: #85, #86
 
 Actions evidence — Sophia-CI run on `main`:
-<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33309346244>
+<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33467437820>
 
 ## Workflow note
 
