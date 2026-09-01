@@ -101,6 +101,15 @@ def test_create_anomaly_missing_required_fields_returns_400(client: FlaskClient)
     assert response.json["description"] == "Missing required field agent_reason_suspected"
 
 
+def test_create_anomaly_missing_transaction_id_returns_400(client: FlaskClient):
+    response = client.post("/anomalies/", json={"agent_reason_suspected": "beans"})
+
+    assert response.status_code == 400
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 400
+    assert response.json["description"] == "Missing required field transaction_id"
+
+
 def test_create_anomaly_rejects_invalid_boolean_flag(client: FlaskClient):
     response = client.post(
         "/anomalies/",
@@ -115,6 +124,18 @@ def test_create_anomaly_rejects_invalid_boolean_flag(client: FlaskClient):
     assert isinstance(response.json, dict)
     assert response.json["code"] == 400
     assert "Field is_confirmed_by_user expected try_parse_bool" in response.json["description"]
+
+
+def test_create_anomaly_rejects_invalid_json_body(client: FlaskClient):
+    response = client.post(
+        "/anomalies/",
+        data="{bad-json",
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 400
 
 
 def test_patch_anomaly_updates_confirmation_flag(client: FlaskClient):
@@ -143,6 +164,48 @@ def test_patch_anomaly_ignores_invalid_update_value(client: FlaskClient):
     updated = client.get(f"/anomalies/{anomaly.id}")
     assert isinstance(updated.json, dict)
     assert updated.json["is_confirmed_by_user"] is False
+
+
+def test_patch_anomaly_with_null_value_is_ignored(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=403, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    response = client.patch(f"/anomalies/{anomaly.id}", json={"is_confirmed_by_user": None})
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["is_confirmed_by_user"] is False
+
+
+def test_patch_anomaly_with_empty_body_does_not_mutate_record(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=404, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    response = client.patch(f"/anomalies/{anomaly.id}", json={})
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["is_confirmed_by_user"] is False
+    assert response.json["agent_reason_suspected"] == "beans"
+
+
+def test_patch_anomaly_with_unrelated_keys_does_not_mutate_state(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=405, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    response = client.patch(f"/anomalies/{anomaly.id}", json={"foo": "bar"})
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["is_confirmed_by_user"] is False
+    assert response.json["agent_reason_suspected"] == "beans"
+
+
+def test_delete_by_transaction_repeated_calls_are_idempotent(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=406, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    first = client.delete(f"/anomalies/by-transaction/{anomaly.transaction_id}")
+    second = client.delete(f"/anomalies/by-transaction/{anomaly.transaction_id}")
+
+    assert first.status_code == 204
+    assert second.status_code == 204
 
 
 # Pytest fixtures & helpers
