@@ -87,7 +87,7 @@ All optional; the defaults match the team's compose file.
 
 | Variable | Default |
 |---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` |
 | `OLLAMA_MODEL` | `qwen2.5:0.5b` (implementation stage) |
 | `OLLAMA_REVIEW_MODEL` | `llama3.1:8b` (review stage) |
 
@@ -95,13 +95,36 @@ The model is called over plain HTTP with `requests`, so there is no SDK
 dependency — `requests` and `PyYAML` are the only requirements, both already
 in `sophia/requirements.txt`.
 
+### Which ollama answers
+
+The default names `127.0.0.1` rather than `localhost`, and the difference is
+not cosmetic. On Windows `localhost` resolves to both `127.0.0.1` and `::1`.
+If a desktop Ollama is installed as well as the composed `ollama` service,
+they end up on one socket each — and `requests` takes IPv4 while `curl` takes
+IPv6, so the two disagree about which models exist without either appearing to
+fail. Every run of this loop before 1 September 2026 reached a host-installed
+Ollama for that reason. It went unnoticed because both instances happened to
+serve `qwen2.5:0.5b` and `llama3.1:8b`.
+
+The fix is ordering, not just the address: the desktop app has to release the
+IPv4 socket before Docker's port proxy can claim it. Quit the desktop Ollama,
+`docker compose restart ollama`, then confirm `0.0.0.0:11434->11434/tcp` in
+`docker ps`.
+
+Every run now records the endpoint it used and the model list that endpoint
+served, in all three report files. That list is the fingerprint — on this
+machine only the container holds `qwen2.5:3b` — so a reader can tell which
+instance produced a run instead of taking it on trust. `docker exec ollama
+ollama ps` is the matching check from the container's side.
+
 ## Tests
 
-`sophia/test/test_loop_collect.py` and `sophia/test/test_loop_record.py` cover
-the deterministic parts: host-port parsing in all three compose forms, the
-architecture collector against a fixture repository, the workflow parser, and
-the record writer. No model calls, no sockets, no Docker — they run in CI with
-the rest of the Bills suite.
+`test_loop_collect.py`, `test_loop_record.py` and `test_loop_endpoint.py` under
+`sophia/test/` cover the deterministic parts: host-port parsing in all three
+compose forms, the architecture collector against a fixture repository, the
+workflow parser, the record writer including the environment block, and the
+endpoint fingerprint with `requests.get` replaced. No model calls, no sockets,
+no Docker — they run in CI with the rest of the Bills suite.
 
 ## Adding a mode
 

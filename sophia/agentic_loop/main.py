@@ -39,6 +39,17 @@ MODES = {
     "devops": ("DevOps", "devops", collect_devops),
 }
 
+# 127.0.0.1 rather than localhost, deliberately. On Windows "localhost"
+# resolves to both 127.0.0.1 and ::1, and a desktop Ollama install and the
+# composed ollama container can each own one of those sockets: requests takes
+# IPv4, curl takes IPv6, and the two answer with different model sets. Every
+# run before 2026-09-01 reached a host-installed Ollama for exactly that
+# reason. Naming the address pins which one, and model_inventory() records
+# what actually answered so the run record proves it rather than assuming it.
+DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
+DEFAULT_MODEL = "qwen2.5:0.5b"
+DEFAULT_REVIEW_MODEL = "llama3.1:8b"
+
 
 # --- prompts and models ----------------------------------------------------
 
@@ -55,6 +66,28 @@ def read_prompt(family: str, name: str) -> str:
         )
 
 
+def model_inventory(base_url: str) -> str:
+    """The models the endpoint actually serves, as a comma-separated string.
+
+    This is the fingerprint that says which ollama answered: the composed
+    container and a desktop install hold different model sets, so the list
+    identifies the instance without needing to inspect sockets. /api/tags is
+    ollama's own route rather than part of the OpenAI shim, so it sits beside
+    /v1 rather than under it.
+
+    Never raises -- an unreachable endpoint is recorded as such, because the
+    run record is more useful with a stated failure than missing a field.
+    """
+    root = base_url[:-len("/v1")] if base_url.endswith("/v1") else base_url
+    try:
+        response = requests.get(f"{root.rstrip('/')}/api/tags", timeout=15)
+        response.raise_for_status()
+        names = sorted(m["name"] for m in response.json().get("models", []))
+        return ", ".join(names) if names else "endpoint served no models"
+    except Exception as exc:
+        return f"unavailable ({exc})"
+
+
 def call_model(system_prompt: str, user_prompt: str, *, review: bool = False):
     """One chat call to the local ollama service.
 
@@ -62,9 +95,9 @@ def call_model(system_prompt: str, user_prompt: str, *, review: bool = False):
     is used over plain HTTP so the loop needs no SDK -- requests is already a
     dependency of the Bills test environment.
     """
-    model = (os.getenv("OLLAMA_REVIEW_MODEL", "llama3.1:8b") if review
-             else os.getenv("OLLAMA_MODEL", "qwen2.5:0.5b"))
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    model = (os.getenv("OLLAMA_REVIEW_MODEL", DEFAULT_REVIEW_MODEL) if review
+             else os.getenv("OLLAMA_MODEL", DEFAULT_MODEL))
+    base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_BASE_URL)
     try:
         response = requests.post(
             f"{base_url}/chat/completions",
@@ -199,9 +232,19 @@ def main():
     record = RunRecord(REPORTS_DIR)
     keys = list(MODES)
 
+    base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_BASE_URL)
+    record.set_environment(
+        endpoint=base_url,
+        models_served=model_inventory(base_url),
+        implementation_model=os.getenv("OLLAMA_MODEL", DEFAULT_MODEL),
+        review_model=os.getenv("OLLAMA_REVIEW_MODEL", DEFAULT_REVIEW_MODEL),
+    )
+
     print("AGENTIC LOOP - Bills extended review (Plan -> Act -> Observe -> Adapt)")
     print(f"Repository: {REPO_ROOT}")
     print(f"Run record: {REPORTS_DIR}")
+    for field, value in record.environment.items():
+        print(f"{field.replace('_', ' ').capitalize()}: {value}")
     while True:
         print()
         print("=" * 70)

@@ -114,3 +114,29 @@ def test_the_reports_directory_is_created_on_demand(tmp_path):
     record = RunRecord(nested)
     complete_mode(record)
     assert (nested / "report.json").is_file()
+
+
+def test_the_environment_reaches_all_three_files(record):
+    """Which ollama answered is the point of the field, so it must survive
+    into every artefact -- the JSON the report cites and the two readables."""
+    record.set_environment(endpoint="http://127.0.0.1:11434/v1",
+                           models_served="llama3.1:8b, qwen2.5:0.5b")
+    complete_mode(record)
+
+    report = json.loads((record.reports_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["environment"]["endpoint"] == "http://127.0.0.1:11434/v1"
+    assert report["environment"]["models_served"] == "llama3.1:8b, qwen2.5:0.5b"
+
+    assert "Endpoint: http://127.0.0.1:11434/v1" in \
+        (record.reports_dir / "report.md").read_text(encoding="utf-8")
+    assert "Models served: llama3.1:8b, qwen2.5:0.5b" in \
+        (record.reports_dir / "run-view.md").read_text(encoding="utf-8")
+
+
+def test_a_run_without_an_environment_still_writes(record):
+    """set_environment is optional; its absence must not add an empty heading."""
+    complete_mode(record)
+    report = json.loads((record.reports_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["environment"] == {}
+    assert "## Environment" not in \
+        (record.reports_dir / "report.md").read_text(encoding="utf-8")
