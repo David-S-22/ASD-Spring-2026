@@ -1,0 +1,14 @@
+The evidence below reports each database service, whether its health route
+answered, and how many rows its list route returned against the ten-row
+seeded minimum.
+
+For each database service named in the evidence, give one line with its name,
+its row count, and whether that count meets the ten-row minimum, is below it,
+or the list route did not answer at all.
+
+Judge that from the row count, not from the health route: a health route
+returning 404 does not mean the list route failed, and a service with few rows
+is seeded thinly rather than unreachable.
+
+End with one line giving how many services meet the minimum, out of how many
+database services the evidence says are defined.

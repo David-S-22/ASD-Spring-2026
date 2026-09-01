@@ -1,0 +1,17 @@
+The evidence below lists the CI workflow files, the student directory each one
+watches, the jobs each defines, and the latest run conclusion on main where the
+GitHub CLI could supply it.
+
+Answer three things, briefly.
+
+1. How many workflow files does the evidence list? The project has five
+   students, so say how many are left without one. If the evidence does not
+   name which student that is, say so.
+2. Name any workflow whose latest run on main was not a success, giving the
+   reason the evidence states. If every workflow succeeded, say so.
+3. Name any workflow whose job list differs from the others, quoting the job
+   lists you are comparing.
+
+Each workflow's directory, jobs and run conclusion appear on the same line as
+its filename; read them only from that line. The entry beginning "NAMING
+DEVIATION" is a note about the whole team, not a workflow file.
