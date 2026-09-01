@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import BadRequest, HTTPException
 
 from .models import Budget, BudgetLine, CoachProposal, PlannedEvent, db
+from .seed import seed_database_if_empty
 
 
 BUDGET_STATUSES = {"draft", "active", "closed"}
@@ -253,7 +254,7 @@ def _require_existing_budget_line_category(budget_id: str, category: str | None)
         )
 
 
-def _create_app(db_path: str) -> Flask:
+def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     application = Flask(__name__)
     application.config["SQLALCHEMY_DATABASE_URI"] = _database_uri(db_path)
     application.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -261,6 +262,8 @@ def _create_app(db_path: str) -> Flask:
 
     with application.app_context():
         db.create_all()
+        if seed_demo_data:
+            seed_database_if_empty()
 
     @application.errorhandler(ApiError)
     def handle_api_error(error: ApiError):
@@ -506,8 +509,8 @@ def _create_app(db_path: str) -> Flask:
     return application
 
 
-def create_app(db_path: str | None = None) -> Flask:
-    return _create_app(db_path or os.environ.get("DB_PATH", "./ethan.db"))
-
-
-app = create_app()
+def create_app(db_path: str | None = None, seed_demo_data: bool = True) -> Flask:
+    return _create_app(
+        db_path or os.environ.get("DB_PATH", "./ethan.db"),
+        seed_demo_data=seed_demo_data,
+    )

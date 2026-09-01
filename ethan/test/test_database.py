@@ -6,7 +6,7 @@ from database.app import create_app
 @pytest.fixture
 def client(tmp_path):
     db_path = str(tmp_path / "ethan.db")
-    app = create_app(db_path)
+    app = create_app(db_path, seed_demo_data=False)
     app.config["TESTING"] = True
     return app.test_client()
 
@@ -180,3 +180,36 @@ def test_deleting_budget_cascades_to_child_records(client):
     assert client.get(f"/budget-lines/{line['id']}").status_code == 404
     assert client.get(f"/planned-events/{planned_event['id']}").status_code == 404
     assert client.get(f"/coach-proposals/{proposal['id']}").status_code == 404
+
+
+def test_startup_seeds_at_least_ten_rows_per_table(tmp_path):
+    db_path = str(tmp_path / "seeded.db")
+    client = create_app(db_path).test_client()
+
+    budgets = client.get("/budgets").get_json()
+    assert len(budgets) >= 10
+
+    total_budget_lines = 0
+    total_planned_events = 0
+    total_coach_proposals = 0
+    for budget in budgets:
+        total_budget_lines += len(client.get(f"/budgets/{budget['id']}/budget-lines").get_json())
+        total_planned_events += len(client.get(f"/budgets/{budget['id']}/planned-events").get_json())
+        total_coach_proposals += len(client.get(f"/budgets/{budget['id']}/coach-proposals").get_json())
+
+    assert total_budget_lines >= 10
+    assert total_planned_events >= 10
+    assert total_coach_proposals >= 10
+
+
+def test_startup_seed_skips_database_that_already_contains_data(tmp_path):
+    db_path = str(tmp_path / "existing.db")
+    first_client = create_app(db_path, seed_demo_data=False).test_client()
+    created_budget = first_client.post("/budgets", json={"month": "2027-02"}).get_json()
+
+    seeded_client = create_app(db_path).test_client()
+    budgets = seeded_client.get("/budgets").get_json()
+    assert budgets == [seeded_client.get(f"/budgets/{created_budget['id']}").get_json()]
+    assert seeded_client.get(f"/budgets/{created_budget['id']}/budget-lines").get_json() == []
+    assert seeded_client.get(f"/budgets/{created_budget['id']}/planned-events").get_json() == []
+    assert seeded_client.get(f"/budgets/{created_budget['id']}/coach-proposals").get_json() == []

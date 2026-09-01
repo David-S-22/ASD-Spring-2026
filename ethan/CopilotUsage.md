@@ -645,3 +645,70 @@ is database implementation complete
 **For the overall feature: no.** What is complete is the DB service foundation. What is still not complete is the backend/API orchestration layer, Statement API integration, starter-budget generation, AI proposal flow in the backend, and the frontend that uses this data.
 
 So the right way to say it is: **the database service is implemented enough to move on, but the full Budget Coach feature is not complete yet**.
+
+## 2026-09-01T23:57:59.450+10:00
+
+### User
+create a way to seed data on docker start up with at least 10 entries in each table, so 10 budgets and 10 + surrounding tables. This should only run if my tables dont already have data in them.
+
+### Assistant
+Added startup seeding for the Ethan database service. There is now a dedicated `ethan/database/seed.py` module that inserts a demo dataset with at least 10 rows in each Ethan table: 10 budgets, 10 budget lines, 10 planned events, and 10 coach proposals.
+
+The seed runs automatically when the database app starts, including under Docker, but only if the Ethan tables are all empty. If any table already contains data, seeding is skipped so existing user data is preserved. I also added an environment-controlled escape hatch in `ethan/database/__main__.py` so `SEED_DEMO_DATA=0` disables startup seeding if needed.
+
+The Ethan database tests now include startup-seed coverage: one test verifies that a fresh database gets at least 10 rows in each table, and another verifies that startup does not reseed a database that already contains user data.
+
+## 2026-09-02T00:06:39.972+10:00
+
+### User
+how to empty out my db
+
+### Assistant
+The safest way depends on how you are running the Ethan database.
+
+If you are running it **directly on your machine** with `DB_PATH` pointing at a local SQLite file, stop the app and delete the file:
+
+```powershell
+Remove-Item "C:\git\GitHub\Uni\ASD Bank\ethan\database\ethan.db" -Force
+```
+
+When you start the app again, it will recreate the schema. If startup seeding is enabled, it will also reseed because the tables are empty.
+
+If you are running it through **Docker Compose**, the data is stored in the Ethan Docker volume. Stop and remove the Ethan container, then remove its volume:
+
+```powershell
+docker compose stop ethan-db
+docker compose rm -f ethan-db
+docker volume rm asdbank_ethan_data
+```
+
+Then start the service again. Docker will create a fresh empty volume, and the startup seed will run because the database has no data.
+
+If instead you want to keep the file but clear the rows manually, open the DB and delete table contents in child-to-parent order:
+
+```sql
+DELETE FROM coach_proposals;
+DELETE FROM planned_events;
+DELETE FROM budget_lines;
+DELETE FROM budgets;
+```
+
+For your setup, deleting the SQLite file or Docker volume is the simplest reset.
+
+## 2026-09-02T00:09:00.897+10:00
+
+### User
+other implementations dont have a physical db file why
+
+### Assistant
+Because the SQLite file is usually a **runtime artifact**, not a source file in the repository.
+
+The other implementations still use a real database file when they run, but they usually create it dynamically at startup from the schema or model code and store it in one of these places:
+
+1. a Docker volume such as `/app/data/...`
+2. a local path provided through `DB_PATH`
+3. an in-memory database during tests
+
+So what gets committed to git is the **code that defines the schema and CRUD API**, not the `.db` file itself. The SQLite file only appears after the service starts and writes data.
+
+In Ethan, you only see a physical file if you point `DB_PATH` at a concrete location like `ethan\database\ethan.db` and run it locally. If you run through Docker, the file lives inside the mounted Docker volume instead of appearing as a tracked repo file.
