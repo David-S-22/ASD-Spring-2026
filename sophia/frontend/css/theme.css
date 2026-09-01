@@ -23,11 +23,26 @@
   box-sizing: border-box;
 }
 
+/* Only the margin reset is safe to put on body. Inside the shared shell this
+   stylesheet is injected into the shell's own document, so a body rule here
+   repaints the whole shell for as long as the Bills tab is open -- which is
+   what made the shell's centred content column read as dead whitespace beside
+   Bills rather than as the shell's own background. Everything that paints now
+   hangs off #bills-root, so Bills renders as a light panel inside the shell's
+   dark chrome and the shell keeps its own theme. */
 body {
   margin: 0;
+}
+
+#bills-root {
   background: var(--bg);
   color: var(--ink);
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Standalone on :3005 nothing else paints the page, and #bills-root is only
+     as tall as its content -- without this the area below it falls back to the
+     browser default white. Inside the shell the panel is always taller than
+     this anyway, so it changes nothing there. */
+  min-height: 100vh;
 }
 
 a {
