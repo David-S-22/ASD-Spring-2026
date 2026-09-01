@@ -1,8 +1,8 @@
 """Prompt and fallback for the Ask Tally chat assistant.
 
-Kept short on purpose: qwen2.5:0.5b's accuracy degrades fast with long
-context, so the bills list is compact and there are only as many
-few-shot examples as needed to pin down the op grammar.
+Kept short on purpose: accuracy degrades with long context, so the bills
+list is compact and there are only as many few-shot examples as needed to
+pin down the op grammar.
 """
 
 RESPONSE_SHAPE = (
