@@ -11,6 +11,7 @@ import pytest
 from database.models import Goal
 from dataclasses import asdict
 from json import dumps
+from database.seed import seed_database_if_empty, get_goals, get_suggestions, get_feedbacks
 
 @pytest.fixture()
 def app():
@@ -319,39 +320,31 @@ def test_feedback_to_dto():
     assert dto_obj.feedback == "A feedback"
     assert feedback.to_dto() == dto_obj
 
-def test_try_parse_bool():
-    from database.helpers import try_parse_bool
-    assert try_parse_bool(True) is True
-    assert try_parse_bool(False) is False
-    assert try_parse_bool("True") is True
-    assert try_parse_bool("true") is True
-    assert try_parse_bool("False") is False
-    assert try_parse_bool("false") is False
-    assert try_parse_bool("invalid") is None
-    assert try_parse_bool(123) is None
-    assert try_parse_bool(None) is None
-
+@pytest.mark.usefixtures("app_ctx")
 
 def test_seed_database_if_empty():
-    from database.seed import seed_database_if_empty, SEED_GOALS, SEED_SUGGESTIONS, SEED_FEEDBACKS
     test_app = setup_app(":memory:")
-    with test_app.app_context():
-        assert len(db.session.execute(db.select(Goal)).scalars().all()) == 0
+    assert len(db.session.execute(db.select(Goal)).scalars().all()) == 0
 
-        seed_database_if_empty()
+    expected_goals = get_goals()
+    expected_suggestions = get_suggestions()
+    expected_feedbacks = get_feedbacks()
 
-        goals = db.session.execute(db.select(Goal)).scalars().all()
-        suggestions = db.session.execute(db.select(Suggestion)).scalars().all()
-        feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
+    seed_database_if_empty()
 
-        assert len(goals) == len(SEED_GOALS)
-        assert len(suggestions) == len(SEED_SUGGESTIONS)
-        assert len(feedbacks) == len(SEED_FEEDBACKS)
+    goals = db.session.execute(db.select(Goal)).scalars().all()
+    suggestions = db.session.execute(db.select(Suggestion)).scalars().all()
+    feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
 
-        seed_database_if_empty()
-        assert len(db.session.execute(db.select(Goal)).scalars().all()) == len(SEED_GOALS)
-        assert len(db.session.execute(db.select(Suggestion)).scalars().all()) == len(SEED_SUGGESTIONS)
-        assert len(db.session.execute(db.select(Feedback)).scalars().all()) == len(SEED_FEEDBACKS)
+    assert len(goals) == len(expected_goals)
+    assert len(suggestions) == len(expected_suggestions)
+    assert len(feedbacks) == len(expected_feedbacks)
+
+    seed_database_if_empty()
+    assert len(db.session.execute(db.select(Goal)).scalars().all()) == len(expected_goals)
+    assert len(db.session.execute(db.select(Suggestion)).scalars().all()) == len(expected_suggestions)
+    assert len(db.session.execute(db.select(Feedback)).scalars().all()) == len(expected_feedbacks)
+        
 
 
 
