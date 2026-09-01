@@ -6,5 +6,5 @@
   <td>{% if anomaly.is_confirmed_by_user is none %}Unreviewed{% elif anomaly.is_confirmed_by_user %}Confirmed{% else %}Dismissed{% endif %}</td>
 </tr>
 {% else %}
-<tr><td colspan="4">No anomalies found.</td></tr>
+<tr><td colspan="4" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}
