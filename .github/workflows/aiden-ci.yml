@@ -7,8 +7,10 @@ on:
       - main
     paths:
       - .github/workflows/aiden-ci.yml
+      - docker-compose.yml
       - aiden/**
       - shared/**
+      - janelle/database/** # Because aiden/backend uses janelle/database
 
 jobs:
   test: # Run static type checks and unit tests
@@ -24,6 +26,13 @@ jobs:
           cache: pip
           cache-dependency-path: aiden/**/requirements.txt
       - run: pip install -r backend/requirements.txt -r database/requirements.txt -r test/requirements.txt
+      - name: Cache Mypy results
+        uses: actions/cache@v6
+        with:
+          path: aiden/.mypy_cache
+          key: ${{ runner.os }}-aidenmypy-${{ hashFiles('aiden/**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-aidenmypy-
       - name: Run mypy annotations
         run: mypy --output=json | jq -r '"::error title=Mypy issue,file=aiden/\(.file),line=\(.line),col=\(.column)::\(.message)"'
       - run: mypy

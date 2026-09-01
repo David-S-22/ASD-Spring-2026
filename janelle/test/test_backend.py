@@ -5,7 +5,16 @@ from flask.testing import FlaskClient
 from pytest import MonkeyPatch, fixture, mark
 
 import janelle.backend.app as backend_app
-import janelle.backend.services.transactions_api as transactions_api
+
+
+TRANSACTION = {
+    "id": 42,
+    "date": "Mon, 31 Aug 2026 00:00:00 GMT",
+    "merchant": "Merivale",
+    "description": "Dinner",
+    "amount": 84.5,
+    "category_id": 80,
+}
 
 
 @fixture
@@ -14,8 +23,9 @@ def client():
         yield test_client
 
 
-def response_with_json(payload):
+def response_with_json(payload, status=200):
     response = Mock()
+    response.status_code = status
     response.raise_for_status.return_value = None
     response.json.return_value = payload
     return response
@@ -50,7 +60,7 @@ def test_transaction_rows_are_loaded_from_database(
         }
     ])
     get = Mock(side_effect=[database_response, category_response])
-    monkeypatch.setattr(transactions_api.requests, "get", get)
+    monkeypatch.setattr(backend_app.requests, "get", get)
 
     response = client.get("/ui/transactions")
 
@@ -63,8 +73,18 @@ def test_transaction_rows_are_loaded_from_database(
     assert "Dining" in response.text
     assert "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;" in response.text
     assert get.call_args_list == [
-        ((f"{transactions_api.config.TRANSACTIONS_DB_URL}/transactions",), {"timeout": 20}),
-        ((f"{transactions_api.config.TRANSACTIONS_DB_URL}/categories",), {"timeout": 20}),
+        (
+            (
+                f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
+            ),
+            {"timeout": 20},
+        ),
+        (
+            (
+                f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+            ),
+            {"timeout": 20},
+        ),
     ]
 
 
@@ -73,7 +93,7 @@ def test_transaction_rows_show_empty_state(
     monkeypatch: MonkeyPatch,
 ):
     monkeypatch.setattr(
-        transactions_api.requests,
+        backend_app.requests,
         "get",
         Mock(side_effect=[response_with_json([]), response_with_json([])]),
     )
@@ -89,7 +109,7 @@ def test_transaction_rows_report_database_failure(
     monkeypatch: MonkeyPatch,
 ):
     monkeypatch.setattr(
-        transactions_api.requests,
+        backend_app.requests,
         "get",
         Mock(side_effect=requests.ConnectionError("database unavailable")),
     )
@@ -111,7 +131,7 @@ def test_transaction_rows_reject_invalid_json(
         0,
     )
     monkeypatch.setattr(
-        transactions_api.requests,
+        backend_app.requests,
         "get",
         Mock(return_value=database_response),
     )
@@ -129,7 +149,7 @@ def test_transaction_rows_reject_invalid_shape(
     payload,
 ):
     monkeypatch.setattr(
-        transactions_api.requests,
+        backend_app.requests,
         "get",
         Mock(return_value=response_with_json(payload)),
     )
@@ -138,3 +158,174 @@ def test_transaction_rows_reject_invalid_shape(
 
     assert response.status_code == 502
     assert "database response was invalid" in response.text
+
+
+def test_create_transaction_forwards_request(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    payload = {
+        "date": "2026-09-01",
+        "merchant": "Merivale",
+        "description": "Lunch",
+        "amount": 42,
+        "category_id": 80,
+    }
+    post = Mock(return_value=response_with_json(
+        {"id": 43, **payload},
+        status=201,
+    ))
+    monkeypatch.setattr(backend_app.requests, "post", post)
+
+    response = client.post("/transactions", json=payload)
+
+    assert response.status_code == 201
+    assert response.get_json() == {"id": 43, **payload}
+    post.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
+        json=payload,
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
+def test_update_transaction_forwards_request(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    payload = {"merchant": "Woolworths", "category_id": 81}
+    patch = Mock(return_value=response_with_json({
+        **TRANSACTION,
+        **payload,
+    }))
+    monkeypatch.setattr(backend_app.requests, "patch", patch)
+
+    response = client.patch("/transactions/42", json=payload)
+
+    assert response.status_code == 200
+    assert response.get_json()["merchant"] == "Woolworths"
+    patch.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/42",
+        json=payload,
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
+def test_get_and_delete_transaction_forward_requests(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(return_value=response_with_json(TRANSACTION))
+    delete = Mock(return_value=response_with_json(None, status=204))
+    monkeypatch.setattr(backend_app.requests, "get", get)
+    monkeypatch.setattr(backend_app.requests, "delete", delete)
+
+    get_response = client.get("/transactions/42")
+    delete_response = client.delete("/transactions/42")
+
+    assert get_response.status_code == 200
+    assert get_response.get_json() == TRANSACTION
+    assert delete_response.status_code == 204
+    get.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/42",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    delete.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/42",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
+def test_transaction_filters_are_forwarded(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(return_value=response_with_json([]))
+    monkeypatch.setattr(backend_app.requests, "get", get)
+
+    response = client.get(
+        "/transactions?merchant=Merivale&min_amount=20&max_amount=90"
+    )
+
+    assert response.status_code == 200
+    call = get.call_args
+    assert call.args == (
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
+    )
+    assert call.kwargs["params"].to_dict() == {
+        "merchant": "Merivale",
+        "min_amount": "20",
+        "max_amount": "90",
+    }
+
+
+def test_database_validation_error_is_preserved(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    error = {
+        "error": "missing required fields: category_id",
+        "code": "missing_fields",
+    }
+    monkeypatch.setattr(
+        backend_app.requests,
+        "post",
+        Mock(return_value=response_with_json(error, status=422)),
+    )
+
+    response = client.post("/transactions", json={
+        "date": "2026-09-01",
+        "merchant": "Merivale",
+        "description": "Dinner",
+        "amount": 84.5,
+    })
+
+    assert response.status_code == 422
+    assert response.get_json() == error
+
+
+def test_category_routes_forward_requests(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    create_payload = {"name": "Education", "type": "saving"}
+    update_payload = {"name": "Learning", "type": "want"}
+    post = Mock(return_value=response_with_json(
+        {"id": 90, **create_payload},
+        status=201,
+    ))
+    patch = Mock(return_value=response_with_json({
+        "id": 90,
+        **update_payload,
+    }))
+    delete = Mock(return_value=response_with_json(None, status=204))
+    monkeypatch.setattr(backend_app.requests, "post", post)
+    monkeypatch.setattr(backend_app.requests, "patch", patch)
+    monkeypatch.setattr(backend_app.requests, "delete", delete)
+
+    create_response = client.post(
+        "/categories",
+        json=create_payload,
+    )
+    update_response = client.patch(
+        "/categories/90",
+        json=update_payload,
+    )
+    delete_response = client.delete("/categories/90")
+
+    assert create_response.status_code == 201
+    assert update_response.status_code == 200
+    assert delete_response.status_code == 204
+    post.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+        json=create_payload,
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    patch.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories/90",
+        json=update_payload,
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    delete.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories/90",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )

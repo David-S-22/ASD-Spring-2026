@@ -1,9 +1,11 @@
+import os
 from dataclasses import is_dataclass
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from typing import Any, Optional, Type, TypeVar
-import os
 
-from flask import abort, Response
+from flask import Response, abort
 from pydantic import TypeAdapter, ValidationError
 
 T = TypeVar("T")
@@ -51,10 +53,39 @@ def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
     if not is_dataclass(cls) or not isinstance(cls, type):
         raise TypeError("Expected a dataclass type.")
 
+    parsed_data = dict(data)
+    for key, value in parsed_data.items():
+        if "date" in key and isinstance(value, str):
+            parsed_data[key] = deserialise_datetime_or_throw(value)
+
     try:
-        return _adapter(cls).validate_python(data)
+        return _adapter(cls).validate_python(parsed_data)
     except ValidationError:
         return None
+
+def deserialise_datetime_or_throw(value: str) -> datetime:
+    """Parses a datetime string from either RFC 2822/GMT or ISO 8601 form."""
+
+    if not isinstance(value, str):
+        raise TypeError("Datetime value must be a string.")
+
+    candidate = value.strip()
+    if not candidate:
+        raise ValueError("Datetime value is empty.")
+
+    try:
+        return datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    try:
+        dt = parsedate_to_datetime(candidate)
+        if dt is not None:
+            return dt
+    except (TypeError, ValueError):
+        pass
+
+    raise ValueError(f"Unsupported datetime format: {value!r}")
 
 def get_env(name: str) -> str:
     return os.environ[name]
