@@ -83,7 +83,7 @@ def review_new_transaction(transaction: dto.Transaction, all_anomalies: List[dto
     serialised = serialise(transaction)
     anomaly_context = _build_anomaly_context(all_anomalies)
     detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
-    impl_model = get_env("OLLAMA_IMPLEMENTATION_MODEL")
+    impl_model = get_env("OLLAMA_MODEL")
 
     current_app.logger.info("Scan new transaction %s", serialised)
     current_app.logger.info("Anomaly context: %s", anomaly_context)

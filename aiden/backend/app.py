@@ -19,7 +19,7 @@ def get_fact():
     return ollama_api.prompt(
         system_prompt="You are a helpful assistant",
         user_prompt="tell me a random fact",
-        model=get_env("OLLAMA_IMPLEMENTATION_MODEL"),
+        model=get_env("OLLAMA_MODEL"),
         temperature=0.5,
         output_tokens=500)
 
