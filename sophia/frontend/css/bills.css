@@ -1,7 +1,15 @@
 /* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
+/* The panel pair sizes from this container, never from the viewport. The chat
+   track is a bounded flexible column rather than a fixed 320px: the percentage
+   resolves against .app-shell's own content box, so it holds at the 320px floor
+   inside the shell's 1052px column and grows toward 380px standalone, where the
+   chat has room to stop wrapping its chips. minmax(0, 1fr) on the table track
+   is load-bearing -- with the default `auto` minimum the table's intrinsic
+   width (854px measured) blows the track out and the clipping comes straight
+   back. */
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 26%, 380px);
   gap: 1rem;
   max-width: 1320px;
   margin: 0 auto;
@@ -30,6 +38,10 @@
 
 .tab-panel {
   grid-column: 1;
+  /* Grid items default to min-width:auto, which is the intrinsic width for a
+     table. The track above is already capped; this stops the item overflowing
+     the track it sits in. */
+  min-width: 0;
 }
 
 .ask-tally {
@@ -44,6 +56,8 @@
   border-collapse: collapse;
 }
 
+/* Kept only as a genuine-overflow fallback far below the shell's column width.
+   At both target widths the table now fits and no scrollbar appears. */
 .bills-panel {
   overflow-x: auto;
 }
@@ -56,25 +70,51 @@
   vertical-align: middle;
 }
 
-.bills-table th,
+/* Amount / Every / Next billing keep their values on one line, but the headers
+   and the name column are allowed to wrap. Holding every one of them at nowrap
+   pinned the table's intrinsic width at 854px, 170px past the shell's track. */
 .bills-table td:nth-child(2),
 .bills-table td:nth-child(3),
 .bills-table td:nth-child(4) {
   white-space: nowrap;
 }
 
+/* The four actions wrap to a second line when the column is narrow instead of
+   being clipped. This is the change that actually fixes it: at the shell's
+   684px track the buttons need more width than one line can give them, and
+   nowrap turned that into "Dis" and a hidden Record payment rather than a
+   second line. Wide enough and they still sit on one line.
+
+   Deliberately NOT display:flex. A flex <td> stops being a table-cell, drops
+   out of the column-width algorithm and paints on top of its neighbour -- the
+   status and actions cells measured at the identical x and width, with the
+   empty header column collapsed to 15px. Ordinary inline-block flow wraps just
+   as well and keeps the column sizing intact. */
 .bills-table .actions {
-  white-space: nowrap;
+  white-space: normal;
   text-align: right;
 }
 
-.bills-table .actions button + button {
-  margin-left: 0.25em;
+.bills-table .actions button {
+  margin: 0.1em 0 0.1em 0.25em;
+  font-size: 0.8em;
+  padding: 0.24em 0.5em;
+  white-space: nowrap;
+}
+
+/* Badge, prompt and Confirm get room to breathe rather than piling up as three
+   inline runs, which is what stretched the GymCo row to more than twice the
+   height of its neighbours. Same reason as .actions above: this stays a real
+   table-cell, so no display change here. */
+.bills-table .status .chip {
+  white-space: nowrap;
 }
 
 .bills-table .confirm-prompt {
   display: block;
   margin-top: 0.3em;
+  color: var(--mut);
+  font-size: 0.85em;
 }
 
 @media (max-width: 900px) {
@@ -264,7 +304,7 @@
 
 .disputes-tab {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -322,6 +362,7 @@
 #modal-root .modal-form {
   max-height: 85vh;
   overflow-y: auto;
+}
 
 .working {
   font-size: 0.9em;

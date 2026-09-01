@@ -15,7 +15,7 @@
         <td>{{ bill.cadence_label }}</td>
         <td>{{ bill.next_billing }}</td>
         <td>{{ bill.payment_method_label }}</td>
-        <td>
+        <td class="status">
           <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
           {% if bill.needs_confirmation %}
           <span class="confirm-prompt">Confirm this?</span>
