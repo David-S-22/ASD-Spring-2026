@@ -1,28 +1,325 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Transactions</title>
-    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
-            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
-            crossorigin="anonymous"></script>
-</head>
-<body>
-    <h1>Transactions</h1>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Merchant</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Category</th>
-            </tr>
-        </thead>
-        <tbody id="transactions" hx-get="/transactions-backend/ui/transactions" hx-trigger="load" hx-swap="innerHTML">
-            <tr><td colspan="5">Loading...</td></tr>
-        </tbody>
-    </table>
-</body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+        integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+        crossorigin="anonymous"></script>
+
+<style>
+    [hidden] {
+        display: none !important;
+    }
+
+    .transactions-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .transactions-toolbar h1,
+    .transaction-form-screen h1 {
+        margin-bottom: 0.25rem;
+    }
+
+    .transactions-toolbar p,
+    .transaction-form-screen > p {
+        margin-top: 0;
+        color: var(--color-text-muted, #94a3b8);
+    }
+
+    .transactions-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .transaction-form-screen {
+        max-width: 960px;
+        margin: 0 auto;
+    }
+
+    .back-button {
+        background: transparent !important;
+        color: var(--color-primary, #38bdf8) !important;
+        padding-left: 0 !important;
+    }
+
+    .transaction-form {
+        display: grid;
+        gap: 1.25rem;
+        margin-top: 1.75rem;
+    }
+
+    .transaction-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.25rem;
+    }
+
+    .transaction-form-field {
+        display: grid;
+        gap: 0.4rem;
+    }
+
+    .transaction-form-field label {
+        margin: 0;
+        font-size: 0.85rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .transaction-form input,
+    .transaction-form textarea,
+    .transaction-form select {
+        min-height: 3rem;
+    }
+
+    .transaction-form textarea {
+        min-height: 5.5rem;
+    }
+
+    .transaction-form-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .transaction-form-actions button {
+        min-width: 12rem;
+    }
+
+    .form-message {
+        margin: 0;
+        color: var(--color-danger, #f87171);
+    }
+
+    .transaction-notice {
+        color: var(--color-success, #4ade80);
+        margin: 1rem 0 0;
+    }
+
+    @media (max-width: 700px) {
+        .transactions-toolbar,
+        .transaction-form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .transactions-toolbar button {
+            width: 100%;
+        }
+    }
+</style>
+
+<section id="transaction-list-screen" class="panel">
+    <div class="transactions-toolbar">
+        <div>
+            <h1>Transactions</h1>
+            <p>Review the transactions you have entered.</p>
+        </div>
+        <button id="add-transaction-button"
+                type="button"
+                onclick="showAddTransactionScreen()">
+            + Add transaction
+        </button>
+    </div>
+
+    <p id="transaction-notice"
+       class="transaction-notice"
+       role="status"
+       hidden></p>
+
+    <div class="transactions-table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Category</th>
+                </tr>
+            </thead>
+            <tbody id="transactions"
+                   hx-get="/transactions-backend/ui/transactions"
+                   hx-trigger="load, transactionsChanged"
+                   hx-swap="innerHTML">
+                <tr><td colspan="5">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section id="transaction-form-screen"
+         class="panel transaction-form-screen"
+         hidden>
+    <button type="button"
+            class="back-button"
+            onclick="showTransactionList()">
+        &larr; Back to transactions
+    </button>
+
+    <h1>Add a transaction</h1>
+    <p>Fill in the transaction details and choose a category before saving.</p>
+
+    <form id="add-transaction-form"
+          class="transaction-form"
+          onsubmit="saveTransaction(event)">
+        <div class="transaction-form-grid">
+            <div class="transaction-form-field">
+                <label for="transaction-date">Date</label>
+                <input id="transaction-date"
+                       name="date"
+                       type="date"
+                       required>
+            </div>
+
+            <div class="transaction-form-field">
+                <label for="transaction-amount">Amount</label>
+                <input id="transaction-amount"
+                       name="amount"
+                       type="number"
+                       min="0"
+                       step="0.01"
+                       placeholder="0.00"
+                       required>
+            </div>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-merchant">Merchant</label>
+            <input id="transaction-merchant"
+                   name="merchant"
+                   type="text"
+                   maxlength="200"
+                   placeholder="Woolworths Town Hall"
+                   required>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-description">Description</label>
+            <textarea id="transaction-description"
+                      name="description"
+                      maxlength="500"
+                      placeholder="What was the transaction for?"
+                      required></textarea>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-category">Category</label>
+            <select id="transaction-category"
+                    name="category_id"
+                    required>
+                <option value="">Loading categories...</option>
+            </select>
+        </div>
+
+        <p id="transaction-form-message"
+           class="form-message"
+           role="alert"
+           hidden></p>
+
+        <div class="transaction-form-actions">
+            <button id="save-transaction-button" type="submit">
+                Save transaction
+            </button>
+        </div>
+    </form>
+</section>
+
+<script>
+    function setTransactionScreen(showForm) {
+        document.getElementById('transaction-list-screen').hidden = showForm;
+        document.getElementById('transaction-form-screen').hidden = !showForm;
+    }
+
+    function showFormMessage(message) {
+        const messageElement = document.getElementById('transaction-form-message');
+        messageElement.textContent = message;
+        messageElement.hidden = !message;
+    }
+
+    async function loadTransactionCategories() {
+        const categorySelect = document.getElementById('transaction-category');
+        categorySelect.disabled = true;
+        categorySelect.replaceChildren(new Option('Loading categories...', ''));
+
+        try {
+            const response = await fetch('/transactions-backend/categories');
+            const categories = await response.json();
+            if (!response.ok || !Array.isArray(categories)) {
+                throw new Error('Unable to load categories.');
+            }
+
+            categorySelect.replaceChildren(
+                new Option('Select a category', '')
+            );
+            for (const category of categories) {
+                categorySelect.add(
+                    new Option(category.name, String(category.id))
+                );
+            }
+            categorySelect.disabled = false;
+        } catch (error) {
+            categorySelect.replaceChildren(
+                new Option('Categories unavailable', '')
+            );
+            showFormMessage('Unable to load categories. Please go back and try again.');
+        }
+    }
+
+    async function showAddTransactionScreen() {
+        const dateInput = document.getElementById('transaction-date');
+        if (!dateInput.value) {
+            dateInput.value = new Date().toISOString().slice(0, 10);
+        }
+        showFormMessage('');
+        setTransactionScreen(true);
+        await loadTransactionCategories();
+    }
+
+    function showTransactionList() {
+        showFormMessage('');
+        setTransactionScreen(false);
+    }
+
+    async function saveTransaction(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const saveButton = document.getElementById('save-transaction-button');
+        const formData = new FormData(form);
+        const payload = {
+            date: formData.get('date'),
+            amount: Number(formData.get('amount')),
+            merchant: formData.get('merchant'),
+            description: formData.get('description'),
+            category_id: Number(formData.get('category_id')),
+        };
+
+        saveButton.disabled = true;
+        showFormMessage('');
+
+        try {
+            const response = await fetch('/transactions-backend/transactions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'Unable to save transaction.');
+            }
+
+            form.reset();
+            showTransactionList();
+            const notice = document.getElementById('transaction-notice');
+            notice.textContent = 'Transaction saved.';
+            notice.hidden = false;
+            htmx.trigger(
+                document.getElementById('transactions'),
+                'transactionsChanged'
+            );
+        } catch (error) {
+            showFormMessage(error.message || 'Unable to save transaction.');
+        } finally {
+            saveButton.disabled = false;
+        }
+    }
+</script>
