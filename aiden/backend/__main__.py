@@ -10,4 +10,5 @@ if __name__ == "__main__":
     get_env("OLLAMA_URL")
     get_env("OLLAMA_MODEL")
 
+    app.logger.setLevel("INFO")
     app.run(host="0.0.0.0", port=port)
