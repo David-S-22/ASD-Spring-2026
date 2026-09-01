@@ -13,10 +13,14 @@ taken against the composed `ollama` service with the endpoint recorded.
 | [`sample-run-2026-09-01/`](sample-run-2026-09-01/) | 1 Sep 2026, 14:02 | `sophia/agentic_loop/`, the rebuilt four-mode version | Architecture, Database, Endpoints, DevOps | 1 rejected, 3 edited |
 | [`sample-run-2026-09-01-composed/`](sample-run-2026-09-01-composed/) | 1 Sep 2026, 16:38 | `sophia/agentic_loop/`, rewritten prompts, pinned endpoint | Architecture, Database, Endpoints, DevOps | 4 edited |
 
-Each directory holds the terminal transcript and the run record in three forms
-(`report.json`, `report.md`, `run-view.md`); the first two also hold
-dark-terminal screenshots. The 31 Aug directory is left exactly as it was
-captured.
+Each directory holds the terminal transcript, the run record in three forms
+(`report.json`, `report.md`, `run-view.md`) and four dark-terminal
+screenshots. The 31 Aug directory is left exactly as it was captured.
+
+In the composed run the fourth screenshot carries the endpoint cross-check
+below the DevOps mode, so `docker exec ollama ollama ps` — showing the two
+models that run loaded, inside the container — is visible as an image rather
+than only in the transcript.
 
 ## Which ollama each run used
 
@@ -135,6 +139,18 @@ human stage did the work. The corrections recorded under each `edited`
 decision are written from the collected evidence, which is the part that is
 trustworthy — the collectors are deterministic and their output is in the
 record next to the finding they contradict.
+
+**The review model is not infallible either, and the composed run shows it.**
+In the architecture mode the implementation model invented three dependency
+edges, and the reviewer — correctly rejecting the finding — justified the
+rejection with a claim of its own that the evidence does not support, saying
+`ollama` has no dependency edge pointing at it when the evidence lists
+`anomalies-backend->ollama` and `bills-backend->ollama`. The recorded
+correction names `shared-frontend`, which is the only service with no
+dependants. Both model stages were wrong and the human stage was right, and
+all three sit in the same record where a reader can check them against the
+evidence. That is the argument for keeping the human stage rather than
+treating a second model pass as sufficient review.
 
 ### What the rewritten prompts changed, and what they did not
 
