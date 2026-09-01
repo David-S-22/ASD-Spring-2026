@@ -11,9 +11,11 @@ def test_frontend_loads_transaction_rows_with_htmx():
 
     assert "htmx.org@2.0.10" in index
     assert 'id="transactions"' in index
-    assert 'hx-get="/ui/transactions"' in index
+    assert 'hx-get="/transactions-backend/ui/transactions"' in index
     assert 'hx-trigger="load"' in index
     assert 'hx-swap="innerHTML"' in index
+    assert "<th>ID</th>" not in index
+    assert 'colspan="5"' in index
 
 
 def test_frontend_proxies_only_to_backend():
@@ -21,9 +23,8 @@ def test_frontend_proxies_only_to_backend():
         REPOSITORY_ROOT / "janelle" / "frontend" / "nginx.conf"
     ).read_text(encoding="utf-8")
 
-    assert "location /api/" in nginx
-    assert "location /ui/" in nginx
-    assert nginx.count("proxy_pass http://transactions-backend:5001;") == 2
+    assert "location /transactions-backend/" in nginx
+    assert "proxy_pass http://transactions-backend:5001/;" in nginx
     assert "transactions-db" not in nginx
 
 

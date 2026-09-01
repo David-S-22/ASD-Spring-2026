@@ -55,7 +55,10 @@ def test_transaction_rows_are_loaded_from_database(
     response = client.get("/ui/transactions")
 
     assert response.status_code == 200
-    assert "Mon, 31 Aug 2026 14:30:00 GMT" in response.text
+    assert "<td>1</td>" not in response.text
+    assert "<td>Mon, 31 Aug 2026</td>" in response.text
+    assert "14:30:00 GMT" not in response.text
+    assert "<td>18.50</td>" in response.text
     assert "Lunch" in response.text
     assert "Dining" in response.text
     assert "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;" in response.text
