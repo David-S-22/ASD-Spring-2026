@@ -321,7 +321,6 @@ def test_feedback_to_dto():
     assert feedback.to_dto() == dto_obj
 
 @pytest.mark.usefixtures("app_ctx")
-
 def test_seed_database_if_empty():
     test_app = setup_app(":memory:")
     assert len(db.session.execute(db.select(Goal)).scalars().all()) == 0
