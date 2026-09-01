@@ -149,7 +149,7 @@ Recommended responsibilities:
 
 Suggested fields:
 
-- `id`
+- `id` as the primary key
 - `month` such as `2026-09`
 - `declared_income`
 - `status` such as `draft`, `active`, `closed`
@@ -158,15 +158,16 @@ Suggested fields:
 
 Rules:
 
-- one active budget per month
-- `declared_income` must be non-negative
+- one budget per month
+- `declared_income` should be stored as an integer amount
+- `month` should use the `YYYY-MM` format
 
 ### 6.2 `budget_lines`
 
 Suggested fields:
 
-- `id`
-- `budget_id`
+- `id` as the primary key
+- `budget_id` as a foreign key to `budgets.id`
 - `category`
 - `warn_at`
 - `hard_cap`
@@ -176,15 +177,16 @@ Suggested fields:
 Rules:
 
 - `warn_at <= hard_cap`
+- `warn_at` and `hard_cap` should be stored as integer amounts
 - categories should be unique within a budget
-- amounts must be non-negative
+- categories are free text, but business rules should keep usage aligned to real budget lines
 
 ### 6.3 `planned_events`
 
 Suggested fields:
 
-- `id`
-- `budget_id`
+- `id` as the primary key
+- `budget_id` as a foreign key to `budgets.id`
 - `date`
 - `label`
 - `category`
@@ -198,14 +200,17 @@ Suggested fields:
 Rules:
 
 - `est_low <= est_high`
+- `est_low` and `est_high` should be stored as integer amounts
+- each planned event belongs to a budget through `budget_id`
+- category values are free text, but should align with existing budget lines for the same budget
 - source and status should be constrained to known values
 
 ### 6.4 `coach_proposals`
 
 Suggested fields:
 
-- `id`
-- `budget_id`
+- `id` as the primary key
+- `budget_id` as a foreign key to `budgets.id`
 - `proposal_json`
 - `rationale`
 - `status` with values `proposed`, `accepted`, `rejected`
@@ -217,6 +222,7 @@ Rules:
 
 - accepted proposals should be traceable to the applied change
 - rejected proposals should preserve the user reason for later prompts
+- the table should store proposal data separately from the real budget tables so AI suggestions are reviewable before application
 
 ## 7. API plan
 

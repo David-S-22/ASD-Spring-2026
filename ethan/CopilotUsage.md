@@ -341,3 +341,307 @@ undo changes you made
 Reverted only the recent Windows port-workaround changes, as requested. The host DB port mappings in `docker-compose.yml` are back to `6001`, `6002`, `6004`, `6005`, and `6006`, and the matching workflow smoke tests, Sophia compose-parsing test, and Aiden README reference were restored to their previous values.
 
 The earlier Ethan scaffold and related work were left in place. Remaining tracked changes are the previously added `anomalies-db` build context fix and the Ethan scaffold entries in `docker-compose.yml`, plus the Ethan files themselves.
+
+## 2026-09-01T21:20:34.093+10:00
+
+### User
+where do we start with the plan you outlined
+
+### Assistant
+Start with **Part 1: lock the contracts first**. That is the highest-leverage step because it fixes the data shapes and service boundaries before you write real code, which prevents rework across the frontend, backend, database, AI prompts, and tests.
+
+The first concrete tasks should be:
+
+1. define the JSON shape for `budgets`, `budget_lines`, `planned_events`, and `coach_proposals`
+2. define the request/response bodies for each CRUD endpoint
+3. define the backend-to-database API contract
+4. define the Statement API data you need from the transactions feature
+5. define the exact schema the AI must return for coaching and chat interpretation
+
+If you want the most practical build sequence after that, do it in this order: **contracts -> database microservice -> backend calculations and summary endpoints -> starter budget generation -> AI coaching -> AI chat -> frontend -> group integration -> CI/evidence**. The reason to start with the database next is that every other part depends on having stable stored data and predictable CRUD endpoints.
+
+## 2026-09-01T21:34:14.511+10:00
+
+### User
+The database will be handled as a Flask app, using models similar to other other existing implementations. The models we want include the following; budgets (month, declared_income, status), 
+budget_lines (budget_id, category, warn_at, hard_cap), 
+planned_events (date, label, category, est_low, est_high, source: user/predicted, status), 
+coach_proposals (budget_id, proposal_json, rationale, status: proposed/accepted/rejected, decided_at).
+
+Lets deep dive into exactly what each table will be used for and the relationships between each and what they mean
+
+### Assistant
+The main structure should be: `budgets` is the parent monthly record, and the other tables exist to describe that month from different angles. `budget_lines` stores the category limits inside the budget, `planned_events` stores expected future spending that should affect the month, and `coach_proposals` stores AI suggestions and the user's decision history.
+
+`budgets` is the monthly container. One row means "this is the budget for a specific month". `month` identifies the period, `declared_income` gives the income context for that month, and `status` tells you whether the budget is still being drafted, currently active, or already closed. This table is the anchor of the feature because everything else should attach to one monthly budget.
+
+`budget_lines` is the per-category detail within a budget. Each row is one category such as groceries, fuel, or eating out. `warn_at` is the warning threshold and `hard_cap` is the upper limit. The relationship is **one budget to many budget lines**. This is the table the system uses when comparing actual spending to intended limits. Within one budget, category names should be unique so you do not end up with duplicate `groceries` entries for the same month.
+
+`planned_events` is for upcoming or expected spending that has not happened yet but still matters to budgeting. Examples are a dinner out, a planned purchase, or a predicted bill. Conceptually, this table should also belong to a budget, even though your shorthand list does not yet include `budget_id`. I strongly recommend adding `budget_id` here so every planned event is attached to the correct month. `source` explains whether the event came from the user or from prediction logic, and `status` tells you whether it is still planned, confirmed, cancelled, or otherwise resolved. The intended relationship is **one budget to many planned events**.
+
+`coach_proposals` stores AI-generated advice in a reviewable form. Each row belongs to a budget through `budget_id`. `proposal_json` should hold the structured proposed change, such as adjusting category limits or adding a planned event, and `rationale` stores the explanation shown to the user. `status` tells you whether the proposal is still proposed, has been accepted, or has been rejected, and `decided_at` tells you when that decision happened. The relationship is **one budget to many coach proposals**.
+
+The direct relationships should be:
+
+1. `budgets` -> `budget_lines` = one-to-many
+2. `budgets` -> `planned_events` = one-to-many
+3. `budgets` -> `coach_proposals` = one-to-many
+
+There is also an important **logical relationship** between `budget_lines` and `planned_events`. A planned event has a category, and that category should normally match one of the budget lines in the same budget. That means the planned event affects the forecast for that category even if there is no direct foreign key from `planned_events` to `budget_lines`. The backend will use that link when calculating whether a category is approaching `warn_at` or `hard_cap`.
+
+There is a similar logical relationship between `coach_proposals` and the other tables. A proposal usually suggests creating, updating, or deleting budget lines or planned events, but it should not directly own those rows. Instead, it stores the proposed change set in `proposal_json`, and only after the user accepts it should the backend apply the change to the real tables. That separation is important because it preserves the rule that the AI can suggest, but the user must approve.
+
+The meaning of the tables is therefore:
+
+1. `budgets` = the month-level budget record
+2. `budget_lines` = the category rules inside that month
+3. `planned_events` = future spending signals that affect that month
+4. `coach_proposals` = AI recommendations and decision history for that month
+
+Two design improvements are worth making before implementation:
+
+1. add `budget_id` to `planned_events`, because otherwise the row is not cleanly tied to a specific month
+2. add standard fields like `id`, `created_at`, and `updated_at` to each table, because they will make CRUD, auditing, and proposal application much easier
+
+## 2026-09-01T21:44:57.114+10:00
+
+### User
+create an md file to outline in writing the database and its tables, which we should actively update if things change
+
+### Assistant
+Created a dedicated living database design document for Budget Coach. It explains the role of the database microservice, the purpose of each table, the direct and logical relationships between them, recommended rules, and a change-management note stating that the file should be updated whenever the schema or table meanings change.
+
+Document: `C:\git\GitHub\Uni\ASD Bank\ethan\BudgetCoach-Database-Design.md`
+
+## 2026-09-01T22:03:13.837+10:00
+
+### User
+update our definitions to implement suggestion 1 (
+1. Add  budget_id to planned_events , otherwise a planned event is not cleanly attached to a month.), and add an id field to each table to at as the pk for each table
+
+### Assistant
+Updated the written Budget Coach schema definitions so `planned_events` explicitly includes `budget_id` and every table explicitly defines `id` as its primary key. I applied that wording in both the living database design document and the Release 0 plan so the definitions stay consistent across the design notes.
+
+## 2026-09-01T22:06:25.494+10:00
+
+### User
+any final clarifications or things to go over before beginning to implement the db, and moving on with the plan
+
+### Assistant
+Yes. Before implementing the database, the main things to lock down are the field types, enum values, validation rules, and lifecycle rules so you do not have to rewrite models and tests later.
+
+The most important decisions to confirm are:
+
+1. **Money representation**: store all amounts as integer cents rather than floats, including `declared_income`, `warn_at`, `hard_cap`, `est_low`, and `est_high`.
+2. **Primary key strategy**: decide whether `id` is a UUID or integer autoincrement, and use the same approach across all four tables.
+3. **Month format**: confirm `month` will be a stable string such as `YYYY-MM`, and whether there can be only one budget per month total or one active budget plus archived versions.
+4. **Enum values**: lock the allowed `status` values for `budgets`, `planned_events`, and `coach_proposals`, plus allowed `source` values for `planned_events`.
+5. **Category rules**: decide whether `category` is free text or must come from a shared allowed list, and whether matching should be case-insensitive.
+6. **Delete behaviour**: decide what happens when a budget is deleted - whether child `budget_lines`, `planned_events`, and `coach_proposals` cascade delete with it.
+7. **Proposal payload shape**: define exactly what `proposal_json` contains so the database, backend, and AI schema all agree.
+8. **Timestamps and nullability**: confirm which tables need `created_at` and `updated_at`, and which fields can be null, especially `rejection_reason` and `decided_at`.
+
+If I were locking it in now, I would recommend: **UUID primary keys, integer cents for money, `YYYY-MM` for `month`, cascade delete from `budgets` to child tables, and strict enums for all status/source fields**. Once those are agreed, you are ready to implement the Flask models first, then the CRUD routes immediately after.
+
+## 2026-09-01T22:31:14.351+10:00
+
+### User
+1. yes int
+2. guid
+3. YYYY-MM, yes only 1 per month
+4. what does that mean, epand on each one
+5. should be free text, but ideally our business rules only allow it to become one of the 'lines'
+6. cascade delete linked entries
+7. give an example of what a proposal_json looks like and an example, and why it exists
+8. let all be null for now except for pks and fks
+
+### Assistant
+Updated the schema notes to reflect your decisions: integer money values, GUID primary keys, one budget per `YYYY-MM` month, free-text categories with business rules aligning them to budget lines, cascade delete from `budgets` to child tables, and nullable fields for now except PKs and FKs.
+
+I also expanded the enum meanings in the database design doc:
+
+1. `budgets.status` -> `draft`, `active`, `closed`
+2. `planned_events.source` -> `user`, `predicted`
+3. `planned_events.status` -> `planned`, `confirmed`, `cancelled`
+4. `coach_proposals.status` -> `proposed`, `accepted`, `rejected`
+
+And I added a concrete `proposal_json` example showing how an AI suggestion can describe changes to a budget line and a planned event without directly mutating the real tables. That exists so AI output is stored as a reviewable proposal first, then only applied if the user accepts it.
+
+## 2026-09-01T22:33:48.770+10:00
+
+### User
+begin implementation
+
+### Assistant
+Implemented the Ethan database service for Budget Coach. The database now uses Flask-SQLAlchemy models for `budgets`, `budget_lines`, `planned_events`, and `coach_proposals`, with GUID primary keys, `budget_id` foreign keys, cascade delete from `budgets`, integer money fields, one-budget-per-month uniqueness, and enum-style constraints for budget, planned-event, and proposal status fields.
+
+The Ethan database app now exposes CRUD JSON endpoints for budgets, budget lines, planned events, and coach proposals, including `GET /budgets/by-month/<month>`, nested collection routes such as `/budgets/<budget_id>/budget-lines`, and single-record routes such as `/budget-lines/<id>` and `/planned-events/<id>`. Planned events are validated so their category must match an existing budget line for the same budget, and coach proposals store structured `proposal_json` payloads separately from real budget data.
+
+I also updated `ethan/database/__main__.py` to run the app through a factory, added `flask-sqlalchemy` to `ethan/database/requirements.txt`, and replaced the old placeholder database test with targeted CRUD and cascade tests. The Ethan test suite passes with the new database implementation.
+
+## 2026-09-01T22:51:40.093+10:00
+
+### User
+how to interact with and test these
+
+### Assistant
+The quickest way is to test the database service in two layers: **automated pytest** for repeatable checks, and **HTTP calls** for manual interaction.
+
+For automated tests, from the repo root run:
+
+```powershell
+py -3 -m pip install -r ethan\backend\requirements.txt -r ethan\database\requirements.txt -r ethan\test\requirements.txt
+py -3 -m pytest ethan\test -q
+```
+
+That runs the Ethan test suite, including the new database CRUD tests in `ethan\test\test_database.py`.
+
+For manual interaction, run the Flask database service directly:
+
+```powershell
+$env:DB_PATH = "C:\git\GitHub\Uni\ASD Bank\ethan\database\ethan.db"
+$env:PORT = "6006"
+py -3 -m ethan.database
+```
+
+Then hit it from another terminal with `curl` or PowerShell:
+
+```powershell
+curl http://127.0.0.1:6006/health
+curl http://127.0.0.1:6006/budgets
+```
+
+A simple end-to-end flow is:
+
+1. create a budget
+2. create a budget line under that budget
+3. create a planned event whose category matches that budget line
+4. create a coach proposal for that budget
+5. fetch each record back
+
+Example requests:
+
+```powershell
+curl -Method POST http://127.0.0.1:6006/budgets -ContentType "application/json" -Body '{"month":"2026-09","declared_income":500000,"status":"draft"}'
+curl -Method POST http://127.0.0.1:6006/budgets/<budget_id>/budget-lines -ContentType "application/json" -Body '{"category":"Groceries","warn_at":15000,"hard_cap":20000}'
+curl -Method POST http://127.0.0.1:6006/budgets/<budget_id>/planned-events -ContentType "application/json" -Body '{"date":"2026-09-04","label":"Dinner out","category":"Groceries","est_low":4000,"est_high":6000,"source":"user","status":"planned"}'
+curl -Method POST http://127.0.0.1:6006/budgets/<budget_id>/coach-proposals -ContentType "application/json" -Body '{"proposal_json":{"proposal_type":"coach"},"rationale":"Test proposal"}'
+```
+
+Useful routes to test are:
+
+- `GET /health`
+- `GET/POST /budgets`
+- `GET /budgets/by-month/<month>`
+- `GET/PATCH/DELETE /budgets/<budget_id>`
+- `GET/POST /budgets/<budget_id>/budget-lines`
+- `GET/PATCH/DELETE /budget-lines/<line_id>`
+- `GET/POST /budgets/<budget_id>/planned-events`
+- `GET/PATCH/DELETE /planned-events/<event_id>`
+- `GET/POST /budgets/<budget_id>/coach-proposals`
+- `GET/PATCH/DELETE /coach-proposals/<proposal_id>`
+
+The most important manual validations are:
+
+1. creating two budgets with the same `month` should fail
+2. creating two budget lines with the same category in one budget should fail
+3. creating a planned event with a category that is not already a budget line should fail
+4. deleting a budget should also remove its linked lines, planned events, and proposals
+
+## 2026-09-01T23:39:14.762+10:00
+
+### User
+how to make these requests
+
+### Assistant
+The easiest way on Windows is to use **PowerShell `Invoke-RestMethod`**. Start the Ethan database service first, then send JSON requests to `http://127.0.0.1:6006`.
+
+Start the service:
+
+```powershell
+$env:DB_PATH = "C:\git\GitHub\Uni\ASD Bank\ethan\database\ethan.db"
+$env:PORT = "6006"
+py -3 -m ethan.database
+```
+
+Then, in a second terminal, make requests like this:
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:6006/health
+
+$budget = Invoke-RestMethod -Method POST `
+  -Uri http://127.0.0.1:6006/budgets `
+  -ContentType "application/json" `
+  -Body '{"month":"2026-09","declared_income":500000,"status":"draft"}'
+
+$line = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:6006/budgets/$($budget.id)/budget-lines" `
+  -ContentType "application/json" `
+  -Body '{"category":"Groceries","warn_at":15000,"hard_cap":20000}'
+
+$event = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:6006/budgets/$($budget.id)/planned-events" `
+  -ContentType "application/json" `
+  -Body '{"date":"2026-09-04","label":"Dinner out","category":"Groceries","est_low":4000,"est_high":6000,"source":"user","status":"planned"}'
+
+$proposal = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:6006/budgets/$($budget.id)/coach-proposals" `
+  -ContentType "application/json" `
+  -Body '{"proposal_json":{"proposal_type":"coach"},"rationale":"Test proposal"}'
+```
+
+Read, update, and delete look like this:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:6006/budgets/$($budget.id)"
+Invoke-RestMethod -Uri "http://127.0.0.1:6006/budgets/by-month/2026-09"
+
+Invoke-RestMethod -Method PATCH `
+  -Uri "http://127.0.0.1:6006/budget-lines/$($line.id)" `
+  -ContentType "application/json" `
+  -Body '{"warn_at":17500,"hard_cap":22500}'
+
+Invoke-RestMethod -Method PATCH `
+  -Uri "http://127.0.0.1:6006/planned-events/$($event.id)" `
+  -ContentType "application/json" `
+  -Body '{"status":"confirmed"}'
+
+Invoke-RestMethod -Method PATCH `
+  -Uri "http://127.0.0.1:6006/coach-proposals/$($proposal.id)" `
+  -ContentType "application/json" `
+  -Body '{"status":"rejected","rejection_reason":"Too aggressive"}'
+
+Invoke-RestMethod -Method DELETE -Uri "http://127.0.0.1:6006/budgets/$($budget.id)"
+```
+
+Use `GET` when you want to read data, `POST` when you want to create a new row, `PATCH` when you want to update part of an existing row, and `DELETE` when you want to remove a row. The JSON body goes in `-Body`, and `-ContentType "application/json"` tells Flask to parse it as JSON.
+
+## 2026-09-01T23:53:12.683+10:00
+
+### User
+what now
+
+### Assistant
+Now move to **the backend/API layer**. The database microservice is in place, so the next step is to build the Ethan backend that talks to it and starts turning stored budget data into Budget Coach behaviour.
+
+The next implementation order should be:
+
+1. add an HTTP client in `ethan/backend` for the Ethan database API
+2. build backend CRUD/orchestration endpoints that call the DB service instead of touching SQLite directly
+3. add summary/calculation endpoints that compute spend vs `warn_at` and `hard_cap`
+4. add the Statement API client so transaction history comes from the transactions feature
+5. implement starter-budget generation from transaction history
+
+In practical terms, the immediate next target is: **make `ethan/backend` able to fetch, create, update, and delete budgets, budget lines, planned events, and coach proposals by calling `ethan-db` over HTTP**. Once that works, the backend can start adding the real Budget Coach calculations and AI orchestration on top.
+
+## 2026-09-01T23:53:53.529+10:00
+
+### User
+is database implementation complete
+
+### Assistant
+**For the database microservice itself: mostly yes.** The Ethan DB layer now has the four models, GUID primary keys, foreign keys, cascade delete, validation/constraint rules, CRUD endpoints, and targeted tests for the main flows.
+
+**For the overall feature: no.** What is complete is the DB service foundation. What is still not complete is the backend/API orchestration layer, Statement API integration, starter-budget generation, AI proposal flow in the backend, and the frontend that uses this data.
+
+So the right way to say it is: **the database service is implemented enough to move on, but the full Budget Coach feature is not complete yet**.
