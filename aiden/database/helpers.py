@@ -44,14 +44,18 @@ def try_parse_int(value: Any) -> Optional[int]:
         return None
 
 def try_parse_bool(value: Any) -> Optional[bool]:
+    if value is None:
+        return None
+
     if isinstance(value, bool):
         return value
 
-    elif value.lower() == "true":
-        return True
-
-    elif value.lower() == "false":
-        return False
+    if isinstance(value, str):
+        lower = value.lower()
+        if lower == "true":
+            return True
+        if lower == "false":
+            return False
 
     return None
 

@@ -47,8 +47,10 @@ def patch_anomaly(id: int):
     data = request.get_json() or {}
 
     # Only the following fields are permitted to be mutated once created
-    if isinstance(is_confirmed_by_user := try_parse_bool(data.get("is_confirmed_by_user")), bool):
-        anomaly.is_confirmed_by_user = is_confirmed_by_user # TODO UT
+    parsed = try_parse_bool(data.get("is_confirmed_by_user"))
+
+    if isinstance(parsed, bool):
+        anomaly.is_confirmed_by_user = parsed
 
     if inspect(anomaly, raiseerr=True).modified:
         db.session.commit() # idk about this one

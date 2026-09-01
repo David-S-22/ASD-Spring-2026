@@ -85,6 +85,7 @@ def review_new_transaction(
     anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
     detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
     impl_model = get_env("OLLAMA_MODEL")
+    review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
     current_app.logger.info("Anomaly context: %s", anomaly_context)
@@ -98,12 +99,13 @@ def review_new_transaction(
             temperature=temperature,
             output_tokens=500)
 
-        if (review_finding := parse_review_finding(response)) is None:
+        if (candidate := parse_review_finding(response)) is None:
             current_app.logger.info("Response is not acceptable json %s", response)
+            iteration += 1
             continue
 
+        review_finding = candidate
         current_app.logger.info("Response was formatted into finding %s", review_finding)
-
         break
 
     if review_finding is None:
