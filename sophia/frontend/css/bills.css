@@ -62,6 +62,21 @@
   border-collapse: collapse;
 }
 
+/* index.html gives these divs class="card", but each fragment root replaces the
+   whole element and brings its own class instead -- so after the first swap the
+   card treatment is gone. That was invisible while everything was white on
+   off-white; on a dark palette it is the difference between a panel and a void,
+   so the treatment names them directly. (#disputes-tab is the one fragment that
+   does return class="card".) */
+.bills-panel,
+.calendar-card,
+.timeline {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.25rem 1rem 1rem;
+}
+
 /* Kept only as a genuine-overflow fallback far below the shell's column width.
    At both target widths the table now fits and no scrollbar appears. */
 .bills-panel {
@@ -103,6 +118,11 @@
    Bills declares its own hover rather than leaving the shell's unopposed. */
 .bills-table tbody tr:hover {
   background: var(--a100);
+}
+
+.bills-table tbody tr:hover .chip {
+  /* The wash sits over the row wash; keep the badge readable. */
+  border-color: currentColor;
 }
 
 .bills-table .actions {
@@ -179,7 +199,7 @@
 
 .range-buttons button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -195,6 +215,7 @@
 .dispute-panel .caveat {
   color: var(--warn);
   background: var(--warn-bg);
+  border: 1px solid var(--warn-bg);
   padding: 0.5em;
   border-radius: 6px;
 }
@@ -212,13 +233,16 @@
   margin: 0.3em 0;
 }
 
+/* Both bubbles are dark now, so the difference has to come from the accent
+   wash and the border rather than light-vs-white. */
 .chat-panel .message-user {
-  background: var(--a100);
+  background: var(--a200);
+  border: 1px solid transparent;
   margin-left: 2em;
 }
 
 .chat-panel .message-assistant {
-  background: var(--card);
+  background: var(--raised);
   border: 1px solid var(--line);
   margin-right: 2em;
 }
@@ -257,7 +281,7 @@
      underneath and the Confirm button cannot be clicked, which kills every
      write started from a modal form while leaving the route tests green. */
   z-index: 60;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,8 +302,10 @@
 }
 
 .toast {
-  background: var(--ink);
-  color: #fff;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   padding: 0.6em 1.2em;
   border-radius: 999px;
 }
@@ -297,7 +323,7 @@
   border-radius: 10px;
   padding: 1.5rem;
   min-width: 320px;
-  box-shadow: 0 10px 30px rgba(29, 34, 44, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .modal-form label {
@@ -332,6 +358,7 @@
 .error-fragment .error {
   background: var(--bad-bg);
   color: var(--bad);
+  border: 1px solid var(--bad);
   padding: 0.6em 1em;
   border-radius: 6px;
 }
@@ -387,7 +414,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -398,9 +425,11 @@
   overflow-y: auto;
 }
 
+/* Was var(--muted, #666) -- Bills defines --mut, never --muted, so this always
+   fell through to #666 and is unreadable on a dark surface. */
 .working {
   font-size: 0.9em;
-  color: var(--muted, #666);
+  color: var(--mut);
   margin-left: 0.5em;
 }
 

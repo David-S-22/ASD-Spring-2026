@@ -1,91 +1,146 @@
-/* Shared Tally theme — donated by the Bills feature; lift as-is for the shell. */
-:root {
-  --ink: #1d222c;
-  --mut: #6b7280;
-  --line: #dcdfe6;
-  --bg: #f2f4f6;
-  --card: #ffffff;
-  --accent: #136066;
-  --accent-bg: #e6f0f0;
-  --a100: #eef5f5;
-  --a200: #e0eded;
-  --a300: #cde2e2;
-  --a500: #5f9296;
-  --warn: #8a6d1a;
-  --warn-bg: #faf3d9;
-  --bad: #8f2f3b;
-  --bad-bg: #fbe9ec;
-  --ok: #2e6b3a;
-  --ok-bg: #e9f3ea;
+/* Bills' theme. Dark in both contexts, matching the shared shell.
+ *
+ * Every token is `var(--color-*, <dark default>)`. Inside the shell those
+ * resolve to the shell's own custom properties, so Bills tracks the shell if
+ * its palette is ever retuned; standalone on :3005 nothing defines them and the
+ * fallbacks apply, which are the same values written out. One palette, no
+ * per-context fork.
+ *
+ * The tokens hang off #bills-root, not :root, and so does everything that
+ * paints. In the shell this stylesheet is injected into the shell's own
+ * document, so a :root or body rule here reaches the entire shell -- that is
+ * how an earlier version repainted the whole page and made the shell's centred
+ * content column read as dead whitespace. Scope is not tidiness here; it is the
+ * whole reason the feature can be embedded at all.
+ */
+#bills-root {
+  --bg: var(--color-bg, #0f172a);
+  --card: var(--color-surface, #1e293b);
+  --raised: var(--color-surface-alt, #273449);
+  --line: var(--color-border, #334155);
+  --ink: var(--color-text, #e2e8f0);
+  --mut: var(--color-text-muted, #94a3b8);
+
+  --accent: var(--color-primary, #38bdf8);
+  --accent-hover: var(--color-primary-hover, #0ea5e9);
+  /* Text sitting on --accent. The shell uses this same near-black against its
+     primary; light text on #38bdf8 fails contrast badly. */
+  --on-accent: #062430;
+
+  /* Accent washes. Alpha rather than opaque tints so they read correctly over
+     both --bg and --card without a second set of values. */
+  --a100: rgba(56, 189, 248, 0.10);
+  --a200: rgba(56, 189, 248, 0.18);
+
+  /* Status colours: a saturated foreground with a low-alpha wash of itself
+     behind. Solid pale backgrounds like the old light set turn to mud on a dark
+     surface, and the foreground has to carry the meaning anyway. */
+  --ok: var(--color-success, #4ade80);
+  --ok-bg: rgba(74, 222, 128, 0.14);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.14);
+  --bad: var(--color-danger, #f87171);
+  --bad-bg: rgba(248, 113, 113, 0.14);
+
+  --scrim: rgba(2, 6, 23, 0.66);
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font, "Segoe UI", system-ui, -apple-system, sans-serif);
+  /* Standalone, #bills-root is only as tall as its content and nothing else
+     paints the page, so without this the area below it falls back to white.
+     In the shell the panel is always taller than this anyway. */
+  min-height: 100vh;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Only the margin reset is safe to put on body. Inside the shared shell this
-   stylesheet is injected into the shell's own document, so a body rule here
-   repaints the whole shell for as long as the Bills tab is open -- which is
-   what made the shell's centred content column read as dead whitespace beside
-   Bills rather than as the shell's own background. Everything that paints now
-   hangs off #bills-root, so Bills renders as a light panel inside the shell's
-   dark chrome and the shell keeps its own theme. */
 body {
   margin: 0;
 }
 
-#bills-root {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  /* Standalone on :3005 nothing else paints the page, and #bills-root is only
-     as tall as its content -- without this the area below it falls back to the
-     browser default white. Inside the shell the panel is always taller than
-     this anyway, so it changes nothing there. */
-  min-height: 100vh;
-}
-
-a {
+#bills-root a {
   color: var(--accent);
 }
 
-.card {
+#bills-root .card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
 }
 
-button {
+#bills-root button {
   font-family: inherit;
   border-radius: 6px;
   border: 1px solid var(--line);
-  background: var(--card);
+  background: var(--raised);
   color: var(--ink);
   padding: 0.4em 0.9em;
   cursor: pointer;
 }
 
-button.btn-sm {
+#bills-root button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* The shell styles bare `button:not(.nav-tab)` so that features pulled in over
+   htmx pick up its look even without their own stylesheet. Bills has one, and
+   two sets of button rules fighting is how you get a control that is legible in
+   one context and not the other -- so Bills states its own, at a specificity
+   that settles it, and states them in the shell's colours so the two agree
+   rather than alternate. */
+#bills-root button.confirm,
+#bills-root button[type="submit"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+#bills-root button.confirm:hover:not(:disabled),
+#bills-root button[type="submit"]:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+#bills-root button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#bills-root button.btn-sm {
   padding: 0.25em 0.6em;
   font-size: 0.85em;
 }
 
-button.confirm,
-button[type="submit"] {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-input,
-textarea,
-select {
+#bills-root input,
+#bills-root textarea,
+#bills-root select {
   font-family: inherit;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.4em 0.6em;
-  background: var(--card);
+  background: var(--raised);
   color: var(--ink);
+}
+
+#bills-root input::placeholder,
+#bills-root textarea::placeholder {
+  color: var(--mut);
+}
+
+#bills-root input:focus,
+#bills-root textarea:focus,
+#bills-root select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+#bills-root label {
+  color: var(--mut);
 }
 
 .chip {
@@ -93,19 +148,23 @@ select {
   border-radius: 999px;
   padding: 0.15em 0.75em;
   font-size: 0.85em;
+  border: 1px solid transparent;
 }
 
 .chip-paid {
   background: var(--ok-bg);
   color: var(--ok);
+  border-color: var(--ok-bg);
 }
 
 .chip-due {
   background: var(--warn-bg);
   color: var(--warn);
+  border-color: var(--warn-bg);
 }
 
 .chip-overdue {
   background: var(--bad-bg);
   color: var(--bad);
+  border-color: var(--bad-bg);
 }
