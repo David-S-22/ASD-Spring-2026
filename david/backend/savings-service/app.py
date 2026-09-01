@@ -2,7 +2,7 @@ import os
 import requests
 from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
-from .helpers import object_to_hook, try_parse_bool
+from .helpers import fetch_transactions, object_to_hook, try_parse_bool
 from .ollama_service import generate_savings_advice
 
 
@@ -182,16 +182,21 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        return render_template("ai-suggestion.jinja", suggestion=generate_savings_advice(db_url, tx_url)), 200
+        transactions = fetch_transactions(tx_url)
+        has_transactions = len(transactions) > 0
+        suggestion = generate_savings_advice(db_url, tx_url)
+        return render_template("ai-suggestion.jinja", suggestion=suggestion, has_transactions=has_transactions), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
     def action_ai_suggestion():
+        transactions = fetch_transactions(tx_url)
+        has_transactions = len(transactions) > 0
         payload = request.get_json(silent=True) or request.form.to_dict()
         suggestion_text = payload.get("suggestion", "").strip() if payload else ""
         accepted_raw = request.args.get("accepted") if "accepted" in request.args else (payload.get("accepted") if payload else None)
         accepted = try_parse_bool(accepted_raw)
 
-        if suggestion_text and suggestion_text != "No current AI suggestion available." and accepted is not None:
+        if has_transactions and suggestion_text and suggestion_text != "No current AI suggestion available." and accepted is not None:
             try:
                 requests.post(
                     f"{db_url}/suggestion",
@@ -201,7 +206,10 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
                 pass
 
         new_suggestion = generate_savings_advice(db_url, tx_url)
-        return make_response(render_template("ai-suggestion.jinja", suggestion=new_suggestion), {"HX-Trigger": "suggestionChanged"})
+        return make_response(
+            render_template("ai-suggestion.jinja", suggestion=new_suggestion, has_transactions=has_transactions),
+            {"HX-Trigger": "suggestionChanged"},
+        )
 
     return app
 

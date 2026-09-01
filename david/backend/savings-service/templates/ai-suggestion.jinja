@@ -4,10 +4,12 @@
     </div>
     <div class="ai-suggestion-body" id="ai-suggestion">
         <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
+        {% if has_transactions %}
         <div class="ai-suggestion-actions">
             <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/action?accepted=true" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
             <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/action?accepted=false" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
         </div>
+        {% endif %}
     </div>
 </div>
 
