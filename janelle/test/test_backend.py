@@ -62,10 +62,7 @@ def test_transaction_rows_are_loaded_from_database(
     get = Mock(side_effect=[database_response, category_response])
     monkeypatch.setattr(backend_app.requests, "get", get)
 
-    response = client.get(
-        "/transactions",
-        headers={"HX-Request": "true"},
-    )
+    response = client.get("/ui/transactions")
 
     assert response.status_code == 200
     assert "<td>1</td>" not in response.text
@@ -101,10 +98,7 @@ def test_transaction_rows_show_empty_state(
         Mock(side_effect=[response_with_json([]), response_with_json([])]),
     )
 
-    response = client.get(
-        "/transactions",
-        headers={"HX-Request": "true"},
-    )
+    response = client.get("/ui/transactions")
 
     assert response.status_code == 200
     assert "No transactions found." in response.text
@@ -120,10 +114,7 @@ def test_transaction_rows_report_database_failure(
         Mock(side_effect=requests.ConnectionError("database unavailable")),
     )
 
-    response = client.get(
-        "/transactions",
-        headers={"HX-Request": "true"},
-    )
+    response = client.get("/ui/transactions")
 
     assert response.status_code == 502
     assert "database service is unavailable" in response.text
@@ -145,10 +136,7 @@ def test_transaction_rows_reject_invalid_json(
         Mock(return_value=database_response),
     )
 
-    response = client.get(
-        "/transactions",
-        headers={"HX-Request": "true"},
-    )
+    response = client.get("/ui/transactions")
 
     assert response.status_code == 502
     assert "database response was invalid" in response.text
@@ -166,10 +154,7 @@ def test_transaction_rows_reject_invalid_shape(
         Mock(return_value=response_with_json(payload)),
     )
 
-    response = client.get(
-        "/transactions",
-        headers={"HX-Request": "true"},
-    )
+    response = client.get("/ui/transactions")
 
     assert response.status_code == 502
     assert "database response was invalid" in response.text

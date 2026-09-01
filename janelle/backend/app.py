@@ -59,63 +59,64 @@ def setup_app(db_url: str) -> Flask:
 
     @application.route("/transactions")
     def get_transactions():
-        if request.headers.get("HX-Request") == "true":
-            try:
-                transaction_response = requests.get(
-                    f"{db_url}/transactions",
-                    timeout=config.DATABASE_TIMEOUT_SECONDS,
-                )
-                transaction_response.raise_for_status()
-                transactions = transaction_response.json()
-
-                category_response = requests.get(
-                    f"{db_url}/categories",
-                    timeout=config.DATABASE_TIMEOUT_SECONDS,
-                )
-                category_response.raise_for_status()
-                categories = category_response.json()
-
-                if (
-                    not isinstance(transactions, list)
-                    or not all(
-                        isinstance(row, dict)
-                        for row in transactions
-                    )
-                    or not isinstance(categories, list)
-                    or not all(
-                        isinstance(row, dict)
-                        for row in categories
-                    )
-                ):
-                    raise ValueError("invalid database response")
-            except (ValueError, RecursionError):
-                return render_template(
-                    "transactions_table.jinja",
-                    transactions=[],
-                    error="Unable to load transactions because the database response was invalid.",
-                ), 502
-            except requests.RequestException:
-                return render_template(
-                    "transactions_table.jinja",
-                    transactions=[],
-                    error="Unable to load transactions because the database service is unavailable.",
-                ), 502
-
-            return render_template(
-                "transactions_table.jinja",
-                transactions=align_transactions_with_corresponding_category_names(
-                    transactions,
-                    categories,
-                ),
-                error=None,
-            )
-
         response = requests.get(
             f"{db_url}/transactions",
             params=request.args,
             timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
         return _json_response(response)
+
+    @application.route("/ui/transactions")
+    def get_transaction_rows():
+        try:
+            transaction_response = requests.get(
+                f"{db_url}/transactions",
+                timeout=config.DATABASE_TIMEOUT_SECONDS,
+            )
+            transaction_response.raise_for_status()
+            transactions = transaction_response.json()
+
+            category_response = requests.get(
+                f"{db_url}/categories",
+                timeout=config.DATABASE_TIMEOUT_SECONDS,
+            )
+            category_response.raise_for_status()
+            categories = category_response.json()
+
+            if (
+                not isinstance(transactions, list)
+                or not all(
+                    isinstance(row, dict)
+                    for row in transactions
+                )
+                or not isinstance(categories, list)
+                or not all(
+                    isinstance(row, dict)
+                    for row in categories
+                )
+            ):
+                raise ValueError("invalid database response")
+        except (ValueError, RecursionError):
+            return render_template(
+                "transactions_table.jinja",
+                transactions=[],
+                error="Unable to load transactions because the database response was invalid.",
+            ), 502
+        except requests.RequestException:
+            return render_template(
+                "transactions_table.jinja",
+                transactions=[],
+                error="Unable to load transactions because the database service is unavailable.",
+            ), 502
+
+        return render_template(
+            "transactions_table.jinja",
+            transactions=align_transactions_with_corresponding_category_names(
+                transactions,
+                categories,
+            ),
+            error=None,
+        )
 
     @application.route("/transactions", methods=["POST"])
     def create_transaction():

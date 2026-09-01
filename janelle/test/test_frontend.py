@@ -11,7 +11,7 @@ def test_frontend_loads_transaction_rows_with_htmx():
 
     assert "htmx.org@2.0.10" in index
     assert 'id="transactions"' in index
-    assert 'hx-get="/transactions-backend/transactions"' in index
+    assert 'hx-get="/transactions-backend/ui/transactions"' in index
     assert 'hx-trigger="load, transactionsChanged"' in index
     assert 'hx-swap="innerHTML"' in index
     assert "<th>ID</th>" not in index
