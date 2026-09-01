@@ -21,7 +21,9 @@ def test_bills_fragment_verbatim_header_and_columns(live_client):
     for column in ("Name", "Amount", "Every", "Next billing", "Paid by", "Status"):
         assert f"<th>{column}</th>" in text
     assert "Add a bill" in text
-    assert "Confirm this?" in text
+    # The prompt names where the bill came from. It only appears for a
+    # source=f4_handoff bill that has not been confirmed -- GymCo in the seed.
+    assert "Added from Spending Alerts — keep it?" in text
     assert "Direct debit" in text
     assert "Fortnight" in text
 
@@ -219,3 +221,14 @@ def test_handoff_subscription_projects_next_billing_date(live_client, last_seen,
     )
     assert response.status_code == 200
     assert f'value="{expected}"' in _text(response)
+
+
+def test_paid_bill_with_an_imminent_next_charge_is_not_green(live_client):
+    """A bill settled for this cycle but charging again within 7 days reads
+    "Due <date>". Rendering that on the green paid chip made two unpaid-looking
+    rows scan as handled; the tone is its own so the colour matches the words.
+    The JSON API's `status` is unchanged -- this is presentation only.
+    """
+    text = _text(live_client.get("/ui/bills"))
+    assert 'class="chip chip-upcoming">Due ' in text
+    assert 'class="chip chip-paid">Due ' not in text

@@ -31,7 +31,16 @@ billsRoot.addEventListener("htmx:beforeSwap", function (evt) {
   }
 });
 
-function showModal(onConfirm) {
+// "Confirm this change" says nothing about what the change is. Controls that
+// know carry data-confirm; the rest fall back to the old wording rather than
+// guessing, because a confidently wrong summary on a confirmation dialog is
+// worse than a vague one.
+function confirmPromptFor(elt) {
+  var described = elt && elt.closest("[data-confirm]");
+  return (described && described.getAttribute("data-confirm")) || "Confirm this change";
+}
+
+function showModal(message, onConfirm) {
   // The confirm dialog must NOT live in #modal-root: the add/edit/cancel/
   // payment/dispute forms render there, and replacing them detaches the
   // form so htmx drops the request it is asking to confirm.
@@ -44,19 +53,42 @@ function showModal(onConfirm) {
     // would outlive Bills and sit over whichever feature came next.
     billsRoot.appendChild(root);
   }
+  var previouslyFocused = document.activeElement;
   root.innerHTML =
-    '<div class="modal-backdrop"><div class="modal">' +
-    "<p>Confirm this change</p>" +
+    '<div class="modal-backdrop">' +
+    '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">' +
+    '<p id="confirm-dialog-title"></p>' +
     '<button type="button" class="confirm">Confirm</button> ' +
     '<button type="button" class="cancel">Cancel</button>' +
     "</div></div>";
-  root.querySelector(".confirm").addEventListener("click", function () {
+  // textContent, not string concatenation: the message can carry a bill name.
+  root.querySelector("#confirm-dialog-title").textContent = message || "Confirm this change";
+
+  var close = function () {
     root.innerHTML = "";
+    document.removeEventListener("keydown", onKey, true);
+    if (previouslyFocused && previouslyFocused.focus) {
+      previouslyFocused.focus();
+    }
+  };
+  var onKey = function (e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  };
+  document.addEventListener("keydown", onKey, true);
+  root.querySelector(".modal-backdrop").addEventListener("click", function (e) {
+    if (e.target === e.currentTarget) {
+      close();
+    }
+  });
+  root.querySelector(".confirm").addEventListener("click", function () {
+    close();
     onConfirm();
   });
-  root.querySelector(".cancel").addEventListener("click", function () {
-    root.innerHTML = "";
-  });
+  root.querySelector(".cancel").addEventListener("click", close);
+  root.querySelector(".confirm").focus();
 }
 
 function showToast(text) {
@@ -124,13 +156,90 @@ function rememberTab(name) {
   history.replaceState(null, "", next);
 }
 
+// The add/edit/cancel/payment/dispute forms are server fragments swapped into
+// #modal-root, so none of them can carry dialog semantics of their own without
+// every template repeating them. Applied here once, when the modal is
+// populated: it opens with focus, it announces itself, and Escape or a click on
+// the backdrop closes it. Before this it took no focus at all and only the
+// Cancel button could close it, which made every form mouse-only.
+var modalRoot = document.getElementById("modal-root");
+var focusBeforeModal = null;
+
+function closeModalForm() {
+  if (!modalRoot.children.length) {
+    return;
+  }
+  modalRoot.innerHTML = "";
+  if (focusBeforeModal && focusBeforeModal.focus) {
+    focusBeforeModal.focus();
+  }
+  focusBeforeModal = null;
+}
+
+billsRoot.addEventListener("htmx:beforeRequest", function (evt) {
+  // Remember what opened it, so focus has somewhere to return to.
+  if (evt.detail.target === modalRoot) {
+    focusBeforeModal = document.activeElement;
+  }
+});
+
+new MutationObserver(function () {
+  var form = modalRoot.querySelector(".modal-form");
+  if (!form || form.dataset.dialogReady) {
+    return;
+  }
+  form.dataset.dialogReady = "1";
+  form.setAttribute("role", "dialog");
+  form.setAttribute("aria-modal", "true");
+  var heading = form.querySelector("h3");
+  if (heading) {
+    if (!heading.id) {
+      heading.id = "modal-form-title";
+    }
+    form.setAttribute("aria-labelledby", heading.id);
+  }
+  if (!form.hasAttribute("tabindex")) {
+    form.setAttribute("tabindex", "-1");
+  }
+  // First field if there is one, otherwise the dialog itself -- never leave
+  // focus behind on the trigger.
+  var first = form.querySelector("input:not([type=hidden]), select, textarea, button");
+  (first || form).focus();
+}).observe(modalRoot, { childList: true });
+
+modalRoot.addEventListener("click", function (evt) {
+  // #modal-root is the backdrop once it holds a form -- see the :has() rule in
+  // bills.css. A click that lands on it rather than on the form is a click
+  // outside the dialog.
+  if (evt.target === modalRoot) {
+    closeModalForm();
+  }
+});
+
+document.addEventListener("keydown", function (evt) {
+  if (evt.key === "Escape" && modalRoot.children.length && !document.querySelector(".modal-backdrop")) {
+    // The confirm dialog owns Escape while it is open; it sits above the form.
+    evt.preventDefault();
+    closeModalForm();
+  }
+}, true);
+
 billsRoot.addEventListener("htmx:confirm", function (evt) {
   var verb = (evt.detail.verb || "get").toLowerCase();
   if (verb === "get") {
     return;
   }
+  // Asking Tally a question is a POST, but it only ever appends to
+  // chat_messages -- no bill, payment or dispute is touched until the user
+  // confirms the preview card, which is a separate request and still gated.
+  // Gating the question itself made the app announce a change it was not
+  // making. The exemption is the ask form specifically, not the chat panel:
+  // the preview card's Confirm lives in the same panel and must stay gated.
+  if (evt.detail.elt && evt.detail.elt.closest(".chat-panel form")) {
+    return;
+  }
   evt.preventDefault();
-  showModal(function () {
+  showModal(confirmPromptFor(evt.detail.elt), function () {
     evt.detail.issueRequest(true);
   });
 });

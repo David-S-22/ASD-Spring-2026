@@ -163,6 +163,15 @@ body {
   border-color: var(--warn-bg);
 }
 
+/* Paid for the current cycle, but the next charge is within 7 days. Neither
+   green (nothing is owed yet) nor red (nothing is late) -- the accent reads as
+   "coming", which is what it is. */
+.chip-upcoming {
+  background: var(--a200);
+  color: var(--accent);
+  border-color: var(--a200);
+}
+
 .chip-overdue {
   background: var(--bad-bg);
   color: var(--bad);

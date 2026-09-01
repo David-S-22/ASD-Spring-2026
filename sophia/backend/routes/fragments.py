@@ -123,6 +123,13 @@ def _render_bills_table():
                 "payment_method_label": PAYMENT_METHOD_LABELS.get(bill.payment_method, bill.payment_method),
                 "status": status,
                 "status_label": label,
+                # derive_status returns "paid" for a bill whose current cycle is
+                # settled, but relabels it "Due <date>" when the next charge is
+                # within 7 days. Correct on both counts, and confusing together:
+                # a green paid chip reading "Due 25 Aug" scans as money already
+                # handled. The tone is presentation only -- `status` is what the
+                # JSON API publishes and is untouched.
+                "status_tone": "upcoming" if status == "paid" and label.startswith("Due ") else status,
                 "needs_confirmation": bill.source == "f4_handoff" and bill.confirmed_at is None,
             }
         )
@@ -479,9 +486,12 @@ def chat_send():
     reply_html = render_template(
         "chat_reply.html", reply=result["reply"], preview=result["preview"], fallback=result["fallback"]
     )
-    response = make_response(reply_html, 200)
-    response.headers.update(_toast_headers("Done — change saved."))
-    return response
+    # No toast. Asking Tally something writes nothing the user cares about --
+    # the reply appearing in the panel is the feedback, and "Done - change
+    # saved." on a question told them their data had changed when it had not.
+    # The apply route below is the one that changes something, and it still says
+    # so.
+    return make_response(reply_html, 200)
 
 
 @bp.post("/chat/apply")
