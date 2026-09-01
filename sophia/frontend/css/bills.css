@@ -203,6 +203,20 @@
   margin-right: 2em;
 }
 
+.chat-panel .chat-welcome {
+  color: var(--mut);
+  font-size: 0.9em;
+  margin: 0.4em 0;
+}
+
+/* Once a reply lands the welcome line has done its job. Replies are appended
+   with hx-swap="beforeend", so the welcome would otherwise sit above the
+   conversation for the rest of the session. Same :has() form already used for
+   #modal-root below. */
+.chat-panel .history:has(.message) .chat-welcome {
+  display: none;
+}
+
 .chat-panel .history-heading {
   color: var(--mut);
   font-size: 0.85em;

@@ -7,7 +7,7 @@ an HX-Trigger toast header.
 """
 import json
 import math
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from flask import Blueprint, make_response, render_template, request
 
@@ -457,35 +457,20 @@ def chat_panel():
 
 
 def _render_chat_panel():
-    today = config.DEMO_TODAY
-    rows = bills_db.list_chat_messages()
-    messages = []
-    seen_headings = set()
-    for row in rows:
-        heading = _history_heading(row["created_at"], today)
-        show_heading = heading is not None and heading not in seen_headings
-        if show_heading:
-            seen_headings.add(heading)
-        preview = json.loads(row["op_json"]) if row.get("op_json") else None
-        if preview:
-            preview["message_id"] = row["id"]
-        messages.append(
-            {
-                "role": row["role"],
-                "content": row["content"],
-                "heading": heading if show_heading else None,
-                "preview": preview,
-                "applied": bool(row.get("applied")),
-            }
-        )
-    return render_template("chat_panel.html", messages=messages)
+    """Open the panel clean rather than replaying stored history.
 
+    The seeded conversation stays in the database -- the ten chat_messages rows
+    are part of the seed the spec asks for, and services.chat still reads the
+    last ten of them as context for the model, so the assistant is no less
+    informed. What changes is only that the panel does not render them on open:
+    a fresh panel is a fresh conversation, not somebody else's transcript from
+    17 August.
 
-def _history_heading(created_at, today):
-    parsed = datetime.fromisoformat(created_at).date()
-    if parsed == today:
-        return None
-    return f"Earlier — {parsed.strftime('%a')} {parsed.day} {parsed.strftime('%b')}"
+    Messages sent during a session are appended by htmx (hx-swap="beforeend" on
+    .history) and stay visible until the panel is re-fetched, at which point it
+    returns to the welcome state.
+    """
+    return render_template("chat_panel.html", messages=[])
 
 
 @bp.post("/chat")

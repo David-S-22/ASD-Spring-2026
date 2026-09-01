@@ -67,7 +67,13 @@ def test_disputes_fragment_empty_state(live_client):
     assert 'No open disputes. If a charge looks wrong, open the bill and choose "Dispute".' in text
 
 
-def test_chat_fragment_chips_placeholder_and_history_heading(live_client):
+def test_chat_fragment_chips_placeholder_and_clean_open(live_client):
+    """The panel opens on a welcome state, not on somebody else's transcript.
+
+    The four suggestion chips share their wording with seeded user messages, so
+    the check that history is not replayed uses assistant replies instead --
+    those appear only if stored messages are being rendered.
+    """
     response = live_client.get("/ui/chat")
     assert response.status_code == 200
     text = _text(response)
@@ -76,8 +82,10 @@ def test_chat_fragment_chips_placeholder_and_history_heading(live_client):
     assert "I cancelled Spotify from September — remove the future payments" in text
     assert "Draft a note to dispute my GymCo charge" in text
     assert 'placeholder="Ask"' in text
-    assert "Earlier — Mon 17 Aug" in text
-    assert text.count("Earlier — Mon 17 Aug") == 1
+    assert "Ask about your bills, or pick one of the suggestions above." in text
+    assert "Earlier — Mon 17 Aug" not in text
+    assert "September needs up to $697" not in text
+    assert "Cloud storage has billed four times" not in text
 
 
 def test_modal_fragment(live_client):

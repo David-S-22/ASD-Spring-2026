@@ -7,6 +7,9 @@
     <button type="button" data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
   </div>
   <div class="history">
+    {% if not messages %}
+    <p class="chat-welcome">Ask about your bills, or pick one of the suggestions above.</p>
+    {% endif %}
     {% for message in messages %}
     {% if message.heading %}<h4 class="history-heading">{{ message.heading }}</h4>{% endif %}
     <div class="message message-{{ message.role }}">{{ message.content }}</div>
