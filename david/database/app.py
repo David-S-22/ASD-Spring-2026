@@ -3,6 +3,7 @@ from flask import jsonify
 from flask import request
 from .models import Goal, Feedback, Suggestion, db
 from .helpers import try_parse_bool
+from .seed import seed_database_if_empty
 from flask import Flask
 import os
 import datetime
@@ -190,5 +191,8 @@ def setup_app(database_path) -> Flask:
     return app
 
 if __name__ == "__main__":
-    app = setup_app(os.environ.get("DB_PATH", "savings.db"))
+    db_path = os.environ.get("DB_PATH", "savings.db")
+    app = setup_app(db_path)
+    with app.app_context():
+        seed_database_if_empty()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 6002)))
