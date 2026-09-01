@@ -1,7 +1,7 @@
 import requests
 from flask import Flask, jsonify, render_template
 
-from . import config
+from .services import transactions_api
 
 
 app = Flask(__name__)
@@ -15,11 +15,8 @@ def get_index():
 @app.get("/ui/transactions")
 def get_transaction_rows():
     try:
-        response = requests.get(
-            f"{config.TRANSACTIONS_DB_URL}/transactions",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
+        transactions = transactions_api.get_all_transactions()
+        categories = transactions_api.get_all_categories()
     except requests.RequestException:
         return render_template(
             "transactions_table.jinja",
@@ -27,22 +24,33 @@ def get_transaction_rows():
             error="Unable to load transactions because the database service is unavailable.",
         ), 502
 
-    try:
-        transactions = response.json()
-    except requests.exceptions.JSONDecodeError:
+    except transactions_api.InvalidDatabaseResponse:
         return render_template(
             "transactions_table.jinja",
             transactions=[],
             error="Unable to load transactions because the database response was invalid.",
         ), 502
 
-    if not isinstance(transactions, list) or not all(
-        isinstance(transaction, dict) for transaction in transactions
-    ):
-        return render_template(
-            "transactions_table.jinja",
-            transactions=[],
-            error="Unable to load transactions because the database response was invalid.",
-        ), 502
+    return render_template(
+        "transactions_table.jinja",
+        transactions=align_transactions_with_corresponding_category_names(
+            transactions,
+            categories,
+        ),
+        error=None,
+    )
 
-    return render_template("transactions_table.jinja", transactions=transactions, error=None)
+def align_transactions_with_corresponding_category_names(transactions, categories):
+    category_names = {
+        category["id"]: category["name"]
+        for category in categories
+        if isinstance(category.get("id"), str)
+        and isinstance(category.get("name"), str)
+    }
+    return [
+        {
+            **transaction,
+            "category_name": category_names.get(transaction.get("category_id")),
+        }
+        for transaction in transactions
+    ]
