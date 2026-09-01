@@ -1,0 +1,9 @@
+The evidence below describes the compose topology and repository layout:
+service inventory with published host ports, dependency edges, the student
+feature directories present, any missing required directories, and whether the
+shared frontend entry point exists.
+
+Report the two or three most significant architectural observations. Prefer
+things a marker would care about: a service with no dependants, a missing
+required directory, a student directory absent from compose, a dependency edge
+that looks wrong, or an entry point that is present or missing.

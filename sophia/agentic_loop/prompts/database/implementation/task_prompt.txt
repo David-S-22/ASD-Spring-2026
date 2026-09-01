@@ -1,0 +1,7 @@
+The evidence below reports each database service, whether it answered, and how
+many rows its list route returned against the ten-row seeded minimum.
+
+Report which databases meet the seed minimum, which do not, and which could not
+be reached at all. Treat "unreachable" as a distinct outcome from "empty" --
+they have different causes and different fixes. Do not assume a service is
+broken merely because it was not running when the evidence was collected.

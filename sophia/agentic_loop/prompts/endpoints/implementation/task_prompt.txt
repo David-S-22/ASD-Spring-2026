@@ -1,0 +1,7 @@
+The evidence below is a status-and-latency sweep of every backend health route
+plus the documented read-only Bills routes.
+
+Report which endpoints are healthy, which failed, and anything notable about
+the latencies. Call out any route returning an unexpected status. If every
+probe succeeded, say so and note the slowest route rather than inventing a
+problem.

@@ -1,0 +1,7 @@
+The evidence below lists the CI workflow files, the student directory each one
+watches, the jobs each defines, and the latest run conclusion on main where the
+GitHub CLI could supply it.
+
+Report the state of CI coverage across the team: which students have a
+workflow, which do not, what the jobs actually check, and any workflow whose
+latest run on main did not succeed.
