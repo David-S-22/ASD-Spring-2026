@@ -100,6 +100,82 @@ def test_create_dummy_anomaly_increases_anomaly_list(client: FlaskClient):
     assert client.get("/anomalies").text.count("<tr>") == before + 2
 
 
+def test_check_transaction_retries_on_invalid_ollama_json(client: FlaskClient, monkeypatch: MonkeyPatch):
+    transaction = dto.Transaction(
+        id=77,
+        amount=5000,
+        merchant="Cash Advance",
+        date=datetime.now(),
+        description="retry test",
+        category_id=1,
+    )
+
+    intercept_ollama(monkeypatch, '{not valid json')
+    first = client.post("/check-transaction", json=serialise(transaction))
+    assert first.status_code == 500
+
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Retry worked"}')
+    second = client.post("/check-transaction", json=serialise(transaction))
+
+    assert second.status_code == 200
+    assert "Retry worked" in second.text
+
+
+def test_check_transaction_rejects_invalid_model_json(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true}')
+
+    transaction = dto.Transaction(
+        id=88,
+        amount=10,
+        merchant="Nope",
+        date=datetime.now(),
+        description="bad json shape",
+        category_id=0,
+    )
+
+    resp = client.post("/check-transaction", json=serialise(transaction))
+
+    assert resp.status_code == 500
+    assert "Could not parse agent response" in resp.text or "Internal Server Error" in resp.text
+
+
+def test_check_transaction_rejects_non_bool_is_suspicious_value(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": "yes", "justification": "not valid"}')
+
+    transaction = dto.Transaction(
+        id=89,
+        amount=30,
+        merchant="Questionable Merchant",
+        date=datetime.now(),
+        description="bad type",
+        category_id=0,
+    )
+
+    resp = client.post("/check-transaction", json=serialise(transaction))
+
+    assert resp.status_code == 500
+
+
+def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Persisted reason"}')
+
+    transaction = dto.Transaction(
+        id=90,
+        amount=123456,
+        merchant="Large Round Transfer",
+        date=datetime.now(),
+        description="persist fields",
+        category_id=9,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    resp = client.get("/anomalies")
+
+    assert resp.status_code == 200
+    assert "Persisted reason" in resp.text
+    assert "<td>90</td>" in resp.text
+
+
 def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
     resp = client.post("/check-transaction", json={"merchant": "Nope"})
 
