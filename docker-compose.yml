@@ -16,7 +16,6 @@ services:
     healthcheck:
       test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
-      # TODO change these params because it's messing with the health of the container
       start_period: 60s
       start_interval: 5s
       interval: 30s

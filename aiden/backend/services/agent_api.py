@@ -78,10 +78,14 @@ class ReviewFinding:
     is_suspicious: bool
     agent_reason_suspected: str
 
-def review_new_transaction(transaction: dto.Transaction, all_anomalies: List[dto.Anomaly]) -> Optional[dto.Anomaly]:
+def review_new_transaction(
+    transaction: dto.Transaction,
+    all_anomalies: List[dto.Anomaly],
+    all_transactions: List[dto.Transaction],
+) -> Optional[dto.Anomaly]:
     iteration = 1
     serialised = serialise(transaction)
-    anomaly_context = _build_anomaly_context(all_anomalies)
+    anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
     detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
     impl_model = get_env("OLLAMA_MODEL")
 
@@ -119,11 +123,16 @@ def review_new_transaction(transaction: dto.Transaction, all_anomalies: List[dto
         is_confirmed_by_user=None
     )
 
-def _build_anomaly_context(all_anomalies: List[dto.Anomaly]) -> str:
+def _build_anomaly_context(
+    all_anomalies: List[dto.Anomaly],
+    all_transactions: List[dto.Transaction],
+) -> str:
     """Builds additional prompt context from anomalies the user has already reviewed.
 
     Only anomalies confirmed (True) or denied (False) by the user are included;
-    anomalies still awaiting review (None) are ignored.
+    anomalies still awaiting review (None) are ignored. Each entry is joined to its
+    underlying transaction (by transaction_id) so the model sees the actual amount,
+    merchant, and date the user made their decision on — not just the agent's reason.
     """
 
     confirmed = [a for a in all_anomalies if a.is_confirmed_by_user is True]
@@ -132,13 +141,30 @@ def _build_anomaly_context(all_anomalies: List[dto.Anomaly]) -> str:
     if not confirmed and not denied:
         return ""
 
+    transactions_by_id = {t.id: t for t in all_transactions}
+
+    def format_entry(label: str, anomaly: dto.Anomaly) -> str:
+        transaction = transactions_by_id.get(anomaly.transaction_id)
+
+        if transaction is None:
+            current_app.logger.error("Transaction with ID %s not found in all_transactions", anomaly.transaction_id)
+            details = "transaction details unavailable"
+        else:
+            details = (
+                f"amount={transaction.amount}, "
+                f"merchant={transaction.merchant!r}, "
+                f"date={transaction.date}"
+            )
+
+        return f"- {label} ({details}): {anomaly.agent_reason_suspected}"
+
     lines: List[str] = []
 
     for anomaly in confirmed:
-        lines.append(f"- CONFIRMED suspicious: {anomaly.agent_reason_suspected}")
+        lines.append(format_entry("CONFIRMED (true positive)", anomaly))
 
     for anomaly in denied:
-        lines.append(f"- DENIED (not suspicious): {anomaly.agent_reason_suspected}")
+        lines.append(format_entry("DENIED (false positive)", anomaly))
 
     return _anomaly_context_prompt.format("\n".join(lines))
 

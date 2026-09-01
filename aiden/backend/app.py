@@ -5,7 +5,7 @@ from flask import Flask, jsonify, render_template, request
 
 from shared.backend import dto
 from .helpers import deserialise_or_abort, empty, get_env
-from .services import anomalies_api, ollama_api, agent_api
+from .services import anomalies_api, ollama_api, agent_api, transaction_api
 
 
 app = Flask(__name__)
@@ -34,9 +34,10 @@ def check_transaction():
     data = request.get_json() or {}
     transaction = deserialise_or_abort(dto.Transaction, data)
     all_anomalies = anomalies_api.get_all_anomalies()
+    all_transactions = transaction_api.get_all_transactions()
 
     app.logger.info("Checking transaction %s (merchant=%r, amount=%s)", transaction.id, transaction.merchant, transaction.amount)
-    anomaly = agent_api.review_new_transaction(transaction, all_anomalies)
+    anomaly = agent_api.review_new_transaction(transaction, all_anomalies, all_transactions)
 
     if anomaly is None:
         app.logger.warning("Transaction %s cleared (no anomaly) -> 204", transaction.id)
