@@ -49,9 +49,9 @@ def read_prompt(family: str, name: str) -> str:
     except FileNotFoundError:
         raise SystemExit(
             f"Prompt file missing: {path}\n"
-            f"Every mode needs implementation/system_prompt.txt, "
-            f"implementation/task_prompt.txt and review/review_prompt.txt "
-            f"under {PROMPTS_DIR}/<family>/."
+            f"Every mode needs {PROMPTS_DIR}/_common/system_prompt.txt, "
+            f"{PROMPTS_DIR}/_common/review_prompt.txt and "
+            f"{PROMPTS_DIR}/<family>/task_prompt.txt."
         )
 
 
@@ -146,7 +146,8 @@ def run_review(key, record):
     label, family, collect = MODES[key]
     record.start_mode(key, label)
     stage(record, label, "PLAN",
-          f"Review target: {label}; prompts: sophia/agentic_loop/prompts/{family}/")
+          f"Review target: {label}; prompts: sophia/agentic_loop/prompts/_common/ "
+          f"+ {family}/task_prompt.txt")
 
     stage(record, label, "OBSERVE", "Collecting evidence")
     ok, evidence = collect(REPO_ROOT)
@@ -157,8 +158,8 @@ def run_review(key, record):
         return f"OBSERVE FAILED: {evidence}"
     stage(record, label, "OBSERVE", "Complete")
 
-    system_prompt = read_prompt(family, "implementation/system_prompt.txt")
-    task_prompt = read_prompt(family, "implementation/task_prompt.txt")
+    system_prompt = read_prompt("_common", "system_prompt.txt")
+    task_prompt = read_prompt(family, "task_prompt.txt")
     stage(record, label, "ACT", "Running implementation model")
     output, err, tb = call_model(system_prompt, f"{task_prompt}\n\nEvidence:\n{evidence}")
     if err:
@@ -168,7 +169,7 @@ def run_review(key, record):
         return f"MODEL FAILED: {err}"
     record.set(implementation_output=output)
 
-    review_system = read_prompt(family, "review/review_prompt.txt")
+    review_system = read_prompt("_common", "review_prompt.txt")
     stage(record, label, "ACT", "Running review model")
     review, review_err, review_tb = call_model(
         review_system, f"Implementation finding:\n{output}\n\nEvidence:\n{evidence}",

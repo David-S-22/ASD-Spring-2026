@@ -28,7 +28,7 @@ answer is recorded as a finding, not raised as an error — "unreachable" and
 
 Only GET routes are swept. The loop never writes to another feature.
 
-## Why it lives here, and why the prompts are duplicated
+## Why it lives here, and why its prompts are its own set
 
 The shared loop is the team's and lives at the repository root; this one is my
 individual work and lives entirely inside `sophia/`. Nothing outside `sophia/`
@@ -42,12 +42,30 @@ choice, not an oversight.
 ## Layout
 
 ```
-main.py            the menu, the four stages, the ADAPT prompt
-collect.py         the four collect functions -- no model calls, no writes
-record.py          writes reports/report.json, report.md, run-view.md
-prompts/<family>/  implementation/ and review/ prompts per mode
-reports/           run output, self-ignoring
+main.py                     the menu, the four stages, the ADAPT prompt
+collect.py                  the four collect functions -- no model calls, no writes
+record.py                   writes reports/report.json, report.md, run-view.md
+prompts/_common/            the persona and the reviewer brief, one copy each
+prompts/<family>/           task_prompt.txt -- the only per-mode prompt
+reports/                    run output, self-ignoring
 ```
+
+The prompts split by what varies, not by mode. Both stages address the same
+reviewer with the same evidence discipline, so the persona
+(`_common/system_prompt.txt`) and the reviewer brief
+(`_common/review_prompt.txt`) are written once; only the task — what to look
+at and what to report — changes per mode. Holding four byte-identical copies
+of each said the opposite, and made a wording fix a four-file edit.
+
+Per-family overrides were deliberately not built. No mode has yet needed its
+own persona, and a lookup that falls back from `<family>/` to `_common/` would
+add a branch to `read_prompt` for a case that does not exist. If one is ever
+needed, adding it is a smaller change than carrying the indirection now.
+
+The shared loop keeps the per-family triplet
+(`prompts/<family>/implementation/{system,task}_prompt.txt` and
+`review/review_prompt.txt`) exactly as PR #78 defines it — the root `prompts/`
+tree is untouched by this package.
 
 `main.py` names two roots separately, which matters because this package sits
 two levels down rather than at the repository root:
@@ -87,5 +105,7 @@ the rest of the Bills suite.
 
 ## Adding a mode
 
-Add prompt files under `prompts/<family>/` and one entry to `MODES` in
-`main.py`. The menu numbers itself.
+Add one `prompts/<family>/task_prompt.txt` and one entry to `MODES` in
+`main.py`; the persona and reviewer brief are inherited from `_common/`. The
+menu numbers itself from `MODES`, so a directory under `prompts/` never
+becomes a mode on its own.
