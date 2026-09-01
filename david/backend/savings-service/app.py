@@ -6,9 +6,10 @@ from .helpers import object_to_hook, try_parse_bool
 from .ollama_service import generate_savings_advice
 
 
-def setup_app(db_url: str) -> Flask:
+def setup_app(db_url: str, transactions_db_url: str) -> Flask:
     app = Flask(__name__)
     db_url = db_url.rstrip("/")
+    tx_url = transactions_db_url.rstrip("/")
 
     @app.route("/")
     def home():
@@ -181,7 +182,7 @@ def setup_app(db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        return render_template("ai-suggestion.jinja", suggestion=generate_savings_advice(db_url)), 200
+        return render_template("ai-suggestion.jinja", suggestion=generate_savings_advice(db_url, tx_url)), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
     def action_ai_suggestion():
@@ -199,11 +200,14 @@ def setup_app(db_url: str) -> Flask:
             except Exception:
                 pass
 
-        new_suggestion = generate_savings_advice(db_url)
+        new_suggestion = generate_savings_advice(db_url, tx_url)
         return make_response(render_template("ai-suggestion.jinja", suggestion=new_suggestion), {"HX-Trigger": "suggestionChanged"})
 
     return app
 
 if __name__ == "__main__":
-    app = setup_app(os.environ.get("DB_URL", "http://localhost:6002"))
+    app = setup_app(
+        os.environ.get("DB_URL", "http://localhost:6002"),
+        os.environ.get("TRANSACTIONS_DB_URL", "http://localhost:6001"),
+    )
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5002)))

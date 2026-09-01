@@ -23,6 +23,15 @@ def object_to_hook(d: dict):
             cost=d["cost"],
             date=parser.parse(d["date"]),
         )
+    if "merchant" in d and "amount" in d and "date" in d:
+        return dto.Transaction(
+            id=d.get("id"),
+            amount=float(d["amount"]),
+            merchant=d["merchant"],
+            date=parser.parse(d["date"]) if isinstance(d["date"], str) else d["date"],
+            description=d.get("description", ""),
+            category_id=d.get("category_id", 0),
+        )
     if "suggestion" in d and "accepted" in d and (accepted_val := try_parse_bool(d["accepted"])) is not None:
         return dto.Suggestion(
             id=d.get("id"),
@@ -60,6 +69,16 @@ def fetch_suggestions(db_url: str) -> List[dto.Suggestion]:
 def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
     try:
         resp = requests.get(f"{db_url.rstrip('/')}/feedbacks")
+        if resp.ok:
+            return resp.json(object_hook=object_to_hook)
+    except Exception:
+        pass
+    return []
+
+
+def fetch_transactions(transactions_db_url: str) -> List[dto.Transaction]:
+    try:
+        resp = requests.get(f"{transactions_db_url.rstrip('/')}/transactions")
         if resp.ok:
             return resp.json(object_hook=object_to_hook)
     except Exception:

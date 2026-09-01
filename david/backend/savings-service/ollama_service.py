@@ -4,11 +4,13 @@ import pathlib
 from typing import List, Optional
 from openai import OpenAI
 from shared.backend import dto
-from .transactions_service import get_transactions
-from .helpers import fetch_feedbacks, fetch_goals, fetch_suggestions
+from .helpers import fetch_feedbacks, fetch_goals, fetch_suggestions, fetch_transactions
 
 url = os.environ.get("OLLAMA_URL", "http://ollama:11434/v1")
 timeout = float(os.environ.get("OLLAMA_TIMEOUT", "180"))
+model = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
+client = OpenAI(base_url=url, api_key="ollama", timeout=timeout)
+
 
 def load_prompt(prompt_name: str) -> str:
     filename = prompt_name if prompt_name.endswith(".txt") else f"{prompt_name}.txt"
@@ -48,13 +50,12 @@ def format_planner_prompt(
         "Generate a savings plan in JSON matching the required schema."
     )
 
+
 def generate_plan(
     goals: List[dto.Goal],
     suggestions: List[dto.Suggestion],
     feedbacks: List[dto.Feedback],
     transactions: List[dto.Transaction],
-    client: OpenAI,
-    model: str,
 ) -> str:
     planning_prompt = load_prompt("planning_prompt.txt")
     if not planning_prompt:
@@ -77,11 +78,7 @@ def generate_plan(
     return (response.choices[0].message.content or "").strip()
 
 
-def generate_action(
-    plan: str,
-    client: OpenAI,
-    model: str,
-) -> str:
+def generate_action(plan: str) -> str:
     action_prompt = load_prompt("action_prompt.txt")
     if not action_prompt:
         action_prompt = (
@@ -103,29 +100,30 @@ def generate_action(
         temperature=0.6,
         max_tokens=150,
     )
-    content = response.choices[0].message.content or ""
-    return content.strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 def generate_savings_advice(
     db_url: str,
+    transactions_db_url: str,
 ) -> str:
     goals = fetch_goals(db_url)
     if not goals:
         return (
-            "You don't have any active savings goals yet. Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!"
+            "You don't have any active savings goals yet. "
+            "Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!"
         )
-    transactions = get_transactions()
+
+    transactions = fetch_transactions(transactions_db_url)
     if not transactions:
-        return ("You don't have any transactions yet. Add transactions using the transactions tab.")
+        return "You don't have any transactions yet. Add transactions using the transactions tab."
+
     suggestions = fetch_suggestions(db_url)
     feedbacks = fetch_feedbacks(db_url)
 
-    client = OpenAI(base_url=url, api_key="ollama", timeout=timeout)
-    selected_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
     try:
-        plan = generate_plan(goals, suggestions, feedbacks, transactions, client, selected_model)
-        advice = generate_action(plan, client, selected_model)
+        plan = generate_plan(goals, suggestions, feedbacks, transactions)
+        advice = generate_action(plan)
         if advice:
             return advice
         return "Error: Could not generate AI savings suggestion (empty response received from AI model)."
