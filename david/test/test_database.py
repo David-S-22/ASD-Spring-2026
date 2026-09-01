@@ -332,3 +332,27 @@ def test_try_parse_bool():
     assert try_parse_bool(None) is None
 
 
+def test_seed_database_if_empty():
+    from database.seed import seed_database_if_empty, SEED_GOALS, SEED_SUGGESTIONS, SEED_FEEDBACKS
+    test_app = setup_app(":memory:")
+    with test_app.app_context():
+        assert len(db.session.execute(db.select(Goal)).scalars().all()) == 0
+
+        # Run seeding
+        seed_database_if_empty()
+
+        goals = db.session.execute(db.select(Goal)).scalars().all()
+        suggestions = db.session.execute(db.select(Suggestion)).scalars().all()
+        feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
+
+        assert len(goals) == len(SEED_GOALS)
+        assert len(suggestions) == len(SEED_SUGGESTIONS)
+        assert len(feedbacks) == len(SEED_FEEDBACKS)
+
+        seed_database_if_empty()
+        assert len(db.session.execute(db.select(Goal)).scalars().all()) == len(SEED_GOALS)
+        assert len(db.session.execute(db.select(Suggestion)).scalars().all()) == len(SEED_SUGGESTIONS)
+        assert len(db.session.execute(db.select(Feedback)).scalars().all()) == len(SEED_FEEDBACKS)
+
+
+
