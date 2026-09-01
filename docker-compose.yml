@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
     environment:
-      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b
+      OLLAMA_PULL_MODELS: qwen2.5:3b llama3.1:8b qwen2.5:0.5b
     healthcheck:
       test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
@@ -167,8 +167,13 @@ services:
       FLASK_ENV: production
       PORT: 5002
       DB_URL: http://savings-db:6002
+      OLLAMA_URL: http://ollama:11434/v1
+      OLLAMA_MODEL: qwen2.5:3b
     depends_on:
-      - savings-db
+      savings-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   savings-frontend:
     build: ./david/frontend/
     container_name: savings-frontend

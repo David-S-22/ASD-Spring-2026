@@ -1,4 +1,5 @@
-from typing import Any, Optional
+from typing import Any, List, Optional
+import requests
 from dateutil import parser
 from shared.backend import dto
 
@@ -32,7 +33,36 @@ def object_to_hook(d: dict):
         return dto.Feedback(id=d.get("id"), feedback=d["feedback"])
     return d
 
-def load_prompt(prompt_to_load) -> str:
-    return ""
 
 object_hook = object_to_hook
+
+
+def fetch_goals(db_url: str) -> List[dto.Goal]:
+    try:
+        resp = requests.get(f"{db_url.rstrip('/')}/goals")
+        if resp.ok:
+            return resp.json(object_hook=object_to_hook)
+    except Exception:
+        pass
+    return []
+
+
+def fetch_suggestions(db_url: str) -> List[dto.Suggestion]:
+    try:
+        resp = requests.get(f"{db_url.rstrip('/')}/suggestions")
+        if resp.ok:
+            return resp.json(object_hook=object_to_hook)
+    except Exception:
+        pass
+    return []
+
+
+def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
+    try:
+        resp = requests.get(f"{db_url.rstrip('/')}/feedbacks")
+        if resp.ok:
+            return resp.json(object_hook=object_to_hook)
+    except Exception:
+        pass
+    return []
+
