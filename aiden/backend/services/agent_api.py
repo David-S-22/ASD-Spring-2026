@@ -46,12 +46,10 @@ Return ONLY valid JSON matching this schema:
 
 {
   "is_suspicious": boolean,
-  "agent_reason_suspected": string
+  "justification": string
 }
 
-If the transaction is not suspicious, set:
-"is_suspicious": false
-and use an empty string for "agent_reason_suspected".
+Always populate "justification" with a concise explanation of your decision — even when "is_suspicious" is false, briefly state why the transaction looks legitimate. Never leave it empty.
 
 Do not return Markdown, code fences, commentary, or any additional fields.
 """
@@ -76,7 +74,7 @@ class CouldNotParseAgentResponseException(Exception):
 @dataclass(frozen=True)
 class ReviewFinding:
     is_suspicious: bool
-    agent_reason_suspected: str
+    justification: str
 
 def review_new_transaction(
     transaction: dto.Transaction,
@@ -113,13 +111,13 @@ def review_new_transaction(
         raise CouldNotParseAgentResponseException()
 
     if not review_finding.is_suspicious:
-        current_app.logger.info("Not classified suspicious, no anomaly")
+        current_app.logger.info("Not classified suspicious, no anomaly. Justification: %s", review_finding.justification)
         return None
 
     return dto.Anomaly(
         id=uuid4(),
         transaction_id=transaction.id,
-        agent_reason_suspected=review_finding.agent_reason_suspected,
+        agent_reason_suspected=review_finding.justification,
         is_confirmed_by_user=None
     )
 
@@ -178,8 +176,8 @@ def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:
 
     if (
         isinstance(is_suspicious := data.get("is_suspicious"), bool) and
-        isinstance(agent_reason_suspected := data.get("agent_reason_suspected"), str)
+        isinstance(justification := data.get("justification"), str)
     ):
-        return ReviewFinding(is_suspicious, agent_reason_suspected)
+        return ReviewFinding(is_suspicious, justification)
 
     return None
