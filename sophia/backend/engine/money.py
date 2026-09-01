@@ -1,4 +1,23 @@
-"""Cents-to-dollar string formatting."""
+"""Cents-to-dollar string formatting, and the one parser going the other way."""
+from decimal import Decimal, InvalidOperation
+
+
+def parse_dollars_to_cents(value) -> int:
+    """Turn a dollar amount into whole cents.
+
+    Decimal rather than float: 16.45 * 100 is 1644.9999999999998 in binary
+    floating point, and a bill priced a cent under what the user asked for is
+    the kind of error nobody notices until it compounds.
+    """
+    if isinstance(value, bool):
+        raise ValueError("amount must be a number")
+    text = str(value).strip().replace("$", "").replace(",", "")
+    if not text:
+        raise ValueError("amount must be a number")
+    try:
+        return int((Decimal(text) * 100).to_integral_value(rounding="ROUND_HALF_UP"))
+    except (InvalidOperation, ArithmeticError):
+        raise ValueError("amount must be a number")
 
 
 def format_actual(cents: int) -> str:

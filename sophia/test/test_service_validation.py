@@ -6,6 +6,7 @@ import pytest
 from sophia.backend import config
 from sophia.backend.clients import bills_db as bills_db_module
 from sophia.backend.services import bills as bills_service
+from sophia.backend.services import chat as chat_service
 from sophia.backend.services import payments as payments_service
 from sophia.backend.services.errors import NotFound, ServiceError
 from test_backend_routes import FAKE_STORE_METHODS, FakeStore
@@ -105,3 +106,50 @@ def test_refresh_skips_bills_that_no_longer_exist(store):
     store.bills.pop(1)
     result = payments_service.delete_payment(1)
     assert result == {"deleted": 1}
+
+
+# --- chat field normalisation -------------------------------------------------
+# The model is asked for the real column names but drifts predictably; these pin
+# the translation, and just as importantly pin that the whitelist still bites.
+
+def test_normalise_maps_amount_dollars_onto_amount_cents():
+    out = chat_service._normalise_chat_fields("bill", "create", {"name": "X", "amount": 16.45})
+    assert out["amount_cents"] == 1645
+    assert "amount" not in out
+
+
+def test_normalise_maps_next_variants_onto_next_billing_date():
+    for alias in ("next", "next_date", "next_billing"):
+        out = chat_service._normalise_chat_fields("bill", "create", {alias: "2026-09-05"})
+        assert out["next_billing_date"] == "2026-09-05"
+
+
+def test_normalise_defaults_merchant_to_name_on_create_only():
+    created = chat_service._normalise_chat_fields("bill", "create", {"name": "Audible"})
+    assert created["merchant"] == "Audible"
+    updated = chat_service._normalise_chat_fields("bill", "update", {"name": "Audible"})
+    assert "merchant" not in updated
+
+
+def test_normalise_keeps_an_explicit_merchant():
+    out = chat_service._normalise_chat_fields("bill", "create", {"name": "Rent", "merchant": "Harbourview Realty"})
+    assert out["merchant"] == "Harbourview Realty"
+
+
+def test_normalise_rejects_a_non_numeric_amount():
+    with pytest.raises(ServiceError) as excinfo:
+        chat_service._normalise_chat_fields("bill", "create", {"amount": "lots"})
+    assert "must be an amount" in str(excinfo.value.message)
+
+
+def test_normalise_rejects_conflicting_aliases():
+    with pytest.raises(ServiceError):
+        chat_service._normalise_chat_fields(
+            "bill", "create", {"next": "2026-09-05", "next_billing_date": "2026-10-01"}
+        )
+
+
+def test_normalise_leaves_unknown_fields_for_the_whitelist_to_reject():
+    """Normalisation must not quietly swallow an invented field."""
+    out = chat_service._normalise_chat_fields("bill", "create", {"name": "X", "colour": "blue"})
+    assert out["colour"] == "blue"
