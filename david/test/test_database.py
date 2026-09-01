@@ -338,7 +338,6 @@ def test_seed_database_if_empty():
     with test_app.app_context():
         assert len(db.session.execute(db.select(Goal)).scalars().all()) == 0
 
-        # Run seeding
         seed_database_if_empty()
 
         goals = db.session.execute(db.select(Goal)).scalars().all()
