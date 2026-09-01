@@ -56,9 +56,9 @@ def generate_plan(
     client: OpenAI,
     model: str,
 ) -> str:
-    system_prompt = load_prompt("planning_prompt.txt")
-    if not system_prompt:
-        system_prompt = (
+    planning_prompt = load_prompt("planning_prompt.txt")
+    if not planning_prompt:
+        planning_prompt = (
             "You are a financial planner. Analyze the data and return a JSON plan with: "
             "target_category, merchants, suggested_action, estimated_savings, goals."
         )
@@ -68,7 +68,7 @@ def generate_plan(
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": planning_prompt},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.3,
@@ -82,9 +82,9 @@ def generate_action(
     client: OpenAI,
     model: str,
 ) -> str:
-    system_prompt = load_prompt("action_prompt.txt")
-    if not system_prompt:
-        system_prompt = (
+    action_prompt = load_prompt("action_prompt.txt")
+    if not action_prompt:
+        action_prompt = (
             "You are a personal financial coach. Convert the provided savings plan into "
             "1 or 2 plain text advice sentences directly addressing the user."
         )
@@ -97,7 +97,7 @@ def generate_action(
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": action_prompt},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.6,
