@@ -12,10 +12,45 @@ def test_frontend_loads_transaction_rows_with_htmx():
     assert "htmx.org@2.0.10" in index
     assert 'id="transactions"' in index
     assert 'hx-get="/transactions-backend/transactions"' in index
-    assert 'hx-trigger="load"' in index
+    assert 'hx-trigger="load, transactionsChanged"' in index
     assert 'hx-swap="innerHTML"' in index
     assert "<th>ID</th>" not in index
     assert 'colspan="5"' in index
+
+
+def test_frontend_has_add_transaction_screen_and_back_button():
+    index = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="add-transaction-button"' in index
+    assert 'onclick="showAddTransactionScreen()"' in index
+    assert 'id="transaction-form-screen"' in index
+    assert 'onclick="showTransactionList()"' in index
+    assert "Back to transactions" in index
+    assert 'id="transaction-date"' in index
+    assert 'id="transaction-amount"' in index
+    assert 'id="transaction-merchant"' in index
+    assert 'id="transaction-description"' in index
+    assert 'id="transaction-category"' in index
+    assert 'id="save-transaction-button"' in index
+
+
+def test_frontend_loads_categories_and_posts_transaction_to_backend():
+    index = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "fetch('/transactions-backend/categories')" in index
+    assert "fetch('/transactions-backend/transactions'" in index
+    assert "method: 'POST'" in index
+    assert "headers: {'Content-Type': 'application/json'}" in index
+    assert "body: JSON.stringify(payload)" in index
+    assert "amount: Number(formData.get('amount'))" in index
+    assert "category_id: Number(formData.get('category_id'))" in index
+    assert "document.getElementById('transactions')" in index
+    assert "'transactionsChanged'" in index
+    assert "transactions-db" not in index
 
 
 def test_frontend_proxies_only_to_backend():
