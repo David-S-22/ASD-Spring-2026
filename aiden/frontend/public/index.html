@@ -6,12 +6,6 @@
     <title>Anomalies</title>
 </head>
 <body>
-    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" 
-            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/htmx-ext-json-enc@2.0.1/json-enc.js"
-            crossorigin="anonymous"></script>
-
             <h1>Anomalies</h1>
     <button type="button"
             hx-post="/anomalies-backend/dummy-anomaly"
@@ -22,7 +16,7 @@
     <button type="button"
             hx-post="/anomalies-backend/check-transaction"
             hx-ext="json-enc"
-            hx-vals="js:window.dummyTransaction()"
+            hx-vals="js:{...window.dummyTransaction()}"
             hx-target="#alert"
             hx-swap="innerHTML">
         Check dummy transaction
