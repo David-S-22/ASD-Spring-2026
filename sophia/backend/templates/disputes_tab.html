@@ -7,7 +7,7 @@
       <li>
         <button
           class="dispute-list-item"
-          hx-get="/ui/disputes?dispute_id={{ d.id }}"
+          hx-get="/bills-backend/ui/disputes?dispute_id={{ d.id }}"
           hx-target="#dispute-panel"
           hx-swap="outerHTML"
         >
@@ -23,5 +23,5 @@
     <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
     {% endif %}
   </div>
-  <div id="dispute-panel" class="dispute-panel" hx-get="/ui/disputes" hx-trigger="load" hx-swap="outerHTML"></div>
+  <div id="dispute-panel" class="dispute-panel" hx-get="/bills-backend/ui/disputes" hx-trigger="load" hx-swap="outerHTML"></div>
 </div>

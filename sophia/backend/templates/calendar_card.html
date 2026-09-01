@@ -14,5 +14,5 @@
     {% endfor %}
   </ul>
   <button type="button" data-action="set-aside" data-toast="Done — change saved.">Set aside {{ total_high }}</button>
-  <button hx-get="/ui/calendar?month={{ next_month_param }}" hx-target="#calendar-card" hx-swap="outerHTML">See other months</button>
+  <button hx-get="/bills-backend/ui/calendar?month={{ next_month_param }}" hx-target="#calendar-card" hx-swap="outerHTML">See other months</button>
 </div>

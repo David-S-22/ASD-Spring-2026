@@ -5,7 +5,7 @@
     {% for value in [30, 60, 90, 180] %}
     <button
       class="{{ 'active' if value == days else '' }}"
-      hx-get="/ui/timeline?days={{ value }}"
+      hx-get="/bills-backend/ui/timeline?days={{ value }}"
       hx-target="#timeline"
       hx-swap="outerHTML"
     >{{ value }}</button>

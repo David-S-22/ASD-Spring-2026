@@ -4,7 +4,7 @@
   {% if context_line %}<p class="context">{{ context_line }}</p>{% endif %}
 
   {% if versions|length > 1 %}
-  <select class="version-picker" hx-get="/ui/disputes?dispute_id={{ dispute.id }}" hx-trigger="change" hx-target="#dispute-panel" hx-swap="outerHTML" name="version">
+  <select class="version-picker" hx-get="/bills-backend/ui/disputes?dispute_id={{ dispute.id }}" hx-trigger="change" hx-target="#dispute-panel" hx-swap="outerHTML" name="version">
     {% for v in versions %}
     <option value="{{ v }}" {{ "selected" if v == selected_version else "" }}>Version {{ v }}</option>
     {% endfor %}
@@ -30,11 +30,11 @@
   <button type="button" data-action="rewrite" data-dispute-id="{{ dispute.id }}">Rewrite it</button>
   <div class="rewrite-feedback" hidden>
     <textarea class="feedback" name="feedback" placeholder="What should change?"></textarea>
-    <button hx-post="/ui/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next .working">Send feedback</button>
+    <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next .working">Send feedback</button>
     <span class="htmx-indicator working">Rewriting — this can take up to a minute…</span>
   </div>
-  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as sent</button>
-  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as resolved</button>
+  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as sent</button>
+  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as resolved</button>
   {% else %}
   <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
   {% endif %}

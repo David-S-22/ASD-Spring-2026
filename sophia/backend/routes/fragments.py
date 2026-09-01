@@ -213,13 +213,13 @@ def _bills_write_response(toast_text, status=200, refresh_projection=True):
 
 @bp.get("/bills/new-form")
 def bill_new_form():
-    return render_template("bill_form.html", bill=None, action="/ui/bills")
+    return render_template("bill_form.html", bill=None, action="/bills-backend/ui/bills")
 
 
 @bp.get("/bills/<int:bill_id>/edit")
 def bill_edit_form(bill_id):
     bill = bills_service.get_bill(bill_id)
-    return render_template("bill_form.html", bill=bill, action=f"/ui/bills/{bill_id}/edit")
+    return render_template("bill_form.html", bill=bill, action=f"/bills-backend/ui/bills/{bill_id}/edit")
 
 
 def _parse_handoff_subscription(args):
@@ -294,7 +294,7 @@ def handoff_subscription_form():
         "low_confidence": request.args.get("confidence") == "low",
         "return_url": request.args.get("return_url"),
     }
-    return render_template("bill_form.html", bill=bill, action="/ui/bills", evidence=evidence)
+    return render_template("bill_form.html", bill=bill, action="/bills-backend/ui/bills", evidence=evidence)
 
 
 @bp.post("/bills")

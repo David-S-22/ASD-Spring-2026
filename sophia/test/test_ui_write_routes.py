@@ -186,7 +186,11 @@ def test_ui_chat_never_writes_bills_and_apply_does(live_client, monkeypatch):
     assert bills_db_module.get_bill(bill_id) == before
 
     body = chat_response.get_data(as_text=True)
-    assert 'hx-post="/ui/chat/apply"' in body
+    # The emitted markup carries the /bills-backend/ prefix so one set of URLs
+    # works both standalone and inside the shared shell; nginx strips it before
+    # the request reaches Flask, which is why the request path two lines below
+    # is still the unprefixed route.
+    assert 'hx-post="/bills-backend/ui/chat/apply"' in body
 
     messages = bills_db_module.list_chat_messages()
     latest_assistant = [m for m in messages if m["role"] == "assistant"][-1]

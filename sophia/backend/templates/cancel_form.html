@@ -2,7 +2,7 @@
 <div class="modal-form" id="cancel-form">
   <h3>Cancel {{ bill.name }}</h3>
   <p>Last payment lands on {{ bill.next_occurrence }}.</p>
-  <form hx-post="/ui/bills/{{ bill.id }}/cancel" hx-target="#bills-table" hx-swap="outerHTML">
+  <form hx-post="/bills-backend/ui/bills/{{ bill.id }}/cancel" hx-target="#bills-table" hx-swap="outerHTML">
     <label>End date
       <input name="end_date" type="date" value="{{ bill.next_occurrence }}" required>
     </label>
