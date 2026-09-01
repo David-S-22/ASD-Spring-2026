@@ -54,7 +54,6 @@ feedbacks = get_feedbacks()
 
 
 def seed_database_if_empty():
-    """Seed the database tables using add_all if they are empty."""
     try:
         has_goals = db.session.execute(db.select(Goal)).scalars().first() is not None
         has_suggestions = db.session.execute(db.select(Suggestion)).scalars().first() is not None
