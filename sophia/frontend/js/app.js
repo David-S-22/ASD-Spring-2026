@@ -159,6 +159,63 @@ billsRoot.addEventListener("switchTab", function (evt) {
   }
 });
 
+// Client-side search over the rendered rows. No route, no ?q=, no request --
+// the whole table is already in the DOM, and filtering it is the honest shape
+// for twelve rows. Server-side search is the R1 shape, for when it is not.
+//
+// Matched against Name, Every, Paid by and Status. Deliberately not the actions
+// cell, whose every row reads "Edit Cancel Dispute Record payment" and would
+// therefore match any query that is a substring of those words.
+var SEARCHABLE_CELLS = [0, 2, 4, 5];
+
+function rowMatches(row, needle) {
+  for (var i = 0; i < SEARCHABLE_CELLS.length; i++) {
+    var cell = row.cells[SEARCHABLE_CELLS[i]];
+    if (cell && cell.textContent.toLowerCase().indexOf(needle) !== -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function applyBillsFilter() {
+  var input = document.getElementById("bills-search");
+  var table = billsRoot.querySelector(".bills-table");
+  if (!input || !table) {
+    return;
+  }
+  var needle = input.value.trim().toLowerCase();
+  var rows = table.querySelectorAll("tbody tr[data-bill-id]");
+  var shown = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var hit = !needle || rowMatches(rows[i], needle);
+    rows[i].hidden = !hit;
+    if (hit) {
+      shown++;
+    }
+  }
+  var empty = table.querySelector("tbody tr.no-match");
+  if (empty) {
+    empty.hidden = !(needle && shown === 0);
+  }
+}
+
+// Bound on billsRoot rather than the input: the input survives table swaps, but
+// binding through the root keeps every listener in this file on one subtree, so
+// a second visit to the Bills tab rebinds a fresh subtree instead of stacking a
+// duplicate on a document that is never replaced.
+billsRoot.addEventListener("input", function (evt) {
+  if (evt.target && evt.target.id === "bills-search") {
+    applyBillsFilter();
+  }
+});
+
+// Every write replaces #bills-table wholesale, which brings back rows the filter
+// had hidden. Re-apply once the swap has settled.
+billsRoot.addEventListener("htmx:afterSwap", function () {
+  applyBillsFilter();
+});
+
 billsRoot.addEventListener("click", function (evt) {
   var tab = evt.target.closest(".tabs button");
   if (tab) {

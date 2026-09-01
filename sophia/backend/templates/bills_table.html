@@ -1,6 +1,7 @@
 {# Bills table fragment: Name / Amount / Every / Next billing / Paid by / Status. #}
 <div class="bills-panel" id="bills-table">
   <h2>Bills &amp; subscriptions · {{ monthly_total }}</h2>
+  <div class="table-scroll">
   <table class="bills-table">
     <thead>
       <tr>
@@ -30,7 +31,10 @@
         </td>
       </tr>
       {% endfor %}
+      {# Toggled by the client-side filter in app.js; never rendered by the server. #}
+      <tr class="no-match" hidden><td colspan="7">No bills match that search.</td></tr>
     </tbody>
   </table>
+  </div>
   <button hx-get="/bills-backend/ui/bills/new-form" hx-target="#modal-root">Add a bill</button>
 </div>

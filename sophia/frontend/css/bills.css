@@ -74,13 +74,77 @@
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 0.25rem 1rem 1rem;
+  padding: 0.25rem 0 1rem;
 }
 
-/* Kept only as a genuine-overflow fallback far below the shell's column width.
-   At both target widths the table now fits and no scrollbar appears. */
-.bills-panel {
-  overflow-x: auto;
+/* The table runs full-bleed to the panel edge and the chrome around it is
+   padded instead. Horizontal padding on the panel comes straight off the
+   table's width, and the table has none to give: the scroll container's own
+   vertical scrollbar already takes 15px, which was enough to push the table
+   back into horizontal overflow and undo #96's no-scrollbar guarantee. */
+.bills-panel > h2,
+.bills-panel > button,
+.calendar-card > *,
+.timeline > * {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.timeline li {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Both axes live on the scroll container now, not split across two elements --
+   a sticky header only works against its nearest scrolling ancestor, and two
+   nested scroll contexts is how you get a header that sticks to the wrong one.
+
+   620px, not the ~950px ten rows would need. Rows are ~94px because the four
+   action controls wrap to three lines in the shell's 684px column, so ten rows
+   plus the header comes to 991px -- taller than the viewport it has to sit in.
+   620px keeps six rows and the header on screen, which covers Spotify (row 3)
+   and GymCo (row 6): the two rows the demo actually touches. */
+.table-scroll {
+  max-height: 620px;
+  overflow: auto;
+}
+
+.bills-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Opaque, deliberately. A translucent header lets rows scroll through it and
+     the column labels become unreadable the moment anything moves. */
+  background: var(--raised);
+  border-bottom: 2px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.bills-table .no-match td {
+  color: var(--mut);
+  text-align: center;
+  padding: 1.4em 0.6em;
+}
+
+.bills-search {
+  display: block;
+  margin: 0 0 0.75rem;
+}
+
+.bills-search input {
+  width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .bills-table th,
