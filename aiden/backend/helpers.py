@@ -1,28 +1,37 @@
-from dataclasses import fields, is_dataclass
-from typing import Any, Optional, Type, TypeVar, get_args, get_origin, Union
-from uuid import UUID
+from dataclasses import is_dataclass
+from functools import lru_cache
+from typing import Any, Optional, Type, TypeVar
 import os
 
-from flask import abort
+from flask import abort, Response
+from pydantic import TypeAdapter, ValidationError
 
 T = TypeVar("T")
 
+def empty() -> Response:
+    return Response(status=204)
+
+@lru_cache(maxsize=None)
+def _adapter(cls: type) -> TypeAdapter:
+    """Builds (and caches) a pydantic TypeAdapter for a plain dataclass.
+
+    pydantic validates the stdlib dataclass directly from its annotations, so the
+    DTOs stay ordinary @dataclass definitions with no BaseModel involvement.
+    """
+
+    return TypeAdapter(cls)
+
 def serialise(dto: Any) -> dict:
-    """Serializes a flat dataclass into a dict, converting all UUIDs to strings."""
+    """Serialises a flat dataclass into a JSON-compatible dict.
 
-    if not is_dataclass(dto):
+    Field values are validated against their declared types and datetimes are
+    rendered as ISO strings by pydantic's JSON serialisation.
+    """
+
+    if not is_dataclass(dto) or isinstance(dto, type):
         raise TypeError("Expected a dataclass instance.")
-        
-    result = {}
-    for field in fields(dto):
-        value = getattr(dto, field.name)
 
-        if isinstance(value, UUID):
-            result[field.name] = str(value)
-        else:
-            result[field.name] = value
-
-    return result
+    return _adapter(type(dto)).dump_python(dto, mode="json")
 
 def deserialise_or_abort(cls: Type[T], data: dict) -> T:
     dto = deserialise_safe(cls, data)
@@ -33,36 +42,19 @@ def deserialise_or_abort(cls: Type[T], data: dict) -> T:
     return dto
 
 def deserialise_safe(cls: Type[T], data: dict) -> Optional[T]:
-    """Safely reconstructs a flat dataclass from a dict, converting strings back to UUIDs."""
+    """Safely reconstructs a flat dataclass from a dict.
 
-    if not is_dataclass(cls):
+    pydantic coerces and validates each value against the declared field types
+    (e.g. an ISO string to datetime). Returns None if validation fails.
+    """
+
+    if not is_dataclass(cls) or not isinstance(cls, type):
         raise TypeError("Expected a dataclass type.")
 
-    kwargs = {}
-
-    for field in fields(cls):
-        if (field_name := field.name) not in data:
-            continue
-
-        field_value = data[field_name]
-        field_type = field.type
-
-        # Unwrap Optional[...] / Union[..., None] to the underlying type
-        if get_origin(field_type) is Union:
-            non_none = [arg for arg in get_args(field_type) if arg is not type(None)]
-            if len(non_none) == 1:
-                field_type = non_none[0]
-
-        # Try reconstruct UUID
-        if field_type is UUID and isinstance(field_value, str):
-            try:
-                field_value = UUID(field_value)
-            except ValueError:
-                return None
-
-        kwargs[field_name] = field_value
-
-    return cls(**kwargs)
+    try:
+        return _adapter(cls).validate_python(data)
+    except ValidationError:
+        return None
 
 def get_env(name: str) -> str:
     return os.environ[name]

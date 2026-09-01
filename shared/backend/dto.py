@@ -4,12 +4,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
 
 # Represents a transaction the user has entered into the application
 @dataclass(frozen=True)
 class Transaction:
-    id: UUID
+    id: int
     amount: float
     merchant: str
     date: datetime
@@ -26,8 +25,8 @@ class Category:
 # whether it is true positive or false positive, which is represented by is_confirmed_by_user
 @dataclass(frozen=True)
 class Anomaly:
-    id: UUID
-    transaction_id: UUID
+    id: int
+    transaction_id: int
     agent_reason_suspected: str
     is_confirmed_by_user: Optional[bool]
 

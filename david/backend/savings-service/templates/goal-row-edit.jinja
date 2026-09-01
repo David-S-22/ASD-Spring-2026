@@ -7,7 +7,7 @@
         <button type="button" 
                 class="btn-accept" 
                 title="Accept" 
-                hx-patch="/savings/goal/{{ goal.id }}" 
+                hx-patch="/savings-backend/goal/{{ goal.id }}" 
                 hx-include="closest tr" 
                 hx-target="closest tr" 
                 hx-swap="outerHTML" 
@@ -15,7 +15,7 @@
         <button type="button" 
                 class="btn-cancel" 
                 title="Cancel" 
-                hx-get="/savings/goal/{{ goal.id }}" 
+                hx-get="/savings-backend/goal/{{ goal.id }}" 
                 hx-target="closest tr" 
                 hx-swap="outerHTML">✗</button>
     </td>
