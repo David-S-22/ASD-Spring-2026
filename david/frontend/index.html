@@ -38,7 +38,7 @@
             <div class="panel-header">
               <h2>AI Suggestion</h2>
             </div>
-            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings-backend/ai-suggestion" hx-trigger="load, feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
+            <div class="ai-suggestion-body" id="ai-suggestion" hx-get="/savings-backend/ai-suggestion" hx-trigger="load, feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML" hx-indicator="#ai-suggestion-container">
               <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion...">Loading personalized AI savings advice...</textarea>
             </div>
           </div>
@@ -97,6 +97,20 @@
           }
         }
         hideError();
+      });
+
+      document.addEventListener('htmx:beforeRequest', function(evt) {
+        const container = (evt.detail.elt && evt.detail.elt.closest) ? evt.detail.elt.closest('#ai-suggestion-container') : null;
+        if (container) {
+          const actions = container.querySelector('.ai-suggestion-actions');
+          if (actions) {
+            actions.remove();
+          }
+          const textbox = container.querySelector('.ai-suggestion-textbox');
+          if (textbox) {
+            textbox.value = 'Loading personalized AI savings advice...';
+          }
+        }
       });
 
       document.addEventListener('htmx:responseError', function(evt) {
