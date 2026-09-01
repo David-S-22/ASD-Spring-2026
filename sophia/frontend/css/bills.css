@@ -178,6 +178,11 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  /* Above #modal-root's z-index: 50. The confirm dialog is asked for BY the
+     modal forms, so it has to paint over them; without this it renders
+     underneath and the Confirm button cannot be clicked, which kills every
+     write started from a modal form while leaving the route tests green. */
+  z-index: 60;
   background: rgba(29, 34, 44, 0.4);
   display: flex;
   align-items: center;
