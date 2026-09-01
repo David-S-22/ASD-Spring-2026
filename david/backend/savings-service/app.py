@@ -1,14 +1,15 @@
 import os
 import requests
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
+from .helpers import object_to_hook, try_parse_bool
+from .ollama_service import generate_savings_advice
 
-from .helpers import object_to_hook
 
-
-def setup_app(db_url: str) -> Flask:
+def setup_app(db_url: str, transactions_db_url: str) -> Flask:
     app = Flask(__name__)
     db_url = db_url.rstrip("/")
+    tx_url = transactions_db_url.rstrip("/")
 
     @app.route("/")
     def home():
@@ -33,7 +34,7 @@ def setup_app(db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/goal", json=payload)
         resp.raise_for_status()
-        return get_goals()
+        return make_response(get_goals(), {"HX-Trigger": "goalChanged"})
 
     @app.route("/goal/<int:id>")
     def get_goal(id: int):
@@ -61,7 +62,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         goal = resp.json(object_hook=object_to_hook)
-        return render_template("goal-row.jinja", goal=goal), 200
+        return make_response(render_template("goal-row.jinja", goal=goal), 200, {"HX-Trigger": "goalChanged"})
 
     @app.route("/goal/<int:id>", methods=["DELETE"])
     def delete_goal(id: int):
@@ -69,7 +70,7 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return get_goals()
+        return make_response(get_goals(), {"HX-Trigger": "goalChanged"})
 
     @app.route("/suggestions")
     def get_suggestions():
@@ -87,7 +88,7 @@ def setup_app(db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/suggestion", json=payload)
         resp.raise_for_status()
-        return get_suggestions()
+        return make_response(get_suggestions(), {"HX-Trigger": "suggestionChanged"})
 
     @app.route("/suggestion/<int:id>")
     def get_suggestion(id: int):
@@ -115,7 +116,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         suggestion = resp.json(object_hook=object_to_hook)
-        return render_template("suggestion-row.jinja", suggestion=suggestion), 200
+        return make_response(render_template("suggestion-row.jinja", suggestion=suggestion), 200, {"HX-Trigger": "suggestionChanged"})
 
     @app.route("/suggestion/<int:id>", methods=["DELETE"])
     def delete_suggestion(id: int):
@@ -123,7 +124,7 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return get_suggestions()
+        return make_response(get_suggestions(), {"HX-Trigger": "suggestionChanged"})
 
     @app.route("/feedback")
     def get_feedback():
@@ -141,7 +142,7 @@ def setup_app(db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/feedback", json=payload)
         resp.raise_for_status()
-        return get_feedback()
+        return make_response(get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/feedback/<int:id>")
     def get_single_feedback(id: int):
@@ -169,7 +170,7 @@ def setup_app(db_url: str) -> Flask:
             abort(404)
         resp.raise_for_status()
         feedback = resp.json(object_hook=object_to_hook)
-        return render_template("feedback-row.jinja", feedback=feedback), 200
+        return make_response(render_template("feedback-row.jinja", feedback=feedback), 200, {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/feedback/<int:id>", methods=["DELETE"])
     def delete_feedback(id: int):
@@ -177,45 +178,36 @@ def setup_app(db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return get_feedback()
+        return make_response(get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
-        return render_template("ai-suggestion.jinja", suggestion=stub_suggestion), 200
+        return render_template("ai-suggestion.jinja", suggestion=generate_savings_advice(db_url, tx_url)), 200
 
-    @app.route("/ai-suggestion/accept", methods=["POST"])
-    def accept_ai_suggestion():
-        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
-        requests.post(
-            f"{db_url}/suggestion",
-            json={"suggestion": stub_suggestion, "accepted": True},
-        )
-        resp = requests.get(f"{db_url}/suggestions")
-        suggestions = resp.json(object_hook=object_to_hook) if resp.ok else []
-        return render_template(
-            "ai-suggestion.jinja",
-            suggestion="Suggestion accepted! Added to the Suggestions table.",
-            suggestions=suggestions,
-        ), 200
+    @app.route("/ai-suggestion/action", methods=["POST"])
+    def action_ai_suggestion():
+        payload = request.get_json(silent=True) or request.form.to_dict()
+        suggestion_text = payload.get("suggestion", "").strip() if payload else ""
+        accepted_raw = request.args.get("accepted") if "accepted" in request.args else (payload.get("accepted") if payload else None)
+        accepted = try_parse_bool(accepted_raw)
 
-    @app.route("/ai-suggestion/reject", methods=["POST"])
-    def reject_ai_suggestion():
-        stub_suggestion = "Based on your recent savings goals, you are on track to save an extra $200 by end of quarter."
-        requests.post(
-            f"{db_url}/suggestion",
-            json={"suggestion": stub_suggestion, "accepted": False},
-        )
-        resp = requests.get(f"{db_url}/suggestions")
-        suggestions = resp.json(object_hook=object_to_hook) if resp.ok else []
-        return render_template(
-            "ai-suggestion.jinja",
-            suggestion="Suggestion rejected. Recorded in the Suggestions table.",
-            suggestions=suggestions,
-        ), 200
+        if suggestion_text and suggestion_text != "No current AI suggestion available." and accepted is not None:
+            try:
+                requests.post(
+                    f"{db_url}/suggestion",
+                    json={"suggestion": suggestion_text, "accepted": accepted},
+                )
+            except Exception:
+                pass
+
+        new_suggestion = generate_savings_advice(db_url, tx_url)
+        return make_response(render_template("ai-suggestion.jinja", suggestion=new_suggestion), {"HX-Trigger": "suggestionChanged"})
 
     return app
 
 if __name__ == "__main__":
-    app = setup_app(os.environ.get("DB_URL", "http://localhost:6002"))
+    app = setup_app(
+        os.environ.get("DB_URL", "http://localhost:6002"),
+        os.environ.get("TRANSACTIONS_DB_URL", "http://localhost:6001"),
+    )
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5002)))

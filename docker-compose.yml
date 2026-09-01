@@ -169,8 +169,16 @@ services:
       FLASK_ENV: production
       PORT: 5002
       DB_URL: http://savings-db:6002
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
+      OLLAMA_URL: http://ollama:11434/v1
+      OLLAMA_MODEL: qwen2.5:3b
     depends_on:
-      - savings-db
+      savings-db:
+        condition: service_started
+      transactions-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   savings-frontend:
     build: ./david/frontend/
     container_name: savings-frontend
@@ -180,7 +188,10 @@ services:
       PORT: 3002
       BACKEND_URL: http://savings-backend:5002
     depends_on:
-      - savings-backend
+      savings-backend:
+        condition: service_started
+      ollama:
+        condition: service_healthy
 
 volumes:
   ollama_data:
