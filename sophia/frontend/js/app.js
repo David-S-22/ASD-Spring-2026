@@ -70,6 +70,18 @@ function showToast(text) {
   }, 2500);
 }
 
+// The four inner tabs, in markup order. Also the whitelist for the fragment:
+// only these names are ever written to or restored from location.hash.
+var TAB_NAMES = ["bills", "calendar", "timeline", "disputes"];
+
+// Tab memory is namespaced -- "#bills:disputes", not "#disputes". In the shell
+// this fragment lives on the shell's own URL, which is shared ground: if the
+// shell later records its active feature there, a bare "#bills" would be
+// ambiguous between "the shell's Bills tab" and "Bills' own bills tab". The
+// prefix also keeps these values clear of the published deep links, which are
+// "#bills?confirm=<id>" and "#chat?..." and are contract, not tab state.
+var TAB_HASH_PREFIX = "#bills:";
+
 function activateTab(name) {
   document.querySelectorAll(".tabs button").forEach(function (btn) {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === name);
@@ -77,6 +89,39 @@ function activateTab(name) {
   document.querySelectorAll(".tab-page").forEach(function (page) {
     page.classList.toggle("active", page.getAttribute("data-tab-page") === name);
   });
+  rememberTab(name);
+}
+
+// Record the open tab in the fragment so a reload comes back to it.
+//
+// replaceState rather than assigning location.hash: assigning pushes a history
+// entry per tab click, so Back would walk the tabs instead of leaving the page.
+// replaceState also fires no hashchange, so this cannot re-enter the restore
+// branch in the initialiser below.
+//
+// Inside the shell this writes to the shell's own URL (:3000/#calendar), which
+// is the only place a reload can survive -- the shell swaps features into
+// #content without touching the URL, so Bills has nowhere else to put it. The
+// shell has no hashchange listener and no other feature reads the fragment, so
+// the value is inert until Bills is opened again. A reload at :3000 still lands
+// on the shell's own Home tab, because Bills is not mounted at that point;
+// clicking Bills then restores the remembered tab. Making the reload itself
+// return to Bills needs the shell to record its active tab, which is Aiden's.
+function rememberTab(name) {
+  if (TAB_NAMES.indexOf(name) === -1) {
+    return;
+  }
+  // Leave a deep link alone while its own tab is the one being activated:
+  // "#bills?confirm=12" already says bills, and overwriting it would drop the
+  // target row on a reload.
+  if (location.hash.indexOf("#" + name + "?") === 0) {
+    return;
+  }
+  var next = TAB_HASH_PREFIX + name;
+  if (location.hash === next) {
+    return;
+  }
+  history.replaceState(null, "", next);
 }
 
 billsRoot.addEventListener("htmx:confirm", function (evt) {
@@ -201,6 +246,15 @@ billsRoot.addEventListener("click", function (evt) {
     }, 10000);
     billsRoot.addEventListener("htmx:afterSettle", scrollToBill);
     return;
+  }
+  // "#bills:<tab>" is the tab remembered from a previous visit. Checked after
+  // the deep links above, which carry a query and are the more specific match.
+  if (location.hash.indexOf(TAB_HASH_PREFIX) === 0) {
+    var remembered = location.hash.slice(TAB_HASH_PREFIX.length);
+    if (TAB_NAMES.indexOf(remembered) !== -1) {
+      activateTab(remembered);
+      return;
+    }
   }
   if (location.hash.indexOf("#chat?") === 0) {
     var chat = document.querySelector(".ask-tally");
