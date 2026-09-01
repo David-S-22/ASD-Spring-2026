@@ -52,7 +52,7 @@ Architecture diagrams:
 | Service | Port | Key env vars |
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
-| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:0.5b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
+| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
 | `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
@@ -90,8 +90,7 @@ second attempt also fails. Neither call ever raises out to the route.
    classifies the message into `{op, entity, id, fields, question, say}`.
    `question` resolves in code (`total`, `barely_using`, `upcoming`); `op`
    becomes a preview card the user must confirm before anything is written.
-   Kept deliberately short — `qwen2.5:0.5b`'s accuracy degrades fast with
-   long context.
+   Kept deliberately short — accuracy degrades with long context.
 
 ## Date engine rules
 
