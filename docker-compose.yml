@@ -11,7 +11,8 @@ services:
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
     environment:
-      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b
+      # Any models you want to use must be listed here, to ensure they are installed on the container
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b
     healthcheck:
       test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
@@ -124,9 +125,9 @@ services:
       FLASK_ENV: production
       PORT: 5004
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
-      OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:0.5b
-      OLLAMA_REVIEW_MODEL: llama3.1:8b
+      OLLAMA_MODEL: qwen2.5:3b
     depends_on:
       anomalies-db:
         condition: service_started
