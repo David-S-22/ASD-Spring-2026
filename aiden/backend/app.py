@@ -4,7 +4,7 @@ from uuid import uuid4
 from flask import Flask, jsonify, render_template, request
 
 from shared.backend import dto
-from .helpers import deserialise_or_abort, empty
+from .helpers import deserialise_or_abort, empty, get_env
 from .services import anomalies_api, ollama_api, agent_api, transaction_api
 
 
@@ -16,7 +16,12 @@ def get_index():
 
 @app.get("/fact")
 def get_fact():
-    return ollama_api.prompt("You are a helpful assistant", "tell me a random fact") # TODO fix
+    return ollama_api.prompt(
+        system_prompt="You are a helpful assistant",
+        user_prompt="tell me a random fact",
+        model=get_env("OLLAMA_IMPLEMENTATION_MODEL"),
+        temperature=0.5,
+        output_tokens=500)
 
 @app.get("/anomalies")
 def get_anomaly_rows():

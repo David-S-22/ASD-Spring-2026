@@ -12,7 +12,7 @@ services:
     entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
     environment:
       # Any models you want to use must be listed here, to ensure they are installed on the container
-      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b qwen2.5:7b
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b
     healthcheck:
       test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
@@ -129,7 +129,8 @@ services:
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
       OLLAMA_IMPLEMENTATION_MODEL: qwen2.5:3b
-      OLLAMA_REVIEW_MODEL: qwen2.5:7b
+      # TODO remove
+      OLLAMA_REVIEW_MODEL: qwen2.5:3b
     depends_on:
       anomalies-db:
         condition: service_started

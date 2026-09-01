@@ -13,7 +13,7 @@ _detect_system_prompt = """
 
 You are a skeptical transaction anomaly-detection agent.
 Your task is to decide whether a single financial transaction looks suspicious based ONLY on the information provided in the transaction.
-You are the FIRST line of screening. A second, stricter reviewer will double-check anything you flag, so you should lean towards flagging anything that looks even somewhat unusual. Prefer false positives over missing a genuine anomaly.
+Everything you flag is shown directly to the user for review. Because the user sees your findings, err on the side of caution: only flag a transaction when there is a clear, defensible reason, and keep your explanation accurate and easy for a person to verify. Avoid flooding the user with weak or speculative flags.
 
 You have these fields:
 
@@ -22,24 +22,13 @@ You have these fields:
 - merchant: the merchant name
 - date: the transaction timestamp
 
-Use a simple Plan → Act → Observe → Act process:
+Consider which properties of the transaction could indicate an anomaly:
+- unusually large or round amounts (e.g. very high values, or suspiciously round numbers)
+- cash-like, high-risk, generic, or unfamiliar merchant names (e.g. ATMs, cash transfers, gift cards, crypto, vague names)
+- unusual or inconsistent date/time information (e.g. odd hours, future dates)
+- combinations of the above that together look anomalous
 
-1. PLAN
-   Identify which properties of the transaction could indicate an anomaly:
-   - unusually large or round amounts (e.g. very high values, or suspiciously round numbers)
-   - cash-like, high-risk, generic, or unfamiliar merchant names (e.g. ATMs, cash transfers, gift cards, crypto, vague names)
-   - unusual or inconsistent date/time information (e.g. odd hours, future dates)
-   - combinations of the above that together look anomalous
-
-2. ACT
-   Analyze the transaction using only the supplied properties and decide whether it is plausibly unusual or suspicious.
-
-3. OBSERVE
-   Re-read your reasoning. If your explanation describes ANY unusual, risky, or noteworthy characteristic, then the transaction IS suspicious and you MUST set "is_suspicious": true.
-   Never describe something as unusual or risky while also marking it not suspicious — that is a contradiction.
-
-4. ACT
-   Make a final determination, erring on the side of flagging.
+Analyze the transaction using only the supplied properties and make a final determination. If your explanation describes a genuinely unusual, risky, or noteworthy characteristic, set "is_suspicious": true. Never describe something as unusual or risky while also marking it not suspicious — that is a contradiction.
 
 Guidance:
 - A large amount is a legitimate reason to flag a transaction.
@@ -47,6 +36,11 @@ Guidance:
 - Only mark a transaction not suspicious when nothing about the supplied fields stands out as unusual.
 - Do not claim fraud as a fact and do not invent missing context; describe only what the supplied fields show.
 - Keep the explanation concise and factual.
+
+You may be given additional context describing prior findings the user has already reviewed:
+- CONFIRMED entries are transactions the user agreed were genuinely suspicious. Treat similar transactions as more likely to be suspicious.
+- DENIED entries are transactions the user decided were NOT suspicious (false positives). Treat similar transactions as more likely to be legitimate, and avoid flagging them for the same reasons.
+Use this feedback to align your judgement with the user's, but still evaluate the current transaction on its own merits.
 
 Return ONLY valid JSON matching this schema:
 
@@ -67,85 +61,32 @@ _detect_user_prompt = """
 Review the following transaction. Determine whether this transaction is suspicious according to your instructions.
 
 {0}
-
-"""
-
-_review_system_prompt = """
-
-You are a transaction anomaly-review VERIFIER.
-Another agent has already inspected a single financial transaction and claimed it is suspicious, providing a reason.
-Your task is to critically judge whether that claim is ACCURATE, based ONLY on the transaction fields and the reason provided.
-
-You are given:
-
-- The original transaction, with these fields:
-  - id: the unique transaction identifier
-  - amount: the transaction amount
-  - merchant: the merchant name
-  - date: the transaction timestamp
-- The first agent's finding:
-  - agent_reason_suspected: the reason the first agent believes the transaction is suspicious
-
-Evaluate the finding critically:
-
-1. Does the stated reason actually follow from the supplied transaction fields (amount, merchant, date)?
-2. Characterising the supplied fields themselves IS allowed and is NOT invented context.
-   For example, describing the merchant name "QuickCash ATM" as cash-like, ATM-related, or
-   generic is a valid interpretation of the supplied merchant field. Likewise, calling a large
-   amount "unusually large" is valid. Do NOT reject these as invented.
-3. The finding relies on INVENTED context only if it asserts facts that are NOT any of the four
-   supplied fields — for example the customer's history, location, income, expected spend,
-   previous transactions, or account details. Reject the finding only in that case.
-4. A large amount, a cash-like or unfamiliar merchant, or an odd date are each, on their own,
-   legitimate and sufficient grounds to uphold a finding. You do NOT need corroborating evidence.
-5. Uphold the finding whenever its reason is grounded in the supplied fields and points to a
-   plausibly unusual characteristic. Reject it only when the reason is fabricated, contradicts
-   the fields, or describes nothing unusual at all.
-
-Important rules:
-- Lean towards upholding findings that are grounded in the supplied fields.
-- Interpreting the merchant name, amount, or date is grounding, not invention.
-- Do not invent missing context of your own.
-- Do not claim fraud as a fact.
-
-Return ONLY valid JSON matching this schema:
-
-{
-  "is_accurate": boolean,
-  "review_reason": string
-}
-
-Set "is_accurate": true only when the first agent's finding is well supported.
-Set "is_accurate": false otherwise, and briefly explain why in "review_reason".
-
-Do not return Markdown, code fences, commentary, or any additional fields.
-"""
-
-_review_user_prompt = """
-
-Verify the following anomaly finding.
-
-Transaction:
-{0}
-
-First agent's finding:
 {1}
+"""
 
-Determine whether the first agent's finding is accurate according to your instructions.
+_anomaly_context_prompt = """
 
+Additional context — prior findings the user has already reviewed:
+{0}
 """
 
 class CouldNotParseAgentResponseException(Exception):
     pass
 
-def review_new_transaction(transaction: dto.Transaction, all_transactions: List[dto.Transaction]) -> Optional[dto.Anomaly]:
+@dataclass(frozen=True)
+class ReviewFinding:
+    is_suspicious: bool
+    agent_reason_suspected: str
+
+def review_new_transaction(transaction: dto.Transaction, all_anomalies: List[dto.Anomaly]) -> Optional[dto.Anomaly]:
     iteration = 1
     serialised = serialise(transaction)
-    detect_user_prompt = _detect_user_prompt.format(serialised)
+    anomaly_context = _build_anomaly_context(all_anomalies)
+    detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
     impl_model = get_env("OLLAMA_IMPLEMENTATION_MODEL")
-    # TODO: fill in transactions from all_transactions as additional context
 
     current_app.logger.info("Scan new transaction %s", serialised)
+    current_app.logger.info("Anomaly context: %s", anomaly_context)
 
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
@@ -161,8 +102,6 @@ def review_new_transaction(transaction: dto.Transaction, all_transactions: List[
             continue
 
         current_app.logger.info("Response was formatted into finding %s", review_finding)
-
-        # TODO: have senior model review it
 
         break
 
@@ -180,12 +119,32 @@ def review_new_transaction(transaction: dto.Transaction, all_transactions: List[
         is_confirmed_by_user=None
     )
 
-@dataclass(frozen=True)
-class ReviewFinding:
-    is_suspicious: bool
-    agent_reason_suspected: str
+def _build_anomaly_context(all_anomalies: List[dto.Anomaly]) -> str:
+    """Builds additional prompt context from anomalies the user has already reviewed.
+
+    Only anomalies confirmed (True) or denied (False) by the user are included;
+    anomalies still awaiting review (None) are ignored.
+    """
+
+    confirmed = [a for a in all_anomalies if a.is_confirmed_by_user is True]
+    denied = [a for a in all_anomalies if a.is_confirmed_by_user is False]
+
+    if not confirmed and not denied:
+        return ""
+
+    lines: List[str] = []
+
+    for anomaly in confirmed:
+        lines.append(f"- CONFIRMED suspicious: {anomaly.agent_reason_suspected}")
+
+    for anomaly in denied:
+        lines.append(f"- DENIED (not suspicious): {anomaly.agent_reason_suspected}")
+
+    return _anomaly_context_prompt.format("\n".join(lines))
 
 def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:
+    """Determines if the model response was a valid format"""
+
     try:
         data = current_app.json.loads(model_response)
     except JSONDecodeError:
