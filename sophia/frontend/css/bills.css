@@ -1,15 +1,21 @@
 /* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
-/* The panel pair sizes from this container, never from the viewport. The chat
-   track is a bounded flexible column rather than a fixed 320px: the percentage
-   resolves against .app-shell's own content box, so it holds at the 320px floor
-   inside the shell's 1052px column and grows toward 380px standalone, where the
-   chat has room to stop wrapping its chips. minmax(0, 1fr) on the table track
-   is load-bearing -- with the default `auto` minimum the table's intrinsic
-   width (854px measured) blows the track out and the clipping comes straight
-   back. */
+/* The panel pair sizes from this container, never from the viewport, and the
+   two tracks say what they actually need rather than trading on a percentage.
+
+   The table track floors at its own min-content (673px measured): that is the
+   width below which the action controls start disappearing, so it is the width
+   the table refuses to go under. 1fr gives it everything spare above that.
+
+   The chat track wants 320px and will surrender down to 240px, and only when
+   the table would otherwise be squeezed below its floor. So at the shell's
+   1052px column the chat gets its full 320px, and in the narrow band just above
+   the stacking breakpoint it gives up pixels one at a time instead of the table
+   clipping. An earlier version used clamp() with a percentage; it hit 320px
+   only above ~1230px and left the chat at 263px in the shell, which is the
+   cramped state this was supposed to fix. */
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 26%, 380px);
+  grid-template-columns: minmax(min-content, 1fr) minmax(240px, 320px);
   gap: 1rem;
   max-width: 1320px;
   margin: 0 auto;
@@ -90,6 +96,15 @@
    status and actions cells measured at the identical x and width, with the
    empty header column collapsed to 15px. Ordinary inline-block flow wraps just
    as well and keeps the column sizing intact. */
+/* The shell's stylesheet carries `tbody tr:hover { background: #273449 }` so
+   that feature tables pulled in over htmx pick up its theme. Bills brings its
+   own light table and its own dark ink, so that rule paints #1d222c text onto a
+   #273449 row -- unreadable, and it fires whenever the pointer crosses a row.
+   Bills declares its own hover rather than leaving the shell's unopposed. */
+.bills-table tbody tr:hover {
+  background: var(--a100);
+}
+
 .bills-table .actions {
   white-space: normal;
   text-align: right;
@@ -117,7 +132,12 @@
   font-size: 0.85em;
 }
 
-@media (max-width: 900px) {
+/* Stack below 1024px. The old breakpoint was 900px, which left a broken band:
+   at a 1000px window the table track fell to 617px against a 673px min-content,
+   so 36 action controls clipped and the scrollbar returned while the panels
+   were still side by side. Side-by-side survives to ~1009px in the shell and
+   ~961px standalone once the chat can give way to 240px; 1024 clears both. */
+@media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
