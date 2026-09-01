@@ -26,29 +26,45 @@ def format_planner_prompt(
     feedbacks: List[dto.Feedback],
     transactions: Optional[List[dto.Transaction]] = None,
 ) -> str:
+    def format_amount(val: Any) -> str:
+        try:
+            return f"${float(val):.2f}"
+        except Exception:
+            return f"${val}"
+
     tables = {
         "active_goals": [
-            {"goal": g.name, "target_amount": f"${g.cost:.2f}", "deadline": str(g.date)[:10]}
+            {
+                "goal": getattr(g, "name", g.get("name", "") if isinstance(g, dict) else ""),
+                "target_amount": format_amount(getattr(g, "cost", g.get("cost", 0) if isinstance(g, dict) else 0)),
+                "deadline": str(getattr(g, "date", g.get("date", "") if isinstance(g, dict) else ""))[:10],
+            }
             for g in (goals or [])
         ],
         "recent_transactions": [
-            {"merchant": t.merchant, "amount": f"${t.amount:.2f}", "date": str(t.date)[:10]}
+            {
+                "merchant": getattr(t, "merchant", t.get("merchant", "") if isinstance(t, dict) else ""),
+                "amount": format_amount(getattr(t, "amount", t.get("amount", 0) if isinstance(t, dict) else 0)),
+                "date": str(getattr(t, "date", t.get("date", "") if isinstance(t, dict) else ""))[:10],
+            }
             for t in (transactions or [])
         ],
         "past_suggestions": [
-            {"suggestion": s.suggestion, "outcome": "Accepted by user" if s.accepted else "Rejected by user"}
+            {
+                "suggestion": getattr(s, "suggestion", s.get("suggestion", "") if isinstance(s, dict) else ""),
+                "outcome": "Accepted by user" if getattr(s, "accepted", s.get("accepted", False) if isinstance(s, dict) else False) else "Rejected by user",
+            }
             for s in (suggestions or [])
         ],
         "user_feedback_rules": [
-            {"rule": f.feedback}
+            {
+                "rule": getattr(f, "feedback", f.get("feedback", "") if isinstance(f, dict) else ""),
+            }
             for f in (feedbacks or [])
         ],
     }
 
-    return (
-        f"User Financial Data:\n{json.dumps(tables, indent=2)}\n\n"
-        "Generate a savings plan in JSON matching the required schema."
-    )
+    return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
 
 
 def generate_plan(

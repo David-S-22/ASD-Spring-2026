@@ -2,7 +2,7 @@ import os
 import requests
 from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
-from .helpers import fetch_transactions, object_to_hook, try_parse_bool
+from .helpers import fetch_suggestions, fetch_transactions, object_to_hook, try_parse_bool
 from .ollama_service import generate_savings_advice
 
 
@@ -34,7 +34,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/goal", json=payload)
         resp.raise_for_status()
-        return make_response(get_goals(), {"HX-Trigger": "goalChanged"})
+        return make_response(*get_goals(), {"HX-Trigger": "goalChanged"})
 
     @app.route("/goal/<int:id>")
     def get_goal(id: int):
@@ -70,7 +70,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return make_response(get_goals(), {"HX-Trigger": "goalChanged"})
+        return make_response(*get_goals(), {"HX-Trigger": "goalChanged"})
 
     @app.route("/suggestions")
     def get_suggestions():
@@ -88,7 +88,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/suggestion", json=payload)
         resp.raise_for_status()
-        return make_response(get_suggestions(), {"HX-Trigger": "suggestionChanged"})
+        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
 
     @app.route("/suggestion/<int:id>")
     def get_suggestion(id: int):
@@ -124,7 +124,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return make_response(get_suggestions(), {"HX-Trigger": "suggestionChanged"})
+        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
 
     @app.route("/feedback")
     def get_feedback():
@@ -142,7 +142,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
         resp = requests.post(f"{db_url}/feedback", json=payload)
         resp.raise_for_status()
-        return make_response(get_feedback(), {"HX-Trigger": "feedbackChanged"})
+        return make_response(*get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/feedback/<int:id>")
     def get_single_feedback(id: int):
@@ -178,7 +178,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return make_response(get_feedback(), {"HX-Trigger": "feedbackChanged"})
+        return make_response(*get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
@@ -196,20 +196,17 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         accepted_raw = request.args.get("accepted") if "accepted" in request.args else (payload.get("accepted") if payload else None)
         accepted = try_parse_bool(accepted_raw)
 
-        if has_transactions and suggestion_text and suggestion_text != "No current AI suggestion available." and accepted is not None:
+        if suggestion_text and suggestion_text != "No current AI suggestion available." and not suggestion_text.startswith("Error") and not suggestion_text.startswith("You don't have") and accepted is not None:
             try:
-                requests.post(
+                resp = requests.post(
                     f"{db_url}/suggestion",
                     json={"suggestion": suggestion_text, "accepted": accepted},
                 )
-            except Exception:
-                pass
+                resp.raise_for_status()
+            except Exception as e:
+                app.logger.error(f"Error saving suggestion: {e}")
 
-        new_suggestion = generate_savings_advice(db_url, tx_url)
-        return make_response(
-            render_template("ai-suggestion.jinja", suggestion=new_suggestion, has_transactions=has_transactions),
-            {"HX-Trigger": "suggestionChanged"},
-        )
+        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
 
     return app
 
