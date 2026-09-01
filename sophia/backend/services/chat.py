@@ -13,6 +13,7 @@ from sophia.backend.ai.schemas import validate_chat_response
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
+from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
 from sophia.backend.services import disputes as disputes_service
 from sophia.backend.services.errors import NotFound, ServiceError
@@ -60,11 +61,26 @@ def _recent_history():
 
 
 def _answer_total():
+    """Answer the "what do my bills add up to" question with both figures.
+
+    There are two defensible totals and they do not match. The table header
+    shows the ongoing monthly rate -- every bill scaled to a month -- while this
+    answer is about the calendar month actually in view, where a five-Monday
+    month or a bill that starts mid-month changes the number. Quoting only the
+    second put "around $1,695" two inches from a header reading $1,731.95, and
+    from the user's chair that is the app disagreeing with itself. Naming both,
+    and what each measures, costs one clause.
+    """
     today = config.DEMO_TODAY
     bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     breakdown = month_breakdown(bills, payments, today.year, today.month, today)
-    return f"This month you're set to pay around {money.format_estimate_single(breakdown.total_high_cents)} in bills and subscriptions."
+    monthly_rate = sum(b.amount_cents * expected_per_month(b.cadence) for b in bills)
+    return (
+        f"{today.strftime('%B')} is set to cost around "
+        f"{money.format_estimate_single(breakdown.total_high_cents)}. "
+        f"Your ongoing monthly total across all bills is {money.format_actual(monthly_rate)}."
+    )
 
 
 def _answer_barely_using():

@@ -232,3 +232,23 @@ def test_paid_bill_with_an_imminent_next_charge_is_not_green(live_client):
     text = _text(live_client.get("/ui/bills"))
     assert 'class="chip chip-upcoming">Due ' in text
     assert 'class="chip chip-paid">Due ' not in text
+
+
+def test_total_answer_names_both_figures_and_quotes_the_header_number(live_client):
+    """The chat answer and the table header quote different totals on purpose --
+    a calendar month versus an ongoing monthly rate -- so the answer has to say
+    which is which. This pins the harder half: the rate it quotes is the number
+    the header actually renders, so the two can never drift into contradicting
+    each other.
+    """
+    from sophia.backend import config
+    from sophia.backend.services import chat as chat_service
+
+    header = _text(live_client.get("/ui/bills"))
+    answer = chat_service._answer_total()
+
+    assert config.DEMO_TODAY.strftime("%B") in answer
+    assert "ongoing monthly total" in answer
+
+    rate = answer.split("ongoing monthly total across all bills is ")[1].rstrip(".")
+    assert f"subscriptions · {rate}" in header
