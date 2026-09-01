@@ -68,6 +68,83 @@ def test_route_not_found(client: FlaskClient):
     assert response.json["name"] == "Not Found"
 
 
+def test_get_all_anomalies_returns_empty_list_for_clean_db(client: FlaskClient):
+    response = client.get("/anomalies/")
+    assert response.status_code == 200
+    assert isinstance(response.json, list)
+
+    for anomaly in response.json:
+        assert isinstance(anomaly, dict)
+        client.delete(f"/anomalies/{anomaly['id']}")
+
+    response = client.get("/anomalies/")
+    assert response.status_code == 200
+    assert isinstance(response.json, list)
+    assert response.json == []
+
+
+def test_get_anomaly_not_found_returns_404(client: FlaskClient):
+    response = client.get("/anomalies/999999")
+
+    assert response.status_code == 404
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 404
+    assert response.json["name"] == "Not Found"
+
+
+def test_create_anomaly_missing_required_fields_returns_400(client: FlaskClient):
+    response = client.post("/anomalies/", json={"transaction_id": 123})
+
+    assert response.status_code == 400
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 400
+    assert response.json["description"] == "Missing required field agent_reason_suspected"
+
+
+def test_create_anomaly_rejects_invalid_boolean_flag(client: FlaskClient):
+    response = client.post(
+        "/anomalies/",
+        json={
+            "transaction_id": 123,
+            "agent_reason_suspected": "beans",
+            "is_confirmed_by_user": "maybe",
+        },
+    )
+
+    assert response.status_code == 400
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 400
+    assert "Field is_confirmed_by_user expected try_parse_bool" in response.json["description"]
+
+
+def test_patch_anomaly_updates_confirmation_flag(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=401, agent_reason_suspected="beans", is_confirmed_by_user=None)
+
+    response = client.patch(f"/anomalies/{anomaly.id}", json={"is_confirmed_by_user": True})
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["is_confirmed_by_user"] is True
+
+    updated = client.get(f"/anomalies/{anomaly.id}")
+    assert isinstance(updated.json, dict)
+    assert updated.json["is_confirmed_by_user"] is True
+
+
+def test_patch_anomaly_ignores_invalid_update_value(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=402, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    response = client.patch(f"/anomalies/{anomaly.id}", json={"is_confirmed_by_user": "not-a-bool"})
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["is_confirmed_by_user"] is False
+
+    updated = client.get(f"/anomalies/{anomaly.id}")
+    assert isinstance(updated.json, dict)
+    assert updated.json["is_confirmed_by_user"] is False
+
+
 # Pytest fixtures & helpers
 @fixture
 def client():

@@ -9,6 +9,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from backend.app import app
+from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
 from janelle.database.app import setup_app as setup_transactions
 from shared.backend import dto
@@ -32,7 +33,9 @@ def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
     assert resp.text.count("<tr>") == 3
 
-def test_check_transaction_html(client: FlaskClient):
+def test_check_transaction_html(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Mock response from ollama"}')
+
     transaction = dto.Transaction(
         id=5,
         amount=9999999,
@@ -48,8 +51,60 @@ def test_check_transaction_html(client: FlaskClient):
     assert "<p>Mock response from ollama</p>" in resp.text
     assert "<small>Head to the Anomalies tab to check it out</small>" in resp.text
 
-def test_check_transaction_creates_anomaly(client: Flask):
-    ...
+def test_check_transaction_creates_anomaly_and_persists_it(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Mock response from ollama"}')
+
+    transaction = dto.Transaction(
+        id=42,
+        amount=9999999,
+        merchant="Slim Shady ATMs",
+        date=datetime.now(),
+        description="we are going to steal your money",
+        category_id=0,
+    )
+
+    before = client.get("/anomalies").text.count("<tr>")
+    resp = client.post("/check-transaction", json=serialise(transaction))
+
+    assert resp.status_code == 200
+    assert "<strong>Possible suspicious transaction detected</strong>" in resp.text
+    assert client.get("/anomalies").text.count("<tr>") == before + 1
+
+
+def test_check_transaction_no_anomaly_returns_empty_response(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": false, "justification": "Looks like a routine purchase."}')
+
+    transaction = dto.Transaction(
+        id=99,
+        amount=42.50,
+        merchant="Corner Store",
+        date=datetime.now(),
+        description="milk and bread",
+        category_id=2,
+    )
+
+    before = client.get("/anomalies").text.count("<tr>")
+    resp = client.post("/check-transaction", json=serialise(transaction))
+
+    assert resp.status_code == 204
+    assert resp.data == b""
+    assert client.get("/anomalies").text.count("<tr>") == before
+
+
+def test_create_dummy_anomaly_increases_anomaly_list(client: FlaskClient):
+    before = client.get("/anomalies").text.count("<tr>")
+
+    client.post("/dummy-anomaly")
+    client.post("/dummy-anomaly")
+
+    assert client.get("/anomalies").text.count("<tr>") == before + 2
+
+
+def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
+    resp = client.post("/check-transaction", json={"merchant": "Nope"})
+
+    assert resp.status_code == 500
+    assert "Schema mismatch between backend and database" in resp.text
 
 
 # Pytest fixtures
@@ -59,19 +114,6 @@ def client():
 
     with app.test_client() as client:
         yield client
-
-@fixture(autouse=True)
-def mock_ollama_api(monkeypatch: MonkeyPatch):
-    fake_client = SimpleNamespace(
-        responses=SimpleNamespace(
-            create=lambda **kwargs: SimpleNamespace(
-                output_text='{"is_suspicious": true, "justification": "Mock response from ollama"}'
-            )
-        )
-    )
-
-    # Monkeypatch ollama api
-    monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
 
 @fixture(autouse=True)
 def integrate_services(monkeypatch: MonkeyPatch):
@@ -111,3 +153,11 @@ def intercept(app_to_inject: Flask, request: PreparedRequest):
             data=request.body)
 
         return resp.status_code, dict(resp.headers), resp.get_data()
+
+def intercept_ollama(monkeypatch: MonkeyPatch, model_response: str):
+    create=lambda **kwargs: SimpleNamespace(output_text=model_response)
+    responses=SimpleNamespace(create=create)
+    fake_client = SimpleNamespace(responses=responses)
+
+    # Monkeypatch ollama api
+    monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
