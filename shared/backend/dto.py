@@ -12,6 +12,14 @@ class Transaction:
     amount: float
     merchant: str
     date: datetime
+    description: str
+    category_id: int
+
+@dataclass(frozen=True)
+class Category:
+    id: int
+    name: str
+    type: Optional[str]
 
 # Represents a transaction an agent has decided may be suspicious. The user can confirm
 # whether it is true positive or false positive, which is represented by is_confirmed_by_user

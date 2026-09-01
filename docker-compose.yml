@@ -61,7 +61,8 @@ services:
     depends_on:
       - transactions-db
   transactions-db:
-    build: ./janelle/database
+    build:
+      dockerfile: ./janelle/database/Dockerfile
     container_name: transactions-db
     ports:
       - "6001:6001"
