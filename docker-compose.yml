@@ -136,6 +136,7 @@ services:
         condition: service_healthy
   anomalies-db:
     build:
+      context: .
       dockerfile: ./aiden/database/Dockerfile
     container_name: anomalies-db
     ports:
@@ -146,6 +147,38 @@ services:
       FLASK_ENV: production
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
+
+  ethan-frontend:
+    build: ./ethan/frontend
+    container_name: ethan-frontend
+    ports:
+      - "3006:3006"
+    environment:
+      PORT: 3006
+    depends_on:
+      - ethan-backend
+  ethan-backend:
+    build: ./ethan/backend
+    container_name: ethan-backend
+    ports:
+      - "5006:5006"
+    environment:
+      FLASK_ENV: production
+      PORT: 5006
+      ETHAN_DB_URL: http://ethan-db:6006
+    depends_on:
+      - ethan-db
+  ethan-db:
+    build: ./ethan/database
+    container_name: ethan-db
+    ports:
+      - "6006:6006"
+    volumes:
+      - ethan_data:/app/data
+    environment:
+      FLASK_ENV: production
+      PORT: 6006
+      DB_PATH: /app/data/ethan.db
 
   savings-db:
     build: 
@@ -187,4 +220,5 @@ volumes:
   transactions_data:
   bills_data:
   anomalies_data:
+  ethan_data:
   savings_data:
