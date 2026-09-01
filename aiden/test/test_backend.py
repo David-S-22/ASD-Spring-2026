@@ -1,6 +1,7 @@
 import re
 
 from datetime import datetime
+from types import SimpleNamespace
 from pytest import MonkeyPatch, fixture
 from flask import Flask
 from flask.testing import FlaskClient
@@ -31,7 +32,7 @@ def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
     assert resp.text.count("<tr>") == 3
 
-def test_check_transaction(client: FlaskClient):
+def test_check_transaction_html(client: FlaskClient):
     transaction = dto.Transaction(
         id=5,
         amount=9999999,
@@ -42,7 +43,13 @@ def test_check_transaction(client: FlaskClient):
     )
 
     resp = client.post("check-transaction", json=transaction)
-    assert False, resp.text
+    assert resp.status_code == 200
+    assert "<strong>Possible suspicious transaction detected</strong>" in resp.text
+    assert "<p>Mock response from ollama</p>" in resp.text
+    assert "<small>Head to the Anomalies tab to check it out</small>" in resp.text
+
+def test_check_transaction_creates_anomaly(client: Flask):
+    ...
 
 
 # Pytest fixtures
@@ -52,6 +59,19 @@ def client():
 
     with app.test_client() as client:
         yield client
+
+@fixture(autouse=True)
+def mock_ollama_api(monkeypatch: MonkeyPatch):
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(
+                output_text='{"is_suspicious": true, "justification": "Mock response from ollama"}'
+            )
+        )
+    )
+
+    # Monkeypatch ollama api
+    monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
 
 @fixture(autouse=True)
 def integrate_services(monkeypatch: MonkeyPatch):
