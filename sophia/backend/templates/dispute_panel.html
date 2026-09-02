@@ -1,5 +1,10 @@
 {# Dispute panel fragment: editable letter, checklist, escalation path, status tracker. #}
-<div class="dispute-panel" id="dispute-panel"{% if oob %} hx-swap-oob="true"{% endif %}>
+{# hidden when there is nothing to show: the collapsed layout gives this div a
+   top border and padding, so an empty-but-visible panel paints a stray rule
+   under the tile grid -- and the Close button below only exists when a dispute
+   does, so there would be no way to dismiss it. #}
+<div class="dispute-panel" id="dispute-panel"{% if not dispute %} hidden{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if dispute %}<button type="button" class="btn-sm close-dispute" data-action="close-dispute-panel" aria-label="Close dispute details">Close ✕</button>{% endif %}
   {% if dispute %}
   {% if context_line %}<p class="context">{{ context_line }}</p>{% endif %}
 
