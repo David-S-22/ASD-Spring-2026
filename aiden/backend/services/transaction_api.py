@@ -3,7 +3,8 @@ from typing import List
 from requests import get
 
 from shared.backend import dto
-from ..helpers import deserialise_or_abort, get_env
+from .. import config
+from ..helpers import deserialise_or_abort
 
 
 def get_all_transactions() -> List[dto.Transaction]:
@@ -13,4 +14,4 @@ def get_all_transactions() -> List[dto.Transaction]:
     return [deserialise_or_abort(dto.Transaction, item) for item in resp.json()]
 
 def _url(path: str) -> str:
-    return get_env("TRANSACTIONS_DB_URL") + path
+    return config.TRANSACTIONS_DB_URL + path

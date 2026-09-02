@@ -200,11 +200,6 @@ def integrate_services(monkeypatch: MonkeyPatch):
 
     transactionsapp = setup_transactions()
 
-    monkeypatch.setenv("ANOMALIES_DB_URL", "http://mock-database-url/anomalies")
-    monkeypatch.setenv("TRANSACTIONS_DB_URL", "http://mock-transactions-url")
-    monkeypatch.setenv("OLLAMA_MODEL", "billy")
-    monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
-
     dburl = re.compile(r"^http://mock-database-url/anomalies/?$")
     transactionsurl = re.compile(r"^http://mock-transactions-url/.+$")
 

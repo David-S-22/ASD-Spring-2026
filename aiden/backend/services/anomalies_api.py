@@ -3,7 +3,8 @@ from typing import List
 from requests import get, post
 
 from shared.backend import dto
-from ..helpers import deserialise_or_abort, serialise, get_env
+from .. import config
+from ..helpers import deserialise_or_abort, serialise
 
 
 def get_all_anomalies() -> List[dto.Anomaly]:
@@ -19,4 +20,4 @@ def create_anomaly(anomaly: dto.Anomaly) -> dto.Anomaly:
     return deserialise_or_abort(dto.Anomaly, resp.json())
 
 def _url(path: str) -> str:
-    return get_env("ANOMALIES_DB_URL") + path
+    return config.ANOMALIES_DB_URL + path
