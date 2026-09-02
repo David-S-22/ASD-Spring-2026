@@ -3,7 +3,8 @@ from random import choice, randint
 from flask import Flask, jsonify, render_template, request
 
 from shared.backend import dto
-from .helpers import deserialise_or_abort, empty, get_env
+from . import config
+from .helpers import deserialise_or_abort, empty
 from .services import anomalies_api, ollama_api, agent_api, transaction_api
 
 
@@ -18,7 +19,7 @@ def get_fact():
     return ollama_api.prompt(
         system_prompt="You are a helpful assistant",
         user_prompt="tell me a random fact",
-        model=get_env("OLLAMA_MODEL"),
+        model=config.OLLAMA_MODEL,
         temperature=0.5,
         output_tokens=500)
 

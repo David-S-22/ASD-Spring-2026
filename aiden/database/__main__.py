@@ -1,10 +1,8 @@
-import os
-
 from .app import app, setup_database
+from .config import DB_PATH, PORT
 
 
 if __name__ == "__main__":
-    setup_database(os.environ["DB_PATH"])
-    port = int(os.environ["PORT"])
+    setup_database(DB_PATH)
 
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=PORT)
