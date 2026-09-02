@@ -1,6 +1,6 @@
 """Shared helpers for the Transactions Flask application."""
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 import requests
@@ -9,6 +9,97 @@ from werkzeug.exceptions import BadRequest
 
 from . import config
 from .services.chat_service import ChatError
+
+
+TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
+TRANSACTION_DATE_RANGES = {
+    "all",
+    "last_7_days",
+    "last_30_days",
+    "last_90_days",
+    "this_month",
+    "this_year",
+}
+
+
+def parse_transaction_datetime(value):
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            return parsedate_to_datetime(str(value))
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+
+def transaction_is_in_date_range(value, date_range, today):
+    parsed = parse_transaction_datetime(value)
+    if parsed is None:
+        return False
+
+    transaction_date = parsed.date()
+    if date_range == "this_month":
+        return (
+            transaction_date.year == today.year
+            and transaction_date.month == today.month
+        )
+    if date_range == "this_year":
+        return transaction_date.year == today.year
+
+    days = {
+        "last_7_days": 7,
+        "last_30_days": 30,
+        "last_90_days": 90,
+    }.get(date_range)
+    if days is None:
+        return True
+
+    first_date = today - timedelta(days=days - 1)
+    return first_date <= transaction_date <= today
+
+
+def filter_transactions(
+    transactions,
+    search,
+    category_id,
+    date_range,
+):
+    search_term = search.casefold()
+    today = date.today()
+    filtered_transactions = []
+
+    for transaction in transactions:
+        if (
+            category_id is not None
+            and transaction.get("category_id") != category_id
+        ):
+            continue
+
+        if search_term:
+            searchable_text = " ".join(
+                str(transaction.get(field) or "")
+                for field in (
+                    "merchant",
+                    "description",
+                    "category_name",
+                )
+            ).casefold()
+            if search_term not in searchable_text:
+                continue
+
+        if (
+            date_range != "all"
+            and not transaction_is_in_date_range(
+                transaction.get("date"),
+                date_range,
+                today,
+            )
+        ):
+            continue
+
+        filtered_transactions.append(transaction)
+
+    return filtered_transactions
 
 
 def align_transactions_with_corresponding_category_names(
@@ -33,13 +124,9 @@ def align_transactions_with_corresponding_category_names(
 
 
 def format_transaction_date(value):
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        try:
-            parsed = parsedate_to_datetime(str(value))
-        except (TypeError, ValueError, OverflowError):
-            return str(value)
+    parsed = parse_transaction_datetime(value)
+    if parsed is None:
+        return str(value)
     return parsed.strftime("%d %b %Y").lstrip("0")
 
 
@@ -67,6 +154,23 @@ def get_form_categories(db_url):
     return categories
 
 
+def render_transaction_page(db_url, notice=None):
+    filter_error = None
+    try:
+        categories = get_form_categories(db_url)
+    except (requests.RequestException, ValueError, RecursionError):
+        categories = []
+        filter_error = (
+            "Category filters are unavailable because categories could not be loaded."
+        )
+    return render_template(
+        "transactions_page.jinja",
+        categories=categories,
+        filter_error=filter_error,
+        notice=notice,
+    )
+
+
 def render_transaction_form(db_url, error=None, values=None):
     values = values or {
         "date": datetime.now().date().isoformat(),
@@ -91,13 +195,22 @@ def render_transaction_form(db_url, error=None, values=None):
 
 
 def render_transaction_table(transactions, error=None):
-    TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
-    DEFAULT_TRANSACTION_PAGE_SIZE = TRANSACTION_PAGE_SIZES[0]
     requested_page_size = request.args.get("page_size", type=int)
     page_size = (
         requested_page_size
         if requested_page_size in TRANSACTION_PAGE_SIZES
-        else DEFAULT_TRANSACTION_PAGE_SIZE
+        else TRANSACTION_PAGE_SIZES[0]
+    )
+    search = request.args.get("search", "").strip()[:100]
+    category_id = request.args.get("category_id", type=int)
+    date_range = request.args.get("date_range", "all")
+    if date_range not in TRANSACTION_DATE_RANGES:
+        date_range = "all"
+    transactions = filter_transactions(
+        transactions,
+        search,
+        category_id,
+        date_range,
     )
     requested_page = request.args.get("page", default=1, type=int)
     page = max(requested_page or 1, 1)
@@ -123,6 +236,11 @@ def render_transaction_table(transactions, error=None):
         last_transaction=last_index,
         has_previous=page > 1,
         has_next=page < total_pages,
+        filters_active=bool(
+            search
+            or category_id is not None
+            or date_range != "all"
+        ),
     )
 
 

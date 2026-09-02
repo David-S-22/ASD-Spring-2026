@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from unittest.mock import Mock
 
 import requests
@@ -155,13 +156,80 @@ def test_transaction_rows_can_move_between_pages(
     assert "Showing 6-10 of 12 transactions" in response.text
     assert "Page 2 of 3" in response.text
     assert (
-        'hx-get="/transactions-backend/ui/transactions?page=1&amp;page_size=5"'
+        'hx-get="/transactions-backend/ui/transactions?page=1"'
         in response.text
     )
     assert (
-        'hx-get="/transactions-backend/ui/transactions?page=3&amp;page_size=5"'
+        'hx-get="/transactions-backend/ui/transactions?page=3"'
         in response.text
     )
+
+
+def test_transaction_rows_apply_search_category_and_date_filters(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    today = date.today()
+    transactions = [
+        {
+            "id": 1,
+            "date": today.isoformat(),
+            "merchant": "Fresh Market",
+            "description": "Weekly groceries",
+            "amount": 42,
+            "category_id": 80,
+        },
+        {
+            "id": 2,
+            "date": today.isoformat(),
+            "merchant": "Market Cafe",
+            "description": "Lunch",
+            "amount": 18,
+            "category_id": 81,
+        },
+        {
+            "id": 3,
+            "date": (today - timedelta(days=45)).isoformat(),
+            "merchant": "Old Market",
+            "description": "Groceries",
+            "amount": 30,
+            "category_id": 80,
+        },
+        {
+            "id": 4,
+            "date": today.isoformat(),
+            "merchant": "Corner Store",
+            "description": "Groceries",
+            "amount": 20,
+            "category_id": 80,
+        },
+    ]
+    categories = [
+        {"id": 80, "name": "Groceries", "type": "need"},
+        {"id": 81, "name": "Dining", "type": "want"},
+    ]
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(transactions),
+            response_with_json(categories),
+        ]),
+    )
+
+    response = client.get(
+        "/ui/transactions"
+        "?search=market"
+        "&category_id=80"
+        "&date_range=last_30_days"
+    )
+
+    assert response.status_code == 200
+    assert "<td>Fresh Market</td>" in response.text
+    assert "<td>Market Cafe</td>" not in response.text
+    assert "<td>Old Market</td>" not in response.text
+    assert "<td>Corner Store</td>" not in response.text
+    assert "Showing 1-1 of 1 transactions" in response.text
 
 
 def test_transaction_rows_show_empty_state(
@@ -178,6 +246,25 @@ def test_transaction_rows_show_empty_state(
 
     assert response.status_code == 200
     assert "No transactions found." in response.text
+
+
+def test_transaction_rows_show_filtered_empty_state(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json([]),
+            response_with_json([]),
+        ]),
+    )
+
+    response = client.get("/ui/transactions?search=missing")
+
+    assert response.status_code == 200
+    assert "No transactions match your filters." in response.text
 
 
 def test_transaction_rows_report_database_failure(
@@ -431,6 +518,29 @@ def test_new_transaction_form_loads_categories_from_database(
     )
 
 
+def test_transactions_page_loads_category_filter_options(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(return_value=response_with_json([
+        {"id": 80, "name": "Dining", "type": "want"},
+        {"id": 81, "name": "Groceries", "type": "need"},
+    ]))
+    monkeypatch.setattr(backend_app.requests, "get", get)
+
+    response = client.get("/ui/transactions/page")
+
+    assert response.status_code == 200
+    assert 'id="transaction-search"' in response.text
+    assert '<option value="80">Dining</option>' in response.text
+    assert '<option value="81">Groceries</option>' in response.text
+    assert 'value="last_30_days"' in response.text
+    get.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
 def test_ui_create_transaction_posts_typed_payload_and_returns_page(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
@@ -446,7 +556,11 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
         },
         status=201,
     ))
+    get = Mock(return_value=response_with_json([
+        {"id": 80, "name": "Dining", "type": "want"},
+    ]))
     monkeypatch.setattr(backend_app.requests, "post", post)
+    monkeypatch.setattr(backend_app.requests, "get", get)
 
     response = client.post(
         "/ui/transactions",
@@ -462,6 +576,7 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
     assert response.status_code == 200
     assert "Transaction saved." in response.text
     assert 'id="add-transaction-button"' in response.text
+    assert '<option value="80">Dining</option>' in response.text
     post.assert_called_once_with(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
         json={
@@ -471,5 +586,9 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
             "amount": 24.5,
             "category_id": 80,
         },
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    get.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )

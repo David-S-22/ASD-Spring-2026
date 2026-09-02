@@ -1,7 +1,8 @@
 {% autoescape true %}
 <div id="transactions-table"
-     hx-get="/transactions-backend/ui/transactions?page={{ page }}&amp;page_size={{ page_size }}"
+     hx-get="/transactions-backend/ui/transactions?page={{ page }}"
      hx-trigger="transactionsChanged from:body"
+     hx-include="#transaction-filters, #transactions-page-size"
      hx-swap="outerHTML">
     <div class="transactions-table-wrapper">
         <table>
@@ -30,7 +31,13 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5">No transactions found.</td>
+                    <td colspan="5">
+                        {% if filters_active %}
+                        No transactions match your filters.
+                        {% else %}
+                        No transactions found.
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
                 {% endif %}
@@ -39,19 +46,21 @@
     </div>
 
     <div class="transactions-pagination">
-        <form class="transactions-page-size"
-              hx-get="/transactions-backend/ui/transactions"
-              hx-trigger="change"
-              hx-target="#transactions-table"
-              hx-swap="outerHTML">
-            <input type="hidden" name="page" value="1">
+        <div class="transactions-page-size">
             <label for="transactions-page-size">Rows per page</label>
-            <select id="transactions-page-size" name="page_size">
+            <select id="transactions-page-size"
+                    name="page_size"
+                    hx-get="/transactions-backend/ui/transactions"
+                    hx-trigger="change"
+                    hx-target="#transactions-table"
+                    hx-swap="outerHTML"
+                    hx-include="#transaction-filters"
+                    hx-sync="#transactions-table:replace">
                 {% for size in page_sizes %}
                 <option value="{{ size }}"{% if size == page_size %} selected{% endif %}>{{ size }}</option>
                 {% endfor %}
             </select>
-        </form>
+        </div>
 
         <div class="transactions-page-details">
             <p class="transactions-page-count" aria-live="polite">
@@ -65,9 +74,11 @@
                         aria-label="Previous page"
                         aria-controls="transactions"
                         {% if has_previous %}
-                        hx-get="/transactions-backend/ui/transactions?page={{ page - 1 }}&amp;page_size={{ page_size }}"
+                        hx-get="/transactions-backend/ui/transactions?page={{ page - 1 }}"
                         hx-target="#transactions-table"
                         hx-swap="outerHTML"
+                        hx-include="#transaction-filters, #transactions-page-size"
+                        hx-sync="#transactions-table:replace"
                         {% else %}
                         disabled
                         {% endif %}>
@@ -82,9 +93,11 @@
                         aria-label="Next page"
                         aria-controls="transactions"
                         {% if has_next %}
-                        hx-get="/transactions-backend/ui/transactions?page={{ page + 1 }}&amp;page_size={{ page_size }}"
+                        hx-get="/transactions-backend/ui/transactions?page={{ page + 1 }}"
                         hx-target="#transactions-table"
                         hx-swap="outerHTML"
+                        hx-include="#transaction-filters, #transactions-page-size"
+                        hx-sync="#transactions-table:replace"
                         {% else %}
                         disabled
                         {% endif %}>

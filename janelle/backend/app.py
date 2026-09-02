@@ -12,6 +12,7 @@ from .Helpers import (
     json_response,
     render_transaction_form,
     render_transaction_table,
+    render_transaction_page,
 )
 from .services.chat_service import ChatError, apply_preview, handle_message
 
@@ -102,10 +103,7 @@ def setup_app(db_url: str) -> Flask:
 
     @application.get("/ui/transactions/page")
     def get_transactions_page():
-        return render_template(
-            "transactions_page.jinja",
-            notice=None,
-        )
+        return render_transaction_page(db_url)
 
     @application.get("/ui/transactions/new")
     def get_new_transaction_form():
@@ -158,8 +156,8 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
-        return render_template(
-            "transactions_page.jinja",
+        return render_transaction_page(
+            db_url,
             notice="Transaction saved.",
         )
 

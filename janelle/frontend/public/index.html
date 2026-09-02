@@ -32,6 +32,27 @@
         overflow-x: auto;
     }
 
+    .transactions-filters {
+        display: grid;
+        grid-template-columns:
+            minmax(11rem, 2fr)
+            repeat(2, minmax(9rem, 1fr));
+        gap: 0.75rem;
+        margin: 1.25rem 0 1rem;
+    }
+
+    .transactions-filters input,
+    .transactions-filters select {
+        min-width: 0;
+        min-height: 2.75rem;
+        margin: 0;
+    }
+
+    .transaction-filter-error {
+        margin: -0.35rem 0 1rem;
+        color: var(--color-danger, #dc2626);
+    }
+
     .transactions-pagination,
     .transactions-page-size,
     .transactions-page-details,
@@ -342,6 +363,15 @@
     }
 
     @media (max-width: 700px) {
+        .transactions-filters {
+            grid-template-columns:
+                minmax(10rem, 1.5fr)
+                repeat(2, minmax(8rem, 1fr));
+            gap: 0.5rem;
+            overflow-x: auto;
+            padding-bottom: 0.25rem;
+        }
+
         .transactions-toolbar,
         .transaction-form-grid,
         .transaction-chat-heading,

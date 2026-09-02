@@ -21,10 +21,11 @@ def test_frontend_loads_transaction_rows_with_htmx():
     assert 'id="transactions-table"' in page
     assert 'id="transactions"' in page
     assert (
-        'hx-get="/transactions-backend/ui/transactions?page=1&amp;page_size=5"'
+        'hx-get="/transactions-backend/ui/transactions?page=1"'
         in page
     )
     assert 'hx-trigger="load, transactionsChanged from:body"' in page
+    assert 'hx-include="#transaction-filters, #transactions-page-size"' in page
     assert 'hx-swap="outerHTML"' in page
     assert "<th>ID</th>" not in page
     assert 'colspan="5"' in page
@@ -50,6 +51,39 @@ def test_transaction_table_has_page_size_and_navigation_controls():
     assert 'aria-label="Next page"' in table
     assert "&rarr;" in table
     assert "Page {{ page }} of {{ total_pages }}" in table
+    assert table.count(
+        'hx-include="#transaction-filters, #transactions-page-size"'
+    ) == 3
+
+
+def test_transaction_page_has_search_category_and_date_filters():
+    page = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_page.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="transaction-filters"' in page
+    assert 'id="transaction-search"' in page
+    assert 'type="search"' in page
+    assert 'name="search"' in page
+    assert 'placeholder="Search transactions"' in page
+    assert 'id="transaction-category-filter"' in page
+    assert 'name="category_id"' in page
+    assert "All categories" in page
+    assert "{% for category in categories %}" in page
+    assert 'id="transaction-date-filter"' in page
+    assert 'name="date_range"' in page
+    assert "All dates" in page
+    assert "Last 7 days" in page
+    assert "Last 30 days" in page
+    assert "Last 90 days" in page
+    assert "This month" in page
+    assert "This year" in page
+    assert 'hx-target="#transactions-table"' in page
+    assert 'hx-include="#transactions-page-size"' in page
 
 
 def test_transaction_pagination_uses_compact_single_row_layout():
