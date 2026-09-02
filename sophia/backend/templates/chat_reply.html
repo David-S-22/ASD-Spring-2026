@@ -1,11 +1,10 @@
 {# One assistant reply, appended (beforeend) to .history after a POST /ui/chat.
-   When the reply carries a proposal, the card is the same suggestion body the
-   panel shows — same detail, same endpoints — wrapped for the chat column.
-   app.js flips it to a resolved state when a suggestionResolved trigger for
-   its id arrives (from either surface's approve/reject). #}
+   A proposal is NOT rendered here as its own card — the Suggestions panel
+   below the chat is the one surface for reviewing and deciding on it (two
+   live copies of the same Approve/Reject element meant two things to keep in
+   sync and two places for state to disagree). The reply just points at it;
+   the panel itself arrives refreshed, out of band, in this same response. #}
 <div class="message message-assistant">{{ reply }}</div>
-{% if suggestion %}
-<div class="preview-card suggestion-card status-{{ suggestion.status }}" data-suggestion-id="{{ suggestion.id }}">
-  {% include "suggestion_card.html" %}
-</div>
+{% if has_suggestion %}
+<p class="suggestion-pointer">Review it in <strong>Suggestions</strong> below — nothing is saved until you approve.</p>
 {% endif %}

@@ -558,6 +558,17 @@
   gap: 1rem;
 }
 
+/* Destructive, so it reads as such — same palette the error fragment uses. */
+.dispute-panel .remove-dispute {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  background: transparent;
+}
+
+.dispute-panel .remove-dispute:hover {
+  background: var(--bad-bg);
+}
+
 .dispute-list ul {
   list-style: none;
   padding: 0;
@@ -637,10 +648,11 @@
   margin: 0.5em 0;
 }
 
-/* The chat's inline copy of a suggestion reuses the same body; unset the old
-   flex row so the table inside it can lay out. */
-.chat-panel .preview-card.suggestion-card {
-  display: block;
+/* The reply's one-line pointer at the Suggestions panel below. */
+.suggestion-pointer {
+  color: var(--mut);
+  font-size: 0.85em;
+  margin: 0.2em 0 0.3em 2em;
 }
 
 .suggestion-title {
@@ -683,14 +695,6 @@
   gap: 0.4em;
 }
 
-.preview-card.resolved {
-  color: var(--mut);
-  font-size: 0.9em;
-}
-
-.preview-card.resolved.status-applied {
-  color: var(--ok);
-}
 
 #modal-root:has(.modal-form) {
   position: fixed;

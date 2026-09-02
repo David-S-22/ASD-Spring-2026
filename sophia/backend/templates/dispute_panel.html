@@ -35,6 +35,10 @@
   </div>
   <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML" data-confirm="Mark this dispute as sent?">Mark as sent</button>
   <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML" data-confirm="Mark this dispute as resolved?">Mark as resolved</button>
+  {# Deliberately NOT exempted from the confirm dialog: removing a dispute
+     discards its drafted letters with it, and unlike a suggestion card this
+     button carries no detail of what it destroys. #}
+  <button class="remove-dispute" hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/delete" hx-target="#dispute-panel" hx-swap="outerHTML" data-confirm='Remove this dispute ("{{ dispute.reason }}")? Its drafted letters go with it.'>Remove dispute</button>
   {% else %}
   <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
   {% endif %}

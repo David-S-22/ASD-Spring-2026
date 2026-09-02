@@ -406,7 +406,10 @@ def dispute_panel():
 
 
 def _dispute_write_response(dispute_id, toast_text, status=200):
-    html = _render_dispute_panel(dispute_id=dispute_id)
+    # The list rides along out of band so its status chips track the panel —
+    # marking a dispute sent used to leave the row's "draft" chip standing
+    # until the tab was reopened.
+    html = _render_dispute_panel(dispute_id=dispute_id) + _render_dispute_list(oob=True)
     response = make_response(html, status)
     response.headers.update(_toast_headers(toast_text))
     return response
@@ -435,7 +438,7 @@ def disputes_regenerate(dispute_id):
     return _dispute_write_response(dispute_id, "Done — change saved.")
 
 
-def _render_disputes_tab():
+def _dispute_list_rows():
     disputes = bills_db.list_disputes()
     bills_by_id = {b["id"]: b for b in bills_db.list_bills()}
     rows = []
@@ -450,12 +453,32 @@ def _render_disputes_tab():
                 "opened_at": _short_date(date.fromisoformat(d["opened_at"])),
             }
         )
-    return render_template("disputes_tab.html", disputes=rows)
+    return rows
+
+
+def _render_dispute_list(oob=False):
+    return render_template("dispute_list.html", disputes=_dispute_list_rows(), oob=oob)
+
+
+def _render_disputes_tab():
+    return render_template("disputes_tab.html", disputes=_dispute_list_rows())
 
 
 @bp.get("/disputes-tab")
 def disputes_tab():
     return _render_disputes_tab()
+
+
+@bp.post("/disputes/<int:dispute_id>/delete")
+def disputes_delete(dispute_id):
+    disputes_service.delete_dispute(dispute_id)
+    # No dispute_id: the panel falls back to the first remaining dispute, or
+    # the empty state once the last one is gone. The list refresh drops the
+    # removed row.
+    html = _render_dispute_panel() + _render_dispute_list(oob=True)
+    response = make_response(html, 200)
+    response.headers.update(_toast_headers("Done — removed."))
+    return response
 
 
 # --- suggestions: the approve/reject window ---------------------------------
@@ -542,20 +565,10 @@ def _render_suggestions_panel(oob=False):
     all_rows = bills_db.list_suggestions()
     visible = [r for r in all_rows if r["status"] in ("pending", "failed")]
     pending_count = sum(1 for r in visible if r["status"] == "pending")
-    # Hidden notes for everything no longer pending, so the chat's inline
-    # copies of these cards can flip to the same resolved state. app.js
-    # reconciles them after every swap of this panel — driven by rendered
-    # state, not by response events, so it works no matter which surface's
-    # button was clicked or what htmx did to that button meanwhile.
-    resolved = [
-        {"id": r["id"], "status": r["status"]}
-        for r in all_rows if r["status"] in ("applied", "rejected", "failed")
-    ][-20:]
     return render_template(
         "suggestions_panel.html",
         suggestions=[_suggestion_view(r) for r in visible],
         pending_count=pending_count,
-        resolved=resolved,
         oob=oob,
     )
 
@@ -587,14 +600,12 @@ def _suggestion_action_response(action, suggestion_id):
     if status == "applied":
         html += _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
     response = make_response(html, 200)
-    # Deliberately no suggestionResolved trigger event here. An event fired
-    # from the response header runs while htmx is still processing that same
-    # response, and flipping the chat's copy of the card detaches the very
-    # button whose request is in flight — at which point htmx quietly drops
-    # the rest of the response, out-of-band table refresh included (observed:
-    # approve from the chat card applied the change but the table never
-    # moved). The chat cards flip instead via the resolved-notes the panel
-    # fragment carries, reconciled in app.js after the swap completes.
+    # The panel is the only surface that renders a decidable suggestion, and
+    # this response replaces it wholesale — nothing else needs telling.
+    # (History lesson, do not reintroduce: a second copy of the card in the
+    # chat, flipped by a response-header trigger event, detached the clicked
+    # button while htmx was still processing the response, and htmx then
+    # quietly dropped the out-of-band table refresh.)
     response.headers["HX-Trigger"] = json.dumps({"toast": toast})
     return response
 
@@ -634,17 +645,13 @@ def _render_chat_panel():
 @bp.post("/chat")
 def chat_send():
     result = chat_service.send_message(request.form.get("message", ""))
-    suggestion_view = None
-    if result["preview"] and result["preview"].get("suggestion_id"):
-        suggestion_row = bills_db.get_suggestion(result["preview"]["suggestion_id"])
-        if suggestion_row:
-            suggestion_view = _suggestion_view(suggestion_row)
+    has_suggestion = bool(result["preview"] and result["preview"].get("suggestion_id"))
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], suggestion=suggestion_view, fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], has_suggestion=has_suggestion, fallback=result["fallback"]
     )
-    if suggestion_view:
-        # The panel is the other surface showing this proposal; refresh it so
-        # the badge and card appear the moment the reply does.
+    if has_suggestion:
+        # The panel is the one surface for the proposal; refresh it so the
+        # badge and card appear the moment the reply does.
         reply_html += _render_suggestions_panel(oob=True)
     # No toast. Asking Tally something writes nothing the user cares about --
     # the reply appearing in the panel is the feedback, and "Done - change

@@ -338,44 +338,6 @@ billsRoot.addEventListener("toast", function (evt) {
   showToast(typeof text === "string" ? text : "Done.");
 });
 
-// A proposal renders in two places — the chat's inline card and the
-// Suggestions panel — backed by one suggestion row. Approve/reject responses
-// re-render the panel (it is their hx-target); the fresh panel carries a
-// hidden .resolved-note per no-longer-pending suggestion, and this reconcile
-// flips any matching chat card to the same resolved state. Driven by
-// rendered state after the swap settles, never by a response-header event: an
-// event fires while htmx is still processing the response, and rewriting the
-// chat card then detaches the clicked button mid-flight, which makes htmx
-// drop the rest of the response — including the out-of-band table refresh.
-var SUGGESTION_RESOLVED_LABELS = {
-  applied: "Applied ✓",
-  rejected: "Rejected — nothing was changed",
-  failed: "Couldn't apply — see Suggestions",
-};
-
-function reconcileSuggestionCards() {
-  var panel = document.getElementById("suggestions-panel");
-  if (!panel) {
-    return;
-  }
-  panel.querySelectorAll(".resolved-note").forEach(function (note) {
-    var id = note.getAttribute("data-suggestion-id");
-    var label = SUGGESTION_RESOLVED_LABELS[note.getAttribute("data-status")];
-    if (!id || !label) {
-      return;
-    }
-    billsRoot
-      .querySelectorAll('.history .suggestion-card[data-suggestion-id="' + id + '"]:not(.resolved)')
-      .forEach(function (card) {
-        card.className =
-          "preview-card suggestion-card resolved status-" + note.getAttribute("data-status");
-        // textContent, not markup: the label is fixed but the pattern stays
-        // injection-proof if it ever carries data.
-        card.textContent = label;
-      });
-  });
-}
-
 billsRoot.addEventListener("switchTab", function (evt) {
   var detail = evt.detail || {};
   var name = typeof detail.value === "string" ? detail.value : detail;
@@ -436,11 +398,9 @@ billsRoot.addEventListener("input", function (evt) {
 });
 
 // Every write replaces #bills-table wholesale, which brings back rows the filter
-// had hidden. Re-apply once the swap has settled. The same hook reconciles the
-// chat's suggestion cards against the freshly swapped panel's resolved notes.
+// had hidden. Re-apply once the swap has settled.
 billsRoot.addEventListener("htmx:afterSwap", function () {
   applyBillsFilter();
-  reconcileSuggestionCards();
 });
 
 billsRoot.addEventListener("click", function (evt) {
