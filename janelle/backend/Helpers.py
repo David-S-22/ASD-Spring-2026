@@ -8,7 +8,7 @@ from flask import jsonify, render_template, request
 from werkzeug.exceptions import BadRequest
 
 from . import config
-from .chat_service import ChatError
+from .services.chat_service import ChatError
 
 
 def align_transactions_with_corresponding_category_names(

@@ -12,7 +12,7 @@ from .Helpers import (
     json_response,
     render_transaction_form,
 )
-from .chat_service import ChatError, apply_preview, handle_message
+from .services.chat_service import ChatError, apply_preview, handle_message
 
 
 def setup_app(db_url: str) -> Flask:

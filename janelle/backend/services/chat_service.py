@@ -6,7 +6,8 @@ from email.utils import parsedate_to_datetime
 
 import requests
 
-from . import config, ollama_service
+from .. import config
+from . import ollama_service
 
 
 DB_FIELDS = {"date", "merchant", "description", "amount", "category_id"}

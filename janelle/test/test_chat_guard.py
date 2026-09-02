@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import requests
 
-from janelle.backend import ollama_service
+from janelle.backend.services import ollama_service
 
 
 VALID_RESPONSE = {

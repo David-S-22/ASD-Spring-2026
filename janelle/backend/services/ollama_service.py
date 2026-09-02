@@ -9,7 +9,7 @@ from pathlib import Path
 
 import requests
 
-from . import config
+from .. import config
 
 
 KEYS = {
@@ -266,7 +266,9 @@ def validate_chat_response(data, categories=()):
 
 def _messages(message, transactions, categories, error):
     prompt = (
-        Path(__file__).resolve().parent / "prompts" / "chat_prompt.txt"
+        Path(__file__).resolve().parent.parent
+        / "prompts"
+        / "chat_prompt.txt"
     ).read_text(encoding="utf-8").strip()
     today = date.today()
     last_week_end = today - timedelta(days=today.weekday() + 1)

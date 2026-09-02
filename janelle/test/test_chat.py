@@ -5,7 +5,7 @@ from flask.testing import FlaskClient
 from pytest import MonkeyPatch, fixture, mark
 
 import janelle.backend.app as backend_app
-import janelle.backend.chat_service as chat_service
+import janelle.backend.services.chat_service as chat_service
 
 
 CATEGORIES = [
