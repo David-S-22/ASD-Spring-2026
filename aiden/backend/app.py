@@ -1,6 +1,7 @@
+import os
 from random import choice, randint
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request
 
 from shared.backend import dto
 from .helpers import deserialise_or_abort, get_env
@@ -9,6 +10,10 @@ from .services import anomalies_api, ollama_api, review_queue
 
 app = Flask(__name__)
 review_queue.start_worker(app)
+
+# How long the /anomaly-alert endpoint long-polls for a new anomaly before
+# returning empty so the client can re-poll.
+ANOMALY_WAIT_SECONDS = float(os.environ.get("ANOMALY_WAIT_SECONDS", "60"))
 
 
 @app.get("/")
@@ -39,6 +44,27 @@ def check_transaction():
     app.logger.info("Queued transaction %s for anomaly review", transaction.id)
 
     return jsonify(status="queued", transaction_id=transaction.id), 202
+
+@app.get("/anomaly-alert")
+def wait_for_anomaly_alert():
+    """Wait for a specific queued transaction to finish review, then report it.
+
+    The client passes the `key` (the transaction id returned by
+    /check-transaction). Blocks for up to ANOMALY_WAIT_SECONDS until that item
+    has been reviewed. Returns the alert HTML if the transaction was flagged as
+    anomalous, otherwise 204 (no anomaly, still processing, or unknown key) so
+    the client can re-poll.
+    """
+    key = request.args.get("key", type=int)
+    if key is None:
+        abort(400, "missing 'key' query parameter")
+
+    anomaly = review_queue.wait_for_result(key, timeout=ANOMALY_WAIT_SECONDS)
+
+    if anomaly is None:
+        return "", 204
+
+    return render_template("alert.jinja", anomaly=anomaly)
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():

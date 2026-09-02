@@ -13,12 +13,7 @@
             hx-swap="innerHTML">
         Create dummy anomaly
     </button>
-    <button type="button"
-            hx-post="/anomalies-backend/check-transaction"
-            hx-ext="json-enc"
-            hx-vals="js:{...window.dummyTransaction()}"
-            hx-swap="none"
-            hx-on::after-request="document.getElementById('alert').innerHTML = '<p>Transaction queued for anomaly review — new anomalies appear below automatically.</p>'">
+    <button type="button" onclick="checkDummyTransaction()">
         Check dummy transaction
     </button>
     <div id="alert"></div>
@@ -49,6 +44,40 @@
                 category_id: 0
             };
         }
+
+        // Queue a dummy transaction for review, then poll for its result by key.
+        async function checkDummyTransaction() {
+            const transaction = window.dummyTransaction();
+            const alert = document.getElementById('alert');
+            alert.innerHTML = '<p>Transaction queued for anomaly review…</p>';
+
+            await fetch('/anomalies-backend/check-transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transaction)
+            });
+
+            watchForAnomaly(transaction.id, alert);
+        }
+
+        // Long-poll /anomaly-alert for a specific transaction id (key).
+        // 200 -> render the alert; 204 -> reviewed with no anomaly (stop).
+        async function watchForAnomaly(key, target) {
+            const resp = await fetch('/anomalies-backend/anomaly-alert?key=' + key);
+            if (resp.status === 200) {
+                target.innerHTML = await resp.text();
+            } else {
+                target.innerHTML = '<p>Transaction reviewed — no anomaly detected.</p>';
+            }
+        }
+
+        // Dismiss an anomaly toast when its close button is clicked.
+        document.addEventListener('click', function (event) {
+            if (event.target.classList.contains('toast-close')) {
+                const toast = event.target.closest('.toast');
+                if (toast) toast.remove();
+            }
+        });
     </script>
 </body>
 </html>

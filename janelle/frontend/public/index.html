@@ -126,6 +126,8 @@
        role="status"
        hidden></p>
 
+    <div id="anomaly-alert"></div>
+
     <div class="transactions-table-wrapper">
         <table>
             <thead>
@@ -316,10 +318,38 @@
                 document.getElementById('transactions'),
                 'transactionsChanged'
             );
+            if (result && result.id != null) {
+                watchForAnomaly(result.id);
+            }
         } catch (error) {
             showFormMessage(error.message || 'Unable to save transaction.');
         } finally {
             saveButton.disabled = false;
         }
     }
+
+    // The transactions backend forwards each saved transaction to the anomalies
+    // backend for asynchronous review. Poll /anomaly-alert with the transaction
+    // id (key) until the review finishes; render the toast if it was flagged.
+    async function watchForAnomaly(key) {
+        const container = document.getElementById('anomaly-alert');
+        try {
+            const response = await fetch(
+                '/anomalies-backend/anomaly-alert?key=' + encodeURIComponent(key)
+            );
+            if (response.status === 200) {
+                container.innerHTML = await response.text();
+            }
+        } catch (error) {
+            // Anomaly review is best-effort; ignore polling failures.
+        }
+    }
+
+    // Dismiss an anomaly toast when its close button is clicked.
+    document.addEventListener('click', function (event) {
+        if (event.target.classList.contains('toast-close')) {
+            const toast = event.target.closest('.toast');
+            if (toast) toast.remove();
+        }
+    });
 </script>

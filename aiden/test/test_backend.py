@@ -9,6 +9,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from backend.app import app
+from backend.services import review_queue
 from backend.services.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
@@ -201,10 +202,69 @@ def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
     assert "Schema mismatch between backend and database" in resp.text
 
 
+def test_anomaly_alert_returns_alert_when_anomaly_created(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Long poll reason"}')
+
+    transaction = dto.Transaction(
+        id=123,
+        amount=9999999,
+        merchant="Slim Shady ATMs",
+        date=datetime.now(),
+        description="we are going to steal your money",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    resp = client.get("/anomaly-alert?key=123")
+
+    assert resp.status_code == 200
+    assert "<strong>Possible suspicious transaction detected</strong>" in resp.text
+    assert "Long poll reason" in resp.text
+
+
+def test_anomaly_alert_returns_204_when_no_anomaly(client: FlaskClient, monkeypatch: MonkeyPatch):
+    intercept_ollama(monkeypatch, '{"is_suspicious": false, "justification": "Looks fine."}')
+
+    transaction = dto.Transaction(
+        id=124,
+        amount=42.50,
+        merchant="Corner Store",
+        date=datetime.now(),
+        description="milk and bread",
+        category_id=2,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    resp = client.get("/anomaly-alert?key=124")
+
+    assert resp.status_code == 204
+    assert resp.data == b""
+
+
+def test_anomaly_alert_times_out_while_pending(client: FlaskClient, monkeypatch: MonkeyPatch):
+    monkeypatch.setattr("backend.app.ANOMALY_WAIT_SECONDS", 0.2)
+
+    resp = client.get("/anomaly-alert?key=999")
+
+    assert resp.status_code == 204
+    assert resp.data == b""
+
+
+def test_anomaly_alert_requires_key(client: FlaskClient):
+    resp = client.get("/anomaly-alert")
+
+    assert resp.status_code == 400
+
+
 # Pytest fixtures
 @fixture
 def client():
     setup_database(":memory:")
+    review_queue.reset()
 
     with app.test_client() as client:
         yield client
