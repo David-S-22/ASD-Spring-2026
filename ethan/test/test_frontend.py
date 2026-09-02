@@ -1,8 +1,12 @@
 from pathlib import Path
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_budgets_frontend_contains_overview_screen():
-    index_html = Path("ethan/frontend/public/index.html").read_text(encoding="utf-8")
+    index_html = (
+        REPOSITORY_ROOT / "ethan" / "frontend" / "public" / "index.html"
+    ).read_text(encoding="utf-8")
 
     assert "Budget overview" in index_html
     assert 'id="budget-month-select"' in index_html
