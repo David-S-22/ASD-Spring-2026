@@ -1,0 +1,86 @@
+<section id="transaction-chat-panel"
+         class="transaction-chat-panel"
+         aria-labelledby="transaction-chat-title">
+    <div class="transaction-chat-heading">
+        <h2 id="transaction-chat-title">Ask Tally</h2>
+        <p>Answers use your transaction history.</p>
+    </div>
+
+    <div class="transaction-chat-prompts"
+         aria-label="Example transaction questions">
+        <form hx-post="/transactions-backend/ui/chat"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-indicator="#transaction-chat-loading"
+              hx-disabled-elt="button"
+              hx-on::before-request="document.getElementById('transaction-chat-input').value = ''"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="message"
+                   value="What did I spend at Woolworths in August?">
+            <button type="submit" class="transaction-chat-prompt">
+                What did I spend at Woolworths in August?
+            </button>
+        </form>
+        <form hx-post="/transactions-backend/ui/chat"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-indicator="#transaction-chat-loading"
+              hx-disabled-elt="button"
+              hx-on::before-request="document.getElementById('transaction-chat-input').value = ''"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="message"
+                   value="Show my biggest purchases in August">
+            <button type="submit" class="transaction-chat-prompt">
+                Show my biggest purchases in August
+            </button>
+        </form>
+        <form hx-post="/transactions-backend/ui/chat"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-indicator="#transaction-chat-loading"
+              hx-disabled-elt="button"
+              hx-on::before-request="document.getElementById('transaction-chat-input').value = ''"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="message"
+                   value="How much did eating out cost me last week?">
+            <button type="submit" class="transaction-chat-prompt">
+                How much did eating out cost me last week?
+            </button>
+        </form>
+    </div>
+
+    <form id="transaction-chat-form"
+          class="transaction-chat-form"
+          hx-post="/transactions-backend/ui/chat"
+          hx-target="#transaction-chat-response"
+          hx-swap="innerHTML"
+          hx-indicator="#transaction-chat-loading"
+          hx-disabled-elt="#transaction-chat-submit"
+          hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+        <label for="transaction-chat-input"
+               class="screen-reader-only">
+            Ask about your transactions
+        </label>
+        <input id="transaction-chat-input"
+               name="message"
+               type="text"
+               maxlength="1000"
+               autocomplete="off"
+               placeholder="Ask about your transactions..."
+               required>
+        <button id="transaction-chat-submit" type="submit">Ask</button>
+    </form>
+
+    <p id="transaction-chat-loading"
+       class="transaction-chat-status htmx-indicator"
+       role="status">
+        Tally is reviewing your transactions...
+    </p>
+
+    <div id="transaction-chat-response"
+         class="transaction-chat-response"
+         aria-live="polite"></div>
+</section>

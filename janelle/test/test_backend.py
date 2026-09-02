@@ -329,3 +329,72 @@ def test_category_routes_forward_requests(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/categories/90",
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )
+
+
+def test_new_transaction_form_loads_categories_from_database(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(return_value=response_with_json([
+        {"id": 80, "name": "Dining", "type": "want"},
+        {"id": 81, "name": "Groceries", "type": "need"},
+    ]))
+    monkeypatch.setattr(backend_app.requests, "get", get)
+
+    response = client.get("/ui/transactions/new")
+
+    assert response.status_code == 200
+    assert "Add a transaction" in response.text
+    assert '<option value="80"' in response.text
+    assert "Dining" in response.text
+    assert 'hx-post="/transactions-backend/ui/transactions"' in response.text
+    assert 'hx-get="/transactions-backend/ui/transactions/page"' in response.text
+    get.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
+def test_ui_create_transaction_posts_typed_payload_and_returns_page(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    post = Mock(return_value=response_with_json(
+        {
+            "id": 90,
+            "date": "2026-09-02",
+            "merchant": "Atomic Cafe",
+            "description": "Lunch",
+            "amount": 24.5,
+            "category_id": 80,
+        },
+        status=201,
+    ))
+    monkeypatch.setattr(backend_app.requests, "post", post)
+
+    response = client.post(
+        "/ui/transactions",
+        data={
+            "date": "2026-09-02",
+            "merchant": "Atomic Cafe",
+            "description": "Lunch",
+            "amount": "24.50",
+            "category_id": "80",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Transaction saved." in response.text
+    assert 'id="add-transaction-button"' in response.text
+    post.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
+        json={
+            "date": "2026-09-02",
+            "merchant": "Atomic Cafe",
+            "description": "Lunch",
+            "amount": 24.5,
+            "category_id": 80,
+        },
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+

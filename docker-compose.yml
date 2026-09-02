@@ -58,8 +58,14 @@ services:
       PORT: 5001
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       DATABASE_TIMEOUT_SECONDS: 20
+      OLLAMA_URL: http://ollama:11434
+      CHAT_MODEL: qwen2.5:3b
+      AI_TIMEOUT_SECONDS: 90
     depends_on:
-      - transactions-db
+      transactions-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   transactions-db:
     build:
       dockerfile: ./janelle/database/Dockerfile
