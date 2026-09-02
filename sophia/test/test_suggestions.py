@@ -74,12 +74,14 @@ def test_reject_changes_nothing_and_tells_the_model(live_client, monkeypatch):
     assert response.status_code == 200
     assert bills_db_module.get_bill(target["id"]) is not None
     assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
-    # The rejection note is on the record, and the loop closed: an adapt
-    # turn followed it (here the stubbed model just re-proposes, which is
-    # fine — the note itself is what the real model adapts from).
+    # The rejection note is still on the record so the model's next turn knows
+    # the change was not made -- but no adapt turn rides the response. That
+    # used to be here, and because the stubbed model "just re-proposes", it
+    # documented the very loop it caused: the replacement proposal became a new
+    # pending row. Asking for an alternative is the Suggest button now.
     recent = [m["content"] for m in bills_db_module.list_chat_messages()[-3:]]
     assert any("rejected by the user" in c and "NOT applied" in c for c in recent)
-    assert 'hx-swap-oob="beforeend:#chat-history"' in _text(response)
+    assert 'hx-swap-oob="beforeend:#chat-history"' not in _text(response)
 
 
 def test_approving_a_delete_for_a_missing_bill_fails_honestly(live_client, monkeypatch):
@@ -205,17 +207,15 @@ def test_reply_pointer_names_the_actual_target_not_the_models_claim(live_client,
     assert "nothing is saved until you approve" in body
 
 
-def test_reject_triggers_an_adapt_turn_in_the_chat(live_client, monkeypatch):
-    """The Observe→Adapt half of the loop: rejecting a pending suggestion gets
-    an immediate follow-up from Tally, appended to the chat out of band."""
-    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+def _propose_then_adapt(monkeypatch, bill_id):
+    """First model turn proposes; every later turn answers without an op."""
     calls = []
 
     def fake_chat(model, messages, timeout=None):
         calls.append(messages)
         if len(calls) == 1:
             return {"message": {"content": json.dumps({
-                "op": "update", "entity": "bill", "id": spotify["id"],
+                "op": "update", "entity": "bill", "id": bill_id,
                 "fields": {"end_date": "2026-09-16"}, "question": "none",
                 "say": "I've suggested ending Spotify — approve to save."})}}
         return {"message": {"content": json.dumps({
@@ -223,18 +223,61 @@ def test_reject_triggers_an_adapt_turn_in_the_chat(live_client, monkeypatch):
             "question": "none", "say": "No problem — what would you like instead?"})}}
 
     monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
+    return calls
+
+
+def test_suggest_asks_tally_for_another_option(live_client, monkeypatch):
+    """Suggest is the "no, try again" action: it clears the current proposal and
+    spends one model turn asking for a different one, appended to the chat out
+    of band. This is the behaviour Reject used to have."""
+    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+    calls = _propose_then_adapt(monkeypatch, spotify["id"])
     live_client.post("/ui/chat", data={"message": "end spotify"})
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
 
-    response = live_client.post(f"/ui/suggestions/{suggestion_id}/reject")
+    response = live_client.post(f"/ui/suggestions/{suggestion_id}/suggest")
+    assert response.status_code == 200
     body = _text(response)
-    # the adapt reply rides the reject response, targeted at the chat history
     assert 'hx-swap-oob="beforeend:#chat-history"' in body
     assert "what would you like instead" in body
-    # the adapt turn's model call saw the rejection note in its history
-    adapt_messages = calls[-1]
-    history_text = " ".join(m["content"] for m in adapt_messages)
+    assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
+    history_text = " ".join(m["content"] for m in calls[-1])
     assert "rejected by the user" in history_text
+
+
+def test_reject_is_quiet_and_does_not_spawn_a_replacement(live_client, monkeypatch):
+    """The loop that made this necessary: Reject ran an adapt turn, that turn
+    proposed again, and _model_turn turned the proposal into a fresh PENDING
+    row -- so rejecting produced another card to reject. Three rejects in a row
+    left three rejected rows and one still pending. Reject must now be terminal:
+    no model turn, no replacement."""
+    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+    calls = _propose_then_adapt(monkeypatch, spotify["id"])
+    live_client.post("/ui/chat", data={"message": "end spotify"})
+    suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+    calls_before = len(calls)
+    # Earlier tests in this module share the live DB and leave pending rows, so
+    # measure the delta rather than asserting the table is empty.
+    pending_before = {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
+
+    response = live_client.post(f"/ui/suggestions/{suggestion_id}/reject")
+    assert response.status_code == 200
+    assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
+    assert len(calls) == calls_before, "Reject must not spend a model turn"
+    pending_after = {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
+    assert pending_after == pending_before - {suggestion_id}, "no replacement card"
+    assert 'hx-swap-oob="beforeend:#chat-history"' not in _text(response)
+
+
+def test_suggestion_card_offers_all_three_actions(live_client, monkeypatch):
+    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+    _propose_then_adapt(monkeypatch, spotify["id"])
+    live_client.post("/ui/chat", data={"message": "end spotify"})
+    suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+
+    body = _text(live_client.get("/ui/suggestions"))
+    for action in ("approve", "reject", "suggest"):
+        assert f"/ui/suggestions/{suggestion_id}/{action}" in body, f"{action} button missing"
 
 
 def test_dismissing_a_failed_suggestion_does_not_adapt(live_client, monkeypatch):
