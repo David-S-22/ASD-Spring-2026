@@ -103,20 +103,11 @@
    a sticky header only works against its nearest scrolling ancestor, and two
    nested scroll contexts is how you get a header that sticks to the wrong one.
 
-   620px is kept, but the arithmetic behind it has changed completely and the
-   figures here were re-measured on 2 Sep rather than carried over. The previous
-   note said rows were ~94px because four action controls wrapped to three
-   lines; both numbers were stale. Measured in the shell before this change:
-   rows were 135px, uniformly, with the controls on FOUR lines.
-
-   After moving three of them into the row menu, rows are 47px where the name
-   fits on one line, 61-62px where it wraps to two, and 108px for GymCo, which
-   carries the Spending Alerts prompt. Twelve seeded bills plus the header come
-   to 755px, so the cap still engages and the sticky header is still doing
-   something -- about ten rows sit above the fold, which covers Spotify (row 3)
-   and GymCo (row 6), the two the demo actually touches. */
+   330px caps the visible table at roughly six rows (measured: header ~41px,
+   one-line rows ~47px), so the panel stays compact and Disputes sits above
+   the fold; the rest of the bills scroll under the sticky header. */
 .table-scroll {
-  max-height: 700px;
+  max-height: 330px;
   overflow: auto;
 }
 
