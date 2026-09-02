@@ -55,8 +55,8 @@ def test_approve_applies_and_refreshes_the_bills_table(live_client, monkeypatch)
     assert 'id="timeline" hx-swap-oob="true"' in body
     assert 'id="calendar-card" hx-swap-oob="true"' in body
     assert "Disney Plus" in body
-    trigger = json.loads(response.headers["HX-Trigger"])
-    assert trigger["suggestionResolved"]["status"] == "applied"
+    # the fresh panel carries the resolution note the chat card reconciles from
+    assert f'data-suggestion-id="{suggestion_id}" data-status="applied"' in body
 
     created = [b for b in bills_db_module.list_bills() if b["name"] == "Disney Plus"]
     assert len(created) == 1 and created[0]["source"] == "chat"
@@ -77,8 +77,8 @@ def test_reject_changes_nothing_and_tells_the_model(live_client, monkeypatch):
     assert response.status_code == 200
     assert bills_db_module.get_bill(target["id"]) is not None
     assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
-    trigger = json.loads(response.headers["HX-Trigger"])
-    assert trigger["suggestionResolved"]["status"] == "rejected"
+    body = _text(response)
+    assert f'data-suggestion-id="{suggestion_id}" data-status="rejected"' in body
     outcome = bills_db_module.list_chat_messages()[-1]
     assert "rejected by the user" in outcome["content"]
     assert "NOT applied" in outcome["content"]
@@ -92,9 +92,9 @@ def test_approving_a_delete_for_a_missing_bill_fails_honestly(live_client, monke
 
     response = live_client.post(f"/ui/suggestions/{suggestion_id}/approve")
     assert response.status_code == 200
-    trigger = json.loads(response.headers["HX-Trigger"])
-    assert trigger["suggestionResolved"]["status"] == "failed"
-    assert "bill not found" in trigger["toast"]
+    body = _text(response)
+    assert f'data-suggestion-id="{suggestion_id}" data-status="failed"' in body
+    assert "bill not found" in json.loads(response.headers["HX-Trigger"])["toast"]
     row = bills_db_module.get_suggestion(suggestion_id)
     assert row["status"] == "failed" and "bill not found" in row["error"]
     outcome = bills_db_module.list_chat_messages()[-1]
