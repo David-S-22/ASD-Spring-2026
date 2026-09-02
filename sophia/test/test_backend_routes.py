@@ -43,6 +43,8 @@ class FakeStore:
         self.disputes = {}
         self.drafts = {}
         self.chat_messages = {}
+        self.suggestions = {}
+        self._next_suggestion_id = 1
         self._next_payment_id = 4
         self._next_dispute_id = 1
         self._next_draft_id = 1
@@ -142,6 +144,32 @@ class FakeStore:
         self.drafts[new_id] = row
         return dict(row)
 
+    def list_suggestions(self, status=None):
+        rows = [dict(s) for s in self.suggestions.values()]
+        if status:
+            rows = [s for s in rows if s["status"] == status]
+        return rows
+
+    def create_suggestion(self, payload):
+        new_id = self._next_suggestion_id
+        self._next_suggestion_id += 1
+        row = dict(payload)
+        row["id"] = new_id
+        row.setdefault("status", "pending")
+        row.setdefault("error", None)
+        row.setdefault("created_at", "2026-08-20T09:00:00")
+        row.setdefault("resolved_at", None)
+        self.suggestions[new_id] = row
+        return dict(row)
+
+    def get_suggestion(self, suggestion_id):
+        row = self.suggestions.get(suggestion_id)
+        return dict(row) if row else None
+
+    def update_suggestion(self, suggestion_id, payload):
+        self.suggestions[suggestion_id].update(payload)
+        return dict(self.suggestions[suggestion_id])
+
     def list_chat_messages(self):
         return [dict(m) for m in self.chat_messages.values()]
 
@@ -170,6 +198,7 @@ FAKE_STORE_METHODS = (
     "list_disputes", "create_dispute", "get_dispute", "update_dispute", "delete_dispute",
     "list_dispute_drafts", "create_dispute_draft", "list_chat_messages", "create_chat_message",
     "update_chat_message", "health",
+    "list_suggestions", "create_suggestion", "get_suggestion", "update_suggestion",
 )
 
 
@@ -248,8 +277,10 @@ def test_chat_only_writes_chat_messages_and_apply_uses_crud(client, store, monke
     data = response.get_json()
     preview = dict(data["preview"])
     message_id = preview.pop("message_id", None)
+    suggestion_id = preview.pop("suggestion_id", None)
     assert preview == {"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}}
     assert message_id is not None
+    assert suggestion_id is not None
     assert store.bills == bills_before
     assert len(store.chat_messages) == 2
     assert {m["role"] for m in store.chat_messages.values()} == {"user", "assistant"}

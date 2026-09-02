@@ -23,7 +23,7 @@ class ApiError(Exception):
 		self.status = status
 
 
-def _reject_unknown_fields(data, allowed_fields):
+def reject_unknown_fields(data, allowed_fields):
 	unknown = sorted(set(data) - allowed_fields)
 	if unknown:
 		raise ApiError(
@@ -33,7 +33,7 @@ def _reject_unknown_fields(data, allowed_fields):
 		)
 
 
-def _parse_text(value, field_name, max_length):
+def parse_text(value, field_name, max_length):
 	if not isinstance(value, str):
 		raise ApiError(f"{field_name} must be a string", f"invalid_{field_name}", 422)
 	value = value.strip()
@@ -54,7 +54,7 @@ def _parse_text(value, field_name, max_length):
 	return value
 
 
-def _parse_datetime(value, field_name, status=422, code=None, end_of_day=False):
+def parse_datetime(value, field_name, status=422, code=None, end_of_day=False):
 	if not isinstance(value, str):
 		raise ApiError(
 			f"{field_name} must be an ISO 8601 date or datetime",
@@ -81,7 +81,7 @@ def _parse_datetime(value, field_name, status=422, code=None, end_of_day=False):
 	return parsed
 
 
-def _parse_integer_id(value, field_name, status=422, code=None):
+def parse_integer_id(value, field_name, status=422, code=None):
 	if (
 		isinstance(value, bool)
 		or not isinstance(value, int)
@@ -96,7 +96,7 @@ def _parse_integer_id(value, field_name, status=422, code=None):
 	return value
 
 
-def _parse_amount(value, field_name, status, code, require_number):
+def parse_amount(value, field_name, status, code, require_number):
 	if require_number and (
 		isinstance(value, bool)
 		or not isinstance(value, (int, float))
@@ -125,7 +125,7 @@ def _parse_amount(value, field_name, status, code, require_number):
 
 
 def validate_transaction_payload(data, partial=False):
-	_reject_unknown_fields(data, TRANSACTION_FIELDS)
+	reject_unknown_fields(data, TRANSACTION_FIELDS)
 	required = {"date", "merchant", "description", "amount", "category_id"}
 	if not partial:
 		missing = sorted(field for field in required if field not in data)
@@ -140,17 +140,17 @@ def validate_transaction_payload(data, partial=False):
 
 	values = {}
 	if "date" in data:
-		values["date"] = _parse_datetime(data["date"], "date")
+		values["date"] = parse_datetime(data["date"], "date")
 	if "merchant" in data:
-		values["merchant"] = _parse_text(data["merchant"], "merchant", 200)
+		values["merchant"] = parse_text(data["merchant"], "merchant", 200)
 	if "description" in data:
-		values["description"] = _parse_text(
+		values["description"] = parse_text(
 			data["description"],
 			"description",
 			500,
 		)
 	if "amount" in data:
-		values["amount"] = _parse_amount(
+		values["amount"] = parse_amount(
 			data["amount"],
 			"amount",
 			422,
@@ -158,12 +158,12 @@ def validate_transaction_payload(data, partial=False):
 			require_number=True,
 		)
 	if "category_id" in data:
-		values["category_id"] = _parse_integer_id(data["category_id"], "category_id")
+		values["category_id"] = parse_integer_id(data["category_id"], "category_id")
 	return values
 
 
 def validate_category_payload(data, partial=False):
-	_reject_unknown_fields(data, CATEGORY_FIELDS)
+	reject_unknown_fields(data, CATEGORY_FIELDS)
 	if not partial and "name" not in data:
 		raise ApiError("missing required fields: name", "missing_fields", 422)
 	if partial and not data:
@@ -171,7 +171,7 @@ def validate_category_payload(data, partial=False):
 
 	values = {}
 	if "name" in data:
-		values["name"] = _parse_text(data["name"], "name", 80)
+		values["name"] = parse_text(data["name"], "name", 80)
 	if "type" in data:
 		category_type = data["type"]
 		if category_type is not None and (
@@ -190,7 +190,7 @@ def validate_category_payload(data, partial=False):
 
 
 def validate_correction_payload(data):
-	_reject_unknown_fields(data, {"category_id", "user_category_id"})
+	reject_unknown_fields(data, {"category_id", "user_category_id"})
 	category_id = data.get("category_id")
 	user_category_id = data.get("user_category_id")
 	if category_id is None and user_category_id is None:
@@ -200,12 +200,12 @@ def validate_correction_payload(data):
 			422,
 		)
 	parsed_category_id = (
-		_parse_integer_id(category_id, "category_id")
+		parse_integer_id(category_id, "category_id")
 		if category_id is not None
 		else None
 	)
 	parsed_user_category_id = (
-		_parse_integer_id(user_category_id, "user_category_id")
+		parse_integer_id(user_category_id, "user_category_id")
 		if user_category_id is not None
 		else None
 	)
@@ -275,7 +275,7 @@ def parse_transaction_filters(arguments):
 def parse_query_date(value, field_name, end_of_day=False):
 	if value in (None, ""):
 		return None
-	return _parse_datetime(
+	return parse_datetime(
 		value,
 		field_name,
 		400,
@@ -287,7 +287,7 @@ def parse_query_date(value, field_name, end_of_day=False):
 def parse_query_amount(value, field_name):
 	if value in (None, ""):
 		return None
-	return _parse_amount(
+	return parse_amount(
 		value,
 		field_name,
 		400,

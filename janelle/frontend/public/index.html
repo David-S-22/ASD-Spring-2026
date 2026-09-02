@@ -1,28 +1,428 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Transactions</title>
-    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
-            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
-            crossorigin="anonymous"></script>
-</head>
-<body>
-    <h1>Transactions</h1>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Merchant</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Category</th>
-            </tr>
-        </thead>
-        <tbody id="transactions" hx-get="/transactions-backend/ui/transactions" hx-trigger="load" hx-swap="innerHTML">
-            <tr><td colspan="5">Loading...</td></tr>
-        </tbody>
-    </table>
-</body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+        integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+        crossorigin="anonymous"></script>
+
+<style>
+    [hidden] {
+        display: none !important;
+    }
+
+    .transactions-toolbar,
+    .transaction-chat-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .transactions-toolbar h1,
+    .transaction-form-screen h1,
+    .transaction-chat-heading h2 {
+        margin: 0;
+    }
+
+    .transactions-toolbar p,
+    .transaction-form-screen > p,
+    .transaction-chat-heading p {
+        margin: 0.25rem 0 0;
+        color: var(--color-text-muted, #64748b);
+    }
+
+    .transactions-toolbar-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .secondary-action-button {
+        border: 1px solid var(--color-border, #cbd5e1) !important;
+        background: transparent !important;
+        color: var(--color-text, #0f172a) !important;
+    }
+
+    .secondary-action-button:hover {
+        border-color: var(--color-primary, #0f766e) !important;
+        background: var(--color-surface-alt, #f8fafc) !important;
+    }
+
+    .transactions-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .transactions-filters {
+        display: grid;
+        grid-template-columns:
+            minmax(11rem, 2fr)
+            repeat(2, minmax(9rem, 1fr));
+        gap: 0.75rem;
+        margin: 1.25rem 0 1rem;
+    }
+
+    .transactions-filters input,
+    .transactions-filters select {
+        min-width: 0;
+        min-height: 2.75rem;
+        margin: 0;
+    }
+
+    .transaction-filter-error {
+        margin: -0.35rem 0 1rem;
+        color: var(--color-danger, #dc2626);
+    }
+
+    .transactions-pagination,
+    .transactions-page-size,
+    .transactions-page-details,
+    .transactions-page-navigation {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .transactions-pagination {
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        min-width: 0;
+        margin-top: 0.85rem;
+    }
+
+    .transactions-page-size {
+        flex: 0 0 auto;
+        margin: 0;
+    }
+
+    .transactions-page-size label,
+    .transactions-page-count,
+    .transactions-page-number {
+        margin: 0;
+        color: var(--color-text-muted, #64748b);
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .transactions-page-size select {
+        width: 4.5rem !important;
+        min-width: 4.5rem;
+        min-height: 2.5rem;
+        padding: 0.4rem 0.7rem;
+    }
+
+    .transactions-page-details {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    .transactions-page-navigation {
+        flex: 0 0 auto;
+    }
+
+    .transactions-page-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        min-width: 2.5rem;
+        height: 2.5rem;
+        padding: 0 !important;
+        font-size: 1.15rem;
+    }
+
+    .transactions-page-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
+    .transaction-form-screen {
+        max-width: 960px;
+        margin: 0 auto;
+    }
+
+    .back-button {
+        margin-bottom: 1rem;
+        padding-left: 0 !important;
+        background: transparent !important;
+        color: var(--color-primary, #0f766e) !important;
+    }
+
+    .transaction-form {
+        display: grid;
+        gap: 1.25rem;
+        margin-top: 1.75rem;
+    }
+
+    .transaction-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.25rem;
+    }
+
+    .transaction-form-field {
+        display: grid;
+        gap: 0.4rem;
+    }
+
+    .transaction-form-field label {
+        margin: 0;
+        font-size: 0.85rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .transaction-form input,
+    .transaction-form textarea,
+    .transaction-form select {
+        min-height: 3rem;
+    }
+
+    .transaction-form textarea {
+        min-height: 5.5rem;
+    }
+
+    .transaction-form-actions {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .transaction-form-actions button {
+        min-width: 12rem;
+    }
+
+    .form-message {
+        margin: 0;
+        color: var(--color-danger, #dc2626);
+    }
+
+    .transaction-notice {
+        margin: 1rem 0 0;
+        color: var(--color-success, #16a34a);
+    }
+
+    .transaction-chat-panel {
+        margin-top: 1.5rem;
+        padding: 1.4rem;
+        border: 1px solid var(--color-border, #cbd5e1);
+        border-radius: var(--radius, 10px);
+        background: var(--color-surface-alt, #f8fafc);
+    }
+
+    .transaction-chat-heading {
+        align-items: baseline;
+        margin-bottom: 1rem;
+    }
+
+    .transaction-chat-heading h2 {
+        font-size: 1.05rem;
+    }
+
+    .transaction-chat-heading p {
+        font-size: 0.85rem;
+    }
+
+    .transaction-chat-prompts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+    }
+
+    .transaction-chat-prompts form,
+    .transaction-chat-actions form {
+        margin: 0;
+    }
+
+    .transaction-chat-prompt {
+        padding: 0.55rem 0.8rem !important;
+        border: 1px solid var(--color-border, #cbd5e1) !important;
+        background: transparent !important;
+        color: var(--color-text-muted, #475569) !important;
+        font-weight: 500 !important;
+        text-align: left;
+    }
+
+    .transaction-chat-prompt:hover {
+        border-color: var(--color-primary, #0f766e) !important;
+        background: var(--color-surface, #ffffff) !important;
+        color: var(--color-text, #0f172a) !important;
+    }
+
+    .transaction-chat-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.75rem;
+    }
+
+    .transaction-chat-form input {
+        min-height: 3rem;
+    }
+
+    .transaction-chat-form button {
+        min-width: 5rem;
+    }
+
+    .transaction-chat-status {
+        margin: 0.85rem 0 0;
+        color: var(--color-text-muted, #64748b);
+    }
+
+    .transaction-chat-response {
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-response:empty {
+        display: none;
+    }
+
+    .transaction-chat-response-card,
+    .transaction-chat-preview {
+        padding: 1rem;
+        border: 1px solid var(--color-border, #cbd5e1);
+        border-radius: var(--radius, 10px);
+        background: var(--color-surface, #ffffff);
+    }
+
+    .transaction-chat-response-card > :first-child,
+    .transaction-chat-preview h3 {
+        margin-top: 0;
+    }
+
+    .transaction-chat-response-card > :last-child {
+        margin-bottom: 0;
+    }
+
+    .transaction-chat-summary,
+    .transaction-chat-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-metric,
+    .transaction-chat-operation {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 0.3rem 0.65rem;
+        background: var(--color-surface-alt, #e2e8f0);
+        color: var(--color-text, #0f172a);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-preview-grid.single {
+        grid-template-columns: 1fr;
+    }
+
+    .transaction-chat-preview {
+        background: var(--color-surface-alt, #f8fafc);
+    }
+
+    .transaction-chat-preview h3 {
+        margin-bottom: 0.7rem;
+        font-size: 0.9rem;
+    }
+
+    .transaction-chat-preview dl {
+        display: grid;
+        grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+        gap: 0.35rem 0.8rem;
+        margin: 0;
+    }
+
+    .transaction-chat-preview dt {
+        color: var(--color-text-muted, #64748b);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-preview dd {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .transaction-chat-cancel {
+        border: 1px solid var(--color-border, #cbd5e1) !important;
+        background: transparent !important;
+        color: var(--color-text, #0f172a) !important;
+    }
+
+    .transaction-chat-matches {
+        margin-bottom: 0;
+        padding-left: 1.25rem;
+    }
+
+    .screen-reader-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .htmx-indicator {
+        display: none;
+    }
+
+    .htmx-request.htmx-indicator,
+    .htmx-request .htmx-indicator {
+        display: block;
+    }
+
+    @media (max-width: 700px) {
+        .transactions-filters {
+            grid-template-columns:
+                minmax(10rem, 1.5fr)
+                repeat(2, minmax(8rem, 1fr));
+            gap: 0.5rem;
+            overflow-x: auto;
+            padding-bottom: 0.25rem;
+        }
+
+        .transactions-toolbar,
+        .transaction-form-grid,
+        .transaction-chat-heading,
+        .transaction-chat-form,
+        .transaction-chat-preview-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .transactions-toolbar-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .transactions-page-count {
+            display: none;
+        }
+
+        .transactions-page-navigation {
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .transactions-toolbar button,
+        .transaction-chat-form button {
+            width: 100%;
+        }
+    }
+</style>
+
+<section id="transactions-content"
+         class="panel"
+         hx-get="/transactions-backend/ui/transactions/page"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+    <p class="loading-state">Loading transactions...</p>
+</section>

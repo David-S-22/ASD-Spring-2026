@@ -1,0 +1,122 @@
+<section id="transactions-content" class="panel">
+    <div class="transactions-toolbar">
+        <div>
+            <h1>Transactions</h1>
+            <p>Review the transactions you have entered.</p>
+        </div>
+        <div class="transactions-toolbar-actions">
+            <button id="add-category-button"
+                    class="secondary-action-button"
+                    type="button"
+                    hx-get="/transactions-backend/ui/categories/new"
+                    hx-target="#transactions-content"
+                    hx-swap="outerHTML">
+                + Add category
+            </button>
+            <button id="add-transaction-button"
+                    type="button"
+                    hx-get="/transactions-backend/ui/transactions/new"
+                    hx-target="#transactions-content"
+                    hx-swap="outerHTML">
+                + Add transaction
+            </button>
+        </div>
+    </div>
+
+    {% if notice %}
+    <p class="transaction-notice" role="status">{{ notice }}</p>
+    {% endif %}
+
+    <form id="transaction-filters"
+          class="transactions-filters"
+          role="search"
+          hx-get="/transactions-backend/ui/transactions"
+          hx-trigger="submit, input changed delay:350ms queue:last from:#transaction-search, change from:.transaction-filter-select"
+          hx-target="#transactions-table"
+          hx-swap="outerHTML"
+          hx-include="#transactions-page-size"
+          hx-sync="#transactions-table:replace">
+        <label class="screen-reader-only"
+               for="transaction-search">
+            Search transactions
+        </label>
+        <input id="transaction-search"
+               type="search"
+               name="search"
+               maxlength="100"
+               autocomplete="off"
+               placeholder="Search transactions"
+               aria-controls="transactions">
+
+        <label class="screen-reader-only"
+               for="transaction-category-filter">
+            Filter by category
+        </label>
+        <select id="transaction-category-filter"
+                class="transaction-filter-select"
+                name="category_id"
+                aria-controls="transactions">
+            <option value="">All categories</option>
+            {% for category in categories %}
+            <option value="{{ category.get('id') }}">{{ category.get("name", "") }}</option>
+            {% endfor %}
+        </select>
+
+        <label class="screen-reader-only"
+               for="transaction-date-filter">
+            Filter by date
+        </label>
+        <select id="transaction-date-filter"
+                class="transaction-filter-select"
+                name="date_range"
+                aria-controls="transactions">
+            <option value="all">All dates</option>
+            <option value="last_7_days">Last 7 days</option>
+            <option value="last_30_days">Last 30 days</option>
+            <option value="last_90_days">Last 90 days</option>
+            <option value="this_month">This month</option>
+            <option value="this_year">This year</option>
+        </select>
+    </form>
+
+    {% if filter_error %}
+    <p class="transaction-filter-error" role="status">
+        {{ filter_error }}
+    </p>
+    {% endif %}
+
+    <div id="transactions-table"
+         hx-get="/transactions-backend/ui/transactions?page=1"
+         hx-trigger="load, transactionsChanged from:body"
+         hx-include="#transaction-filters, #transactions-page-size"
+         hx-swap="outerHTML">
+        <input id="transactions-page-size"
+               type="hidden"
+               name="page_size"
+               value="5">
+        <div class="transactions-table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Merchant</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions">
+                    <tr><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="transaction-chat-panel"
+         class="transaction-chat-panel"
+         hx-get="/transactions-backend/ui/chat"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+        <p class="transaction-chat-status">Loading Ask Tally...</p>
+    </div>
+</section>

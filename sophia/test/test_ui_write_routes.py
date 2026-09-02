@@ -40,9 +40,11 @@ def test_post_ui_bills_add_returns_html_and_toast_and_oob(live_client):
     assert response.content_type.startswith("text/html")
     assert "HX-Trigger" in response.headers
     assert json.loads(response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
+    # Single-page layout: the write response is the refreshed table alone —
+    # Coming up and the Calendar are no longer on the page to refresh.
     body = response.get_data(as_text=True)
-    assert 'id="timeline"' in body and 'hx-swap-oob="true"' in body
-    assert 'id="calendar-card"' in body
+    assert 'id="bills-table"' in body
+    assert 'id="timeline"' not in body and 'id="calendar-card"' not in body
 
     fetched = bills_db_module.get_bill(bill_id)
     assert fetched["name"] == bill_name
@@ -59,7 +61,7 @@ def test_post_ui_bills_edit_changes_db_and_returns_oob(live_client):
     )
     assert response.status_code == 200
     assert json.loads(response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
-    assert 'hx-swap-oob="true"' in response.get_data(as_text=True)
+    assert 'id="bills-table"' in response.get_data(as_text=True)
     assert bills_db_module.get_bill(bill_id)["name"] == "Renamed Streaming"
 
 
@@ -98,7 +100,7 @@ def test_post_ui_payments_records_payment_and_refreshes_projection(live_client):
     response = live_client.post("/ui/payments", data={"bill_id": str(bill_id), "date": "2026-08-20", "amount": "12.50"})
     assert response.status_code == 201, response.get_data(as_text=True)
     assert "HX-Trigger" in response.headers
-    assert 'hx-swap-oob="true"' in response.get_data(as_text=True)
+    assert 'id="bills-table"' in response.get_data(as_text=True)
     payments = bills_db_module.list_bill_payments(bill_id)
     assert any(p["amount_cents"] == 1250 for p in payments)
 
@@ -182,15 +184,23 @@ def test_ui_chat_never_writes_bills_and_apply_does(live_client, monkeypatch):
     monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
     chat_response = live_client.post("/ui/chat", data={"message": "cancel this"})
     assert chat_response.status_code == 200
-    assert json.loads(chat_response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
+    # Asking a question changes nothing, so it must not claim to. The apply
+    # route is the one that writes, and it still sends the toast.
+    assert "HX-Trigger" not in chat_response.headers
     assert bills_db_module.get_bill(bill_id) == before
 
     body = chat_response.get_data(as_text=True)
     # The emitted markup carries the /bills-backend/ prefix so one set of URLs
     # works both standalone and inside the shared shell; nginx strips it before
-    # the request reaches Flask, which is why the request path two lines below
-    # is still the unprefixed route.
-    assert 'hx-post="/bills-backend/ui/chat/apply"' in body
+    # the request reaches Flask, which is why the request paths below are
+    # still the unprefixed routes. The reply's card posts to the suggestion
+    # endpoints — the proposal is a pending suggestion, approvable from the
+    # chat card or the Suggestions panel alike.
+    suggestion = bills_db_module.list_suggestions(status="pending")[-1]
+    assert f'hx-post="/bills-backend/ui/suggestions/{suggestion["id"]}/approve"' in body
+    assert f'hx-post="/bills-backend/ui/suggestions/{suggestion["id"]}/reject"' in body
+    # ...and refreshes the panel out of band so the badge appears immediately.
+    assert 'id="suggestions-panel" hx-swap-oob="true"' in body
 
     messages = bills_db_module.list_chat_messages()
     latest_assistant = [m for m in messages if m["role"] == "assistant"][-1]
@@ -313,3 +323,116 @@ def test_ui_chat_apply_value_db_rejects_returns_422_not_500(live_client):
     body = response.get_data(as_text=True)
     assert "error-fragment" in body
     assert "cadence" in body
+
+
+def test_ui_chat_apply_can_create_a_bill_from_the_shape_the_model_emits(live_client):
+    """The whole point: an add-a-bill request from chat now lands as a row.
+
+    Fields are exactly what the model produces against the current prompt --
+    amount in dollars, real column names elsewhere.
+    """
+    fields = {
+        "name": "Audible",
+        "merchant": "Audible",
+        "amount": 16.45,
+        "cadence": "monthly",
+        "next_billing_date": "2026-09-10",
+        "type": "subscription",
+        "payment_method": "card",
+    }
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 200
+    created = [b for b in bills_db_module.list_bills() if b["name"] == "Audible"]
+    assert len(created) == 1
+    assert created[0]["amount_cents"] == 1645
+    assert created[0]["source"] == "chat"
+
+
+def test_ui_chat_apply_creates_a_bill_from_the_older_drifted_shape(live_client):
+    """A smaller model says "amount"/"next" and names no merchant; still lands."""
+    fields = {"name": "Kindle", "amount": 9.99, "next": "2026-09-20",
+              "cadence": "monthly", "type": "subscription"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 200
+    created = [b for b in bills_db_module.list_bills() if b["name"] == "Kindle"]
+    assert created[0]["amount_cents"] == 999
+    assert created[0]["merchant"] == "Kindle"
+    assert created[0]["next_billing_date"] == "2026-09-20"
+
+
+def test_ui_chat_apply_still_refuses_an_invented_field_on_create(live_client):
+    """Normalisation widens the vocabulary; it must not disarm the allowlist."""
+    fields = {"name": "X", "amount": 5, "cadence": "monthly", "type": "bill",
+              "next_billing_date": "2026-09-01", "colour": "blue"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 422
+    assert "field 'colour' cannot be set via chat" in _text(response)
+    assert not [b for b in bills_db_module.list_bills() if b["name"] == "X"]
+
+
+def test_ui_chat_apply_refuses_an_amount_that_is_not_a_number(live_client):
+    fields = {"name": "Y", "amount": "lots", "cadence": "monthly", "type": "bill",
+              "next_billing_date": "2026-09-01"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 422
+    assert "must be an amount" in _text(response)
+
+
+def test_ui_dispute_delete_removes_it_and_refreshes_the_list(live_client, monkeypatch):
+    """The Disputes tab's remove button: dispute and its drafts go, the panel
+    falls back to the next dispute (or the empty state), and the list arrives
+    refreshed out of band so the removed row doesn't linger."""
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    bill_id, _response, _name = _add_bill(live_client)
+    created = live_client.post("/ui/disputes", data={"bill_id": str(bill_id), "reason": "Duplicate charge"})
+    assert created.status_code == 201
+    dispute_id = max(d["id"] for d in bills_db_module.list_disputes())
+    assert bills_db_module.list_dispute_drafts(dispute_id)
+
+    response = live_client.post(f"/ui/disputes/{dispute_id}/delete")
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger")
+    body = response.get_data(as_text=True)
+    assert 'id="dispute-list" hx-swap-oob="true"' in body
+    assert "Duplicate charge" not in body
+    assert bills_db_module.get_dispute(dispute_id) is None
+    assert bills_db_module.list_dispute_drafts(dispute_id) == []
+
+
+def test_ui_dispute_delete_missing_is_a_clean_422(live_client):
+    response = live_client.post("/ui/disputes/99999/delete")
+    assert response.status_code == 422
+    assert "dispute not found" in response.get_data(as_text=True)
+
+
+def test_ui_dispute_status_change_refreshes_the_list_chips(live_client, monkeypatch):
+    """Marking a dispute sent used to leave the list row's 'draft' chip
+    standing until the tab was reopened."""
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    bill_id, _response, _name = _add_bill(live_client)
+    live_client.post("/ui/disputes", data={"bill_id": str(bill_id), "reason": "Chip check"})
+    dispute_id = max(d["id"] for d in bills_db_module.list_disputes())
+
+    response = live_client.post(f"/ui/disputes/{dispute_id}/status", data={"status": "sent"})
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="dispute-list" hx-swap-oob="true"' in body
+    assert "chip-dispute-sent" in body

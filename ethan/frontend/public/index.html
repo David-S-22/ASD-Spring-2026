@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tally - Budgets</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+            crossorigin="anonymous"></script>
+</head>
+<body>
+    <style>
+        .budgets-page {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .budgets-page-header h1 {
+            margin: 0;
+            font-size: 1.75rem;
+            line-height: 1.2;
+        }
+
+        .budgets-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .budget-overview-panel,
+        .planned-events-panel,
+        .affordability-panel,
+        .coach-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            background: var(--color-surface, #1e293b);
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .budget-overview-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 11px 18px;
+            background-color: var(--color-surface-alt, #273449);
+            border-bottom: 1px solid var(--color-border, #334155);
+        }
+
+        .budget-overview-header h2 {
+            margin: 0;
+            font-size: 1.35rem;
+            font-weight: 600;
+        }
+
+        .budget-overview-header p {
+            margin: 0;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .budget-section-label {
+            display: block;
+            margin-bottom: 0.35rem;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .budget-month-picker {
+            min-width: 16rem;
+        }
+
+        .budget-month-picker label {
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+
+        .budget-month-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .budget-month-controls button {
+            min-width: 2.5rem;
+            padding-inline: 0.75rem;
+        }
+
+        .budget-month-input {
+            position: relative;
+            flex: 1 1 auto;
+        }
+
+        .budget-month-input input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .budget-month-display {
+            display: block;
+            width: 100%;
+            padding: 0.45rem 0.75rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 5px;
+            background: var(--color-surface, #1e293b);
+            color: var(--color-text, #e2e8f0);
+            line-height: 1.4;
+            text-align: left;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .budget-summary-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.9rem;
+            padding: 14px 18px 0;
+        }
+
+        .budget-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding: 10px 18px 0;
+        }
+
+        .budget-line-form {
+            display: grid;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: var(--color-surface-alt, #273449);
+        }
+
+        .budget-line-dialog {
+            width: min(560px, calc(100vw - 2rem));
+            padding: 0;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            background: var(--color-surface, #1e293b);
+            color: var(--color-text, #e2e8f0);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+        }
+
+        .budget-line-dialog::backdrop {
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .budget-line-dialog-header {
+            padding: 11px 18px;
+            border-bottom: 1px solid var(--color-border, #334155);
+            background: var(--color-surface-alt, #273449);
+        }
+
+        .budget-line-dialog-header h3,
+        .budget-line-dialog-header p {
+            margin: 0;
+        }
+
+        .budget-line-dialog-header p {
+            margin-top: 0.25rem;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .budget-line-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .budget-line-form-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .budget-line-form-error {
+            color: var(--color-danger, #f87171);
+            margin: 0;
+        }
+
+        .summary-card {
+            background: var(--color-surface-alt, #273449);
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            padding: 0.9rem 1rem;
+        }
+
+        .summary-card .summary-label {
+            display: block;
+            margin-bottom: 0.25rem;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .summary-card .summary-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .summary-card .summary-hint {
+            margin-top: 0.3rem;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.85rem;
+        }
+
+        .budget-lines {
+            display: grid;
+            gap: 1rem;
+            padding: 14px 18px 18px;
+        }
+
+        .planned-events-panel {
+            gap: 0;
+        }
+
+        .planned-events-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            padding: 11px 18px;
+            background-color: var(--color-surface-alt, #273449);
+            border-bottom: 1px solid var(--color-border, #334155);
+        }
+
+        .planned-events-header h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .planned-events-header p {
+            margin: 0.25rem 0 0;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .planned-events-list {
+            display: grid;
+            gap: 0.75rem;
+            padding: 14px 18px 18px;
+        }
+
+        .planned-event-item {
+            display: grid;
+            gap: 0.5rem;
+            padding: 0.9rem 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .planned-event-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: baseline;
+            flex-wrap: wrap;
+        }
+
+        .planned-event-title {
+            font-weight: 700;
+        }
+
+        .planned-event-status {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .planned-event-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.9rem;
+        }
+
+        .planned-event-impact {
+            padding: 0.75rem 0.9rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .planned-event-impact.info {
+            color: #cbd5e1;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .planned-event-impact.warning {
+            color: #fde68a;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+
+        .planned-event-impact.cap {
+            color: #fecaca;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .planned-event-form {
+            display: grid;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: var(--color-surface-alt, #273449);
+        }
+
+        .planned-event-dialog {
+            width: min(700px, calc(100vw - 2rem));
+            padding: 0;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            background: var(--color-surface, #1e293b);
+            color: var(--color-text, #e2e8f0);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+        }
+
+        .planned-event-dialog::backdrop {
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .planned-event-dialog-header {
+            padding: 11px 18px;
+            border-bottom: 1px solid var(--color-border, #334155);
+            background: var(--color-surface-alt, #273449);
+        }
+
+        .planned-event-dialog-header h3,
+        .planned-event-dialog-header p {
+            margin: 0;
+        }
+
+        .planned-event-dialog-header p {
+            margin-top: 0.25rem;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .planned-event-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .planned-event-form-error {
+            color: var(--color-danger, #f87171);
+            margin: 0;
+        }
+
+        .other-expenses {
+            margin: 0 18px 18px;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            overflow: hidden;
+        }
+
+        .other-expenses summary {
+            cursor: pointer;
+            padding: 1rem;
+            font-weight: 700;
+            list-style: none;
+        }
+
+        .other-expenses summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .other-expenses-summary-note {
+            color: var(--color-text-muted, #94a3b8);
+            font-weight: 400;
+        }
+
+        .other-expenses-content {
+            display: grid;
+            gap: 0.75rem;
+            padding: 0 1rem 1rem;
+        }
+
+        .other-expense-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .other-expense-name {
+            font-weight: 600;
+        }
+
+        .other-expense-amount {
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .other-expense-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .budget-line {
+            display: grid;
+            gap: 0.6rem;
+            padding: 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .budget-line-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: baseline;
+        }
+
+        .budget-line-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .budget-line-amounts {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .budget-progress {
+            position: relative;
+            height: 12px;
+            border-radius: 999px;
+            background: #d7deeb;
+            overflow: hidden;
+        }
+
+        .budget-progress-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            border-radius: 999px;
+            background: #34d399;
+            z-index: 1;
+        }
+
+        .budget-progress-fill.warning {
+            background: #dfc449;
+        }
+
+        .budget-progress-fill.cap {
+            background: #ef7d7d;
+        }
+
+        .budget-progress-fill.projected {
+            background: #7c93c8;
+            border-radius: 0 999px 999px 0;
+            z-index: 2;
+            box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);
+        }
+
+        .budget-progress-marker {
+            position: absolute;
+            top: -2px;
+            bottom: -2px;
+            width: 2px;
+            background: rgba(15, 23, 42, 0.35);
+            border-radius: 999px;
+        }
+
+        .budget-line-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.9rem;
+        }
+
+        .budget-line-meta strong {
+            color: var(--color-text, #e2e8f0);
+        }
+
+        .budget-line-state {
+            font-weight: 700;
+        }
+
+        .budget-line-state.ok {
+            color: var(--color-success, #4ade80);
+        }
+
+        .budget-line-state.warning {
+            color: #dfc449;
+        }
+
+        .budget-line-state.cap {
+            color: var(--color-danger, #f87171);
+        }
+
+        .budget-empty,
+        .budget-error {
+            padding: 1rem;
+            border-radius: 10px;
+        }
+
+        .budget-empty {
+            color: var(--color-text-muted, #94a3b8);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .budget-error {
+            color: #fecaca;
+            background: rgba(239, 125, 125, 0.12);
+            border: 1px solid rgba(239, 125, 125, 0.35);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .budgets-lower-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 1.5rem;
+        }
+
+        .affordability-panel,
+        .coach-panel {
+            gap: 0;
+        }
+
+        .panel-heading {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .panel-subtext {
+            margin: 0.25rem 0 0;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .placeholder-copy {
+            color: var(--color-text-muted, #94a3b8);
+            line-height: 1.6;
+        }
+
+        .affordability-form {
+            display: grid;
+            gap: 1.35rem;
+        }
+
+        .affordability-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.1rem;
+        }
+
+        .affordability-result {
+            margin-top: 0.35rem;
+            padding: 0.9rem 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .affordability-result strong {
+            color: var(--color-text, #e2e8f0);
+        }
+
+        .affordability-result.ok {
+            color: #bbf7d0;
+            background: rgba(52, 211, 153, 0.12);
+            border-color: rgba(52, 211, 153, 0.28);
+        }
+
+        .affordability-result.warning {
+            color: #fde68a;
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.25);
+        }
+
+        .affordability-result.cap {
+            color: #fecaca;
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .panel-header-block {
+            padding: 11px 18px;
+            background-color: var(--color-surface-alt, #273449);
+            border-bottom: 1px solid var(--color-border, #334155);
+        }
+
+        .panel-body-block {
+            padding: 14px 18px 18px;
+        }
+
+        @media (max-width: 700px) {
+            .budget-line-head {
+                display: grid;
+            }
+
+            .budget-line-amounts {
+                text-align: left;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .budgets-lower-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <section class="panel budgets-page">
+        <header class="budgets-page-header">
+            <h1>Budgets</h1>
+        </header>
+
+        <div class="budgets-grid">
+            <section class="budget-overview-panel">
+                <div class="budget-overview-header">
+                    <div>
+                        <h2 id="budget-title">September 2026</h2>
+                    </div>
+                    <div class="budget-month-picker">
+                        <label for="budget-month-select">Budget month</label>
+                        <div class="budget-month-controls">
+                            <button id="previous-budget-month-button" type="button" aria-label="Previous month">&larr;</button>
+                            <div id="budget-month-input" class="budget-month-input">
+                                <button id="budget-month-display" class="budget-month-display" type="button" aria-label="Open budget month picker">Select month</button>
+                                <input id="budget-month-select" type="month" aria-label="Budget month">
+                            </div>
+                            <button id="next-budget-month-button" type="button" aria-label="Next month">&rarr;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="budget-error" class="budget-error hidden" role="alert"></div>
+
+                <div id="budget-summary-strip" class="budget-summary-strip hidden"></div>
+
+                <div class="budget-actions">
+                    <button id="show-add-budget-line-button" type="button">
+                        Add budget line
+                    </button>
+                </div>
+
+                <dialog id="budget-line-dialog" class="budget-line-dialog">
+                    <div class="budget-line-dialog-header">
+                        <h3 id="budget-line-dialog-title">Add budget line</h3>
+                        <p>Select a transaction category and choose its warning and cap amounts.</p>
+                    </div>
+                    <form id="budget-line-form" class="budget-line-form">
+                        <div class="budget-line-form-grid">
+                            <div>
+                                <label for="budget-line-category">Category</label>
+                                <select id="budget-line-category" name="category_id" required>
+                                    <option value="">Loading categories...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="budget-line-warn-at">Warn at</label>
+                                <input id="budget-line-warn-at" name="warn_at" type="number" min="0" step="0.01" placeholder="50.00">
+                            </div>
+                            <div>
+                                <label for="budget-line-hard-cap">Hard cap</label>
+                                <input id="budget-line-hard-cap" name="hard_cap" type="number" min="0" step="0.01" placeholder="75.00">
+                            </div>
+                        </div>
+                        <p id="budget-line-form-error" class="budget-line-form-error hidden" role="alert"></p>
+                        <div class="budget-line-form-actions">
+                            <button type="button" id="cancel-add-budget-line-button">Cancel</button>
+                            <button type="submit" id="save-budget-line-button">Save budget line</button>
+                        </div>
+                    </form>
+                </dialog>
+
+                <div id="budget-lines" class="budget-lines">
+                    <p class="loading-state">Loading budget overview...</p>
+                </div>
+
+                <details id="other-expenses-panel" class="other-expenses hidden">
+                    <summary id="other-expenses-summary">Show other expenses</summary>
+                    <div id="other-expenses-content" class="other-expenses-content"></div>
+                </details>
+            </section>
+
+            <div class="budgets-lower-grid">
+                <section class="planned-events-panel">
+                    <div class="planned-events-header">
+                        <div>
+                            <h2 class="panel-heading">Week Ahead</h2>
+                            <p class="panel-subtext">Track upcoming spending for this month and see if it pushes a category over budget.</p>
+                        </div>
+                        <button id="show-add-planned-event-button" type="button">Add planned event</button>
+                    </div>
+
+                    <dialog id="planned-event-dialog" class="planned-event-dialog">
+                        <div class="planned-event-dialog-header">
+                            <h3 id="planned-event-dialog-title">Add planned event</h3>
+                            <p>Capture an upcoming spend and preview how it affects this month's budget lines.</p>
+                        </div>
+                        <form id="planned-event-form" class="planned-event-form">
+                            <div class="planned-event-form-grid">
+                                <div>
+                                    <label for="planned-event-date">Date</label>
+                                    <input id="planned-event-date" name="date" type="date">
+                                </div>
+                                <div>
+                                    <label for="planned-event-label">Label</label>
+                                    <input id="planned-event-label" name="label" type="text" placeholder="Dinner on Tuesday">
+                                </div>
+                                <div>
+                                    <label for="planned-event-category">Budget line</label>
+                                    <select id="planned-event-category" name="category" required>
+                                        <option value="">Select a budget line</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="planned-event-est-low">Estimated low</label>
+                                    <input id="planned-event-est-low" name="est_low" type="number" min="0" step="0.01" placeholder="30.00">
+                                </div>
+                                <div>
+                                    <label for="planned-event-est-high">Estimated high</label>
+                                    <input id="planned-event-est-high" name="est_high" type="number" min="0" step="0.01" placeholder="50.00">
+                                </div>
+                                <div>
+                                    <label for="planned-event-status">Status</label>
+                                    <select id="planned-event-status" name="status">
+                                        <option value="planned">Planned</option>
+                                        <option value="confirmed">Confirmed</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="planned-event-impact" class="planned-event-impact info hidden"></div>
+                            <p id="planned-event-form-error" class="planned-event-form-error hidden" role="alert"></p>
+                            <div class="budget-line-form-actions">
+                                <button type="button" id="cancel-planned-event-button">Cancel</button>
+                                <button type="submit" id="save-planned-event-button">Save planned event</button>
+                            </div>
+                        </form>
+                    </dialog>
+
+                    <div id="planned-events-list" class="planned-events-list">
+                        <div class="budget-empty">No planned events for this month yet.</div>
+                    </div>
+                </section>
+
+                <section id="affordability-panel" class="affordability-panel">
+                    <div class="panel-header-block">
+                        <h2 class="panel-heading">Can I afford?</h2>
+                        <p class="panel-subtext">Check whether a possible spend still fits within this month's category budget once planned spending is included.</p>
+                    </div>
+                    <div class="panel-body-block">
+                        <form id="affordability-form" class="affordability-form">
+                            <div class="affordability-form-grid">
+                                <div>
+                                    <label for="affordability-category">Budget line</label>
+                                    <select id="affordability-category" name="category" required>
+                                        <option value="">Select a budget line</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="affordability-amount">Possible spend</label>
+                                    <input id="affordability-amount" name="amount" type="number" min="0" step="0.01" placeholder="25.00">
+                                </div>
+                            </div>
+                        </form>
+                        <div id="affordability-result" class="affordability-result">
+                            Choose a budget line and enter an amount to preview the impact.
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <section id="coach-panel" class="coach-panel">
+                <div class="panel-header-block">
+                    <h2 class="panel-heading">Chat with Tally (AI)</h2>
+                    <p class="panel-subtext">This area is reserved for the later coaching chat flow and now has its own wide section in the page layout.</p>
+                </div>
+                <div class="panel-body-block">
+                    <div class="budget-empty">
+                        <p class="placeholder-copy">This area now matches the simpler dashboard styling while staying independent from the overview and Week Ahead sections.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+        const pageRoot = document.querySelector('.budgets-page');
+        if (!pageRoot) {
+            return;
+        }
+
+        function isPageActive() {
+            return pageRoot.isConnected;
+        }
+
+        const budgetState = {
+            budgets: [],
+            activeBudgetId: null,
+            selectedMonth: null,
+            editingLineId: null,
+            editingPlannedEventId: null,
+            summary: null,
+        };
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function formatCurrencyFromCents(value) {
+            if (!Number.isFinite(value)) {
+                return '-';
+            }
+            return new Intl.NumberFormat('en-AU', {
+                style: 'currency',
+                currency: 'AUD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(value / 100);
+        }
+
+        function formatMoneyInputFromCents(value) {
+            if (!Number.isFinite(value)) {
+                return '';
+            }
+            return (value / 100).toFixed(2);
+        }
+
+        function parseMoneyInputToCents(value) {
+            if (value === '') {
+                return null;
+            }
+            const parsedValue = Number(value);
+            if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+                throw new Error('Money values must be valid positive amounts.');
+            }
+            return Math.round(parsedValue * 100);
+        }
+
+        function formatMonthLabel(value) {
+            if (typeof value !== 'string' || value.length !== 7) {
+                return 'Unknown month';
+            }
+            const [yearText, monthText] = value.split('-');
+            const year = Number(yearText);
+            const month = Number(monthText);
+            const date = new Date(year, month - 1, 1);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+            return date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+        }
+
+        function currentMonthValue() {
+            const now = new Date();
+            const year = String(now.getFullYear());
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return year + '-' + month;
+        }
+
+        function monthDateBounds(value) {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}$/.test(value)) {
+                return null;
+            }
+            const [yearText, monthText] = value.split('-');
+            const year = Number(yearText);
+            const month = Number(monthText);
+            if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+                return null;
+            }
+            const lastDay = new Date(year, month, 0).getDate();
+            return {
+                min: value + '-01',
+                max: value + '-' + String(lastDay).padStart(2, '0'),
+            };
+        }
+
+        function activeBudgetMonth() {
+            if (budgetState.summary && budgetState.summary.budget && typeof budgetState.summary.budget.month === 'string') {
+                return budgetState.summary.budget.month;
+            }
+            return budgetState.selectedMonth || null;
+        }
+
+        function syncPlannedEventDateConstraints() {
+            const dateInput = document.getElementById('planned-event-date');
+            const bounds = monthDateBounds(activeBudgetMonth());
+            if (!bounds) {
+                dateInput.removeAttribute('min');
+                dateInput.removeAttribute('max');
+                return;
+            }
+            dateInput.min = bounds.min;
+            dateInput.max = bounds.max;
+        }
+
+        function isDateInMonth(dateValue, monthValue) {
+            if (!dateValue || !monthValue) {
+                return true;
+            }
+            return String(dateValue).slice(0, 7) === monthValue;
+        }
+
+        function shiftMonthValue(value, delta) {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}$/.test(value)) {
+                return currentMonthValue();
+            }
+            const [yearText, monthText] = value.split('-');
+            const baseDate = new Date(Number(yearText), Number(monthText) - 1 + delta, 1);
+            return String(baseDate.getFullYear()) + '-' + String(baseDate.getMonth() + 1).padStart(2, '0');
+        }
+
+        function progressPercent(value, cap) {
+            if (!Number.isFinite(cap) || cap <= 0 || !Number.isFinite(value)) {
+                return 0;
+            }
+            return Math.max(0, Math.min(100, (value / cap) * 100));
+        }
+
+        function stateForLine(line) {
+            const warnAt = Number.isFinite(line.warn_at) ? line.warn_at : null;
+            const hardCap = Number.isFinite(line.hard_cap) ? line.hard_cap : null;
+            const projectedHigh = Number.isFinite(line.projected_high_total) ? line.projected_high_total : null;
+            if (line.cap_state) {
+                return { label: 'Over cap', className: 'cap' };
+            }
+            if (line.warning_state) {
+                return { label: 'Warning', className: 'warning' };
+            }
+            if (hardCap !== null && projectedHigh !== null && projectedHigh >= hardCap) {
+                return { label: 'Projected over cap', className: 'cap' };
+            }
+            if (warnAt !== null && projectedHigh !== null && projectedHigh >= warnAt) {
+                return { label: 'Projected warning', className: 'warning' };
+            }
+            return { label: 'On track', className: 'ok' };
+        }
+
+        function setError(message) {
+            const errorElement = document.getElementById('budget-error');
+            errorElement.textContent = message;
+            errorElement.classList.toggle('hidden', !message);
+        }
+
+        function setBudgetLineFormError(message) {
+            const errorElement = document.getElementById('budget-line-form-error');
+            errorElement.textContent = message;
+            errorElement.classList.toggle('hidden', !message);
+        }
+
+        function setPlannedEventFormError(message) {
+            const errorElement = document.getElementById('planned-event-form-error');
+            errorElement.textContent = message;
+            errorElement.classList.toggle('hidden', !message);
+        }
+
+        function setPlannedEventImpact(message, tone) {
+            const impactElement = document.getElementById('planned-event-impact');
+            impactElement.textContent = message || '';
+            impactElement.className = 'planned-event-impact ' + (tone || 'info');
+            impactElement.classList.toggle('hidden', !message);
+        }
+
+        function setAffordabilityResult(message, tone) {
+            const resultElement = document.getElementById('affordability-result');
+            resultElement.innerHTML = message || 'Choose a budget line and enter an amount to preview the impact.';
+            resultElement.className = 'affordability-result' + (tone ? ' ' + tone : '');
+        }
+
+        function setBudgetLineFormVisible(isVisible) {
+            const dialog = document.getElementById('budget-line-dialog');
+            document.getElementById('save-budget-line-button').textContent = budgetState.editingLineId ? 'Save changes' : 'Save budget line';
+            document.getElementById('budget-line-dialog-title').textContent = budgetState.editingLineId ? 'Edit budget line' : 'Add budget line';
+            if (isVisible) {
+                if (!dialog.open) {
+                    dialog.showModal();
+                }
+                return;
+            }
+            if (dialog.open) {
+                dialog.close();
+            }
+            if (!isVisible) {
+                budgetState.editingLineId = null;
+                document.getElementById('budget-line-form').reset();
+                setBudgetLineFormError('');
+            }
+        }
+
+        function setPlannedEventFormVisible(isVisible) {
+            const dialog = document.getElementById('planned-event-dialog');
+            document.getElementById('save-planned-event-button').textContent = budgetState.editingPlannedEventId ? 'Save changes' : 'Save planned event';
+            document.getElementById('planned-event-dialog-title').textContent = budgetState.editingPlannedEventId ? 'Edit planned event' : 'Add planned event';
+            if (isVisible) {
+                syncPlannedEventDateConstraints();
+                if (!dialog.open) {
+                    dialog.showModal();
+                }
+                return;
+            }
+            if (dialog.open) {
+                dialog.close();
+            }
+            if (!isVisible) {
+                budgetState.editingPlannedEventId = null;
+                document.getElementById('planned-event-form').reset();
+                renderPlannedEventCategoryOptions();
+                setPlannedEventFormError('');
+                setPlannedEventImpact('', 'info');
+            }
+        }
+
+        function setBudgetLineActionsEnabled(isEnabled) {
+            const addButton = document.getElementById('show-add-budget-line-button');
+            addButton.disabled = !isEnabled;
+            addButton.title = isEnabled ? '' : 'No budget exists for the selected month yet.';
+            if (!isEnabled) {
+                setBudgetLineFormVisible(false);
+            }
+        }
+
+        function setPlannedEventActionsEnabled(isEnabled) {
+            const addButton = document.getElementById('show-add-planned-event-button');
+            addButton.disabled = !isEnabled;
+            addButton.title = isEnabled ? '' : 'No budget exists for the selected month yet.';
+            if (!isEnabled) {
+                setPlannedEventFormVisible(false);
+            }
+        }
+
+        function setAffordabilityActionsEnabled(isEnabled) {
+            const form = document.getElementById('affordability-form');
+            const categorySelect = document.getElementById('affordability-category');
+            const amountInput = document.getElementById('affordability-amount');
+            categorySelect.disabled = !isEnabled;
+            amountInput.disabled = !isEnabled;
+            if (!isEnabled) {
+                form.reset();
+                setAffordabilityResult('No budget lines are available for the selected month yet.', '');
+            }
+        }
+
+        function findBudgetLine(lineId) {
+            const lines = budgetState.summary && Array.isArray(budgetState.summary.budget_lines)
+                ? budgetState.summary.budget_lines
+                : [];
+            return lines.find(function (line) {
+                return String(line.id) === String(lineId);
+            }) || null;
+        }
+
+        function findBudgetByMonth(month) {
+            return budgetState.budgets.find(function (budget) {
+                return budget.month === month;
+            }) || null;
+        }
+
+        function findPlannedEvent(eventId) {
+            const events = budgetState.summary && Array.isArray(budgetState.summary.planned_events)
+                ? budgetState.summary.planned_events
+                : [];
+            return events.find(function (plannedEvent) {
+                return String(plannedEvent.id) === String(eventId);
+            }) || null;
+        }
+
+        function syncMonthInput() {
+            const monthInput = document.getElementById('budget-month-select');
+            monthInput.value = budgetState.selectedMonth || currentMonthValue();
+            document.getElementById('budget-month-display').textContent = formatMonthLabel(monthInput.value || currentMonthValue());
+        }
+
+        function openBudgetMonthPicker() {
+            const monthInput = document.getElementById('budget-month-select');
+            monthInput.focus();
+            if (typeof monthInput.showPicker === 'function') {
+                monthInput.showPicker();
+                return;
+            }
+            monthInput.click();
+        }
+
+        async function loadTransactionCategories() {
+            const categorySelect = document.getElementById('budget-line-category');
+            categorySelect.disabled = true;
+            categorySelect.innerHTML = '<option value="">Loading categories...</option>';
+
+            try {
+                const response = await fetch('/budgets-backend/api/transaction-categories');
+                const categories = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok || !Array.isArray(categories)) {
+                    throw new Error('Unable to load categories.');
+                }
+
+                categorySelect.innerHTML = '<option value="">Select a category</option>';
+                for (const category of categories) {
+                    if (!Number.isInteger(category.id) || typeof category.name !== 'string') {
+                        continue;
+                    }
+                    const option = document.createElement('option');
+                    option.value = String(category.id);
+                    option.textContent = category.name;
+                    categorySelect.appendChild(option);
+                }
+                categorySelect.disabled = false;
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                categorySelect.innerHTML = '<option value="">Categories unavailable</option>';
+                setBudgetLineFormError(error.message || 'Unable to load categories.');
+            }
+        }
+
+        function budgetLineOptions() {
+            return budgetState.summary && Array.isArray(budgetState.summary.budget_lines)
+                ? budgetState.summary.budget_lines.filter(function (line) {
+                    return typeof line.category === 'string' && line.category;
+                })
+                : [];
+        }
+
+        function renderPlannedEventCategoryOptions(selectedCategory) {
+            const categorySelect = document.getElementById('planned-event-category');
+            const options = budgetLineOptions();
+            categorySelect.innerHTML = '<option value="">Select a budget line</option>';
+            options.forEach(function (line) {
+                const option = document.createElement('option');
+                option.value = line.category;
+                option.textContent = line.category;
+                categorySelect.appendChild(option);
+            });
+            categorySelect.disabled = options.length === 0;
+            categorySelect.value = selectedCategory || '';
+            syncPlannedEventDateConstraints();
+        }
+
+        function renderAffordabilityOptions(selectedCategory) {
+            const categorySelect = document.getElementById('affordability-category');
+            const options = budgetLineOptions();
+            categorySelect.innerHTML = '<option value="">Select a budget line</option>';
+            options.forEach(function (line) {
+                const option = document.createElement('option');
+                option.value = line.category;
+                option.textContent = line.category;
+                categorySelect.appendChild(option);
+            });
+            categorySelect.disabled = options.length === 0;
+            categorySelect.value = selectedCategory || '';
+            document.getElementById('affordability-amount').disabled = options.length === 0;
+            if (options.length === 0) {
+                setAffordabilityResult('No budget lines are available for the selected month yet.', '');
+            } else if (!selectedCategory) {
+                setAffordabilityResult('Choose a budget line and enter an amount to preview the impact.', '');
+            }
+        }
+
+        function renderSummaryCards(summary) {
+            const strip = document.getElementById('budget-summary-strip');
+            const totals = summary.totals || {};
+            const budget = summary.budget || {};
+            const cards = [
+                {
+                    label: 'Income',
+                    value: formatCurrencyFromCents(totals.declared_income),
+                    hint: budget.status ? 'Status: ' + budget.status : '',
+                },
+                {
+                    label: 'Spent',
+                    value: formatCurrencyFromCents(totals.actual_spend_total),
+                    hint: 'Across all budget lines',
+                },
+                {
+                    label: 'Planned',
+                    value: formatCurrencyFromCents(totals.planned_est_high_total),
+                    hint: 'Upper estimate this month',
+                },
+                {
+                    label: 'Remaining',
+                    value: formatCurrencyFromCents(totals.remaining_income_high),
+                    hint: 'After planned upper estimate',
+                },
+            ];
+
+            strip.innerHTML = cards.map(function (card) {
+                return '<div class="summary-card">'
+                    + '<span class="summary-label">' + escapeHtml(card.label) + '</span>'
+                    + '<div class="summary-value">' + escapeHtml(card.value) + '</div>'
+                    + '<div class="summary-hint">' + escapeHtml(card.hint || '') + '</div>'
+                    + '</div>';
+            }).join('');
+            strip.classList.remove('hidden');
+        }
+
+        function renderBudgetLines(summary) {
+            const linesElement = document.getElementById('budget-lines');
+            const titleElement = document.getElementById('budget-title');
+            const budget = summary.budget || {};
+            const lines = Array.isArray(summary.budget_lines) ? summary.budget_lines : [];
+
+            titleElement.textContent = formatMonthLabel(budget.month);
+
+            if (lines.length === 0) {
+                linesElement.innerHTML = '<div class="budget-empty">No budget lines have been created for this month yet.</div>';
+                return;
+            }
+
+            linesElement.innerHTML = lines.map(function (line) {
+                const actual = Number.isFinite(line.actual_spend) ? line.actual_spend : 0;
+                const hardCap = Number.isFinite(line.hard_cap) ? line.hard_cap : null;
+                const warnAt = Number.isFinite(line.warn_at) ? line.warn_at : null;
+                const fillPercent = progressPercent(actual, hardCap);
+                const warnPercent = progressPercent(warnAt, hardCap);
+                const lineState = stateForLine(line);
+                const projected = Number.isFinite(line.projected_high_total) ? line.projected_high_total : actual;
+                const projectedFillPercent = progressPercent(projected, hardCap);
+                const projectedSegmentWidth = Math.max(0, projectedFillPercent - fillPercent);
+
+                return '<article class="budget-line">'
+                    + '<div class="budget-line-head">'
+                    + '<div class="budget-line-title">' + escapeHtml(line.category || 'Uncategorised') + '</div>'
+                    + '<div class="budget-line-amounts">' + escapeHtml(formatCurrencyFromCents(actual)) + ' of ' + escapeHtml(formatCurrencyFromCents(hardCap)) + '</div>'
+                    + '</div>'
+                    + '<div class="budget-progress">'
+                    + '<div class="budget-progress-fill ' + lineState.className + '" style="width:' + fillPercent + '%"></div>'
+                    + (projectedSegmentWidth > 0 ? '<div class="budget-progress-fill projected" style="left:' + fillPercent + '%; width:' + projectedSegmentWidth + '%"></div>' : '')
+                    + (warnAt !== null && hardCap !== null ? '<div class="budget-progress-marker" style="left:' + warnPercent + '%"></div>' : '')
+                    + '</div>'
+                    + '<div class="budget-line-meta">'
+                    + '<span>Warns at <strong>' + escapeHtml(formatCurrencyFromCents(warnAt)) + '</strong></span>'
+                    + '<span>Spent <strong>' + escapeHtml(formatCurrencyFromCents(actual)) + '</strong> - Planned <strong>' + escapeHtml(formatCurrencyFromCents(Number.isFinite(line.planned_est_high_total) ? line.planned_est_high_total : 0)) + '</strong></span>'
+                    + '<span class="budget-line-state ' + lineState.className + '">' + escapeHtml(lineState.label) + '</span>'
+                    + '</div>'
+                    + '<div class="budget-line-form-actions">'
+                    + '<button type="button" data-edit-budget-line="' + escapeHtml(line.id || '') + '">Edit</button>'
+                    + '<button type="button" data-delete-budget-line="' + escapeHtml(line.id || '') + '">Remove</button>'
+                    + '</div>'
+                    + '</article>';
+            }).join('');
+        }
+
+        function renderOtherExpenses(summary) {
+            const panel = document.getElementById('other-expenses-panel');
+            const summaryElement = document.getElementById('other-expenses-summary');
+            const contentElement = document.getElementById('other-expenses-content');
+            const transactions = summary.transactions || {};
+            const otherExpenses = Array.isArray(transactions.other_expenses) ? transactions.other_expenses : [];
+            const uncategorisedTotal = Number.isFinite(transactions.uncategorised_total) ? transactions.uncategorised_total : 0;
+            const otherExpenseTotal = otherExpenses.reduce(function (total, expense) {
+                return total + (Number.isFinite(expense.actual_spend) ? expense.actual_spend : 0);
+            }, 0);
+
+            summaryElement.innerHTML = 'Show other expenses'
+                + '<span class="other-expenses-summary-note"> - '
+                + escapeHtml(formatCurrencyFromCents(otherExpenseTotal))
+                + '</span>';
+
+            if (otherExpenses.length === 0 && uncategorisedTotal <= 0) {
+                contentElement.innerHTML = '<div class="budget-empty">No spending categories without budget lines right now.</div>';
+                panel.classList.remove('hidden');
+                return;
+            }
+
+            const rows = otherExpenses.map(function (expense) {
+                return '<div class="other-expense-row">'
+                    + '<div>'
+                    + '<div class="other-expense-name">' + escapeHtml(expense.category || 'Unknown category') + '</div>'
+                    + '<div class="other-expense-amount">' + escapeHtml(formatCurrencyFromCents(expense.actual_spend)) + ' spent</div>'
+                    + '</div>'
+                    + '<div class="other-expense-actions">'
+                    + '<button type="button" data-quick-add-budget-line="' + escapeHtml(String(expense.category_id || '')) + '" data-quick-add-category-name="' + escapeHtml(expense.category || '') + '">Add line</button>'
+                    + '</div>'
+                    + '</div>';
+            });
+
+            if (uncategorisedTotal > 0) {
+                rows.push(
+                    '<div class="other-expense-row">'
+                    + '<div>'
+                    + '<div class="other-expense-name">Still uncategorised</div>'
+                    + '<div class="other-expense-amount">' + escapeHtml(formatCurrencyFromCents(uncategorisedTotal)) + ' spent without a transaction category</div>'
+                    + '</div>'
+                    + '</div>'
+                );
+            }
+
+            contentElement.innerHTML = rows.join('');
+            panel.classList.remove('hidden');
+        }
+
+        function projectedImpactForEvent(category, estHigh, excludedEventId) {
+            const lines = budgetLineOptions();
+            const line = lines.find(function (budgetLine) {
+                return budgetLine.category === category;
+            });
+            if (!line || !Number.isFinite(estHigh)) {
+                return null;
+            }
+            let baseProjectedHigh = Number.isFinite(line.projected_high_total) ? line.projected_high_total : 0;
+            if (excludedEventId) {
+                const existingEvent = findPlannedEvent(excludedEventId);
+                if (
+                    existingEvent
+                    && existingEvent.status !== 'cancelled'
+                    && existingEvent.category === category
+                    && Number.isFinite(existingEvent.est_high)
+                ) {
+                    baseProjectedHigh -= existingEvent.est_high;
+                }
+            }
+            return {
+                category: line.category,
+                warnAt: Number.isFinite(line.warn_at) ? line.warn_at : null,
+                hardCap: Number.isFinite(line.hard_cap) ? line.hard_cap : null,
+                projectedHighAfterSave: baseProjectedHigh + estHigh,
+            };
+        }
+
+        function affordabilityOutcome(category, amountCents) {
+            const line = budgetLineOptions().find(function (budgetLine) {
+                return budgetLine.category === category;
+            });
+            if (!line || !Number.isFinite(amountCents)) {
+                return null;
+            }
+            const actual = Number.isFinite(line.actual_spend) ? line.actual_spend : 0;
+            const planned = Number.isFinite(line.planned_est_high_total) ? line.planned_est_high_total : 0;
+            const currentProjected = Number.isFinite(line.projected_high_total) ? line.projected_high_total : actual + planned;
+            const afterSpend = currentProjected + amountCents;
+            const warnAt = Number.isFinite(line.warn_at) ? line.warn_at : null;
+            const hardCap = Number.isFinite(line.hard_cap) ? line.hard_cap : null;
+            let tone = 'ok';
+            let headline = 'Yes, this fits.';
+            let followUp = 'It stays within the current safe range for ' + escapeHtml(line.category) + '.';
+
+            if (hardCap !== null && afterSpend >= hardCap) {
+                tone = 'cap';
+                headline = 'No, this would put you over cap.';
+                followUp = 'It would take ' + escapeHtml(line.category) + ' to ' + escapeHtml(formatCurrencyFromCents(afterSpend)) + ', past the hard cap of ' + escapeHtml(formatCurrencyFromCents(hardCap)) + '.';
+            } else if (warnAt !== null && afterSpend >= warnAt) {
+                tone = 'warning';
+                headline = 'Maybe, but it would trigger a warning.';
+                followUp = 'It would take ' + escapeHtml(line.category) + ' to ' + escapeHtml(formatCurrencyFromCents(afterSpend)) + ', crossing the warning amount of ' + escapeHtml(formatCurrencyFromCents(warnAt)) + '.';
+            } else if (warnAt !== null) {
+                followUp = 'It would take ' + escapeHtml(line.category) + ' to ' + escapeHtml(formatCurrencyFromCents(afterSpend)) + ', leaving ' + escapeHtml(formatCurrencyFromCents(warnAt - afterSpend)) + ' before the warning amount.';
+            } else if (hardCap !== null) {
+                followUp = 'It would take ' + escapeHtml(line.category) + ' to ' + escapeHtml(formatCurrencyFromCents(afterSpend)) + ', leaving ' + escapeHtml(formatCurrencyFromCents(hardCap - afterSpend)) + ' before the hard cap.';
+            }
+
+            return {
+                tone: tone,
+                message:
+                    '<strong>' + headline + '</strong><br>'
+                    + 'Current position: spent ' + escapeHtml(formatCurrencyFromCents(actual))
+                    + ' and planned ' + escapeHtml(formatCurrencyFromCents(planned))
+                    + '. After adding ' + escapeHtml(formatCurrencyFromCents(amountCents))
+                    + ', the projected total would be ' + escapeHtml(formatCurrencyFromCents(afterSpend))
+                    + '. ' + followUp,
+            };
+        }
+
+        function updateAffordabilityPreview() {
+            const category = document.getElementById('affordability-category').value;
+            const amountText = document.getElementById('affordability-amount').value;
+            if (!category && !amountText) {
+                setAffordabilityResult('Choose a budget line and enter an amount to preview the impact.', '');
+                return;
+            }
+            let amountCents;
+            try {
+                amountCents = parseMoneyInputToCents(amountText);
+            } catch (error) {
+                setAffordabilityResult(escapeHtml(error.message || 'Enter a valid amount to preview affordability.'), 'warning');
+                return;
+            }
+            if (!category || amountCents === null) {
+                setAffordabilityResult('Choose a budget line and enter an amount to preview the impact.', '');
+                return;
+            }
+            const outcome = affordabilityOutcome(category, amountCents);
+            if (!outcome) {
+                setAffordabilityResult('Select a valid budget line to preview affordability.', 'warning');
+                return;
+            }
+            setAffordabilityResult(outcome.message, outcome.tone);
+        }
+
+        function updatePlannedEventImpactWarning() {
+            const category = document.getElementById('planned-event-category').value;
+            const estHighText = document.getElementById('planned-event-est-high').value;
+            let estHigh;
+            try {
+                estHigh = parseMoneyInputToCents(estHighText);
+            } catch (_error) {
+                setPlannedEventImpact('Enter a valid estimated high amount to preview budget impact.', 'info');
+                return;
+            }
+            if (!category || estHigh === null) {
+                setPlannedEventImpact('', 'info');
+                return;
+            }
+            const impact = projectedImpactForEvent(category, estHigh, budgetState.editingPlannedEventId);
+            if (!impact) {
+                setPlannedEventImpact('', 'info');
+                return;
+            }
+            if (impact.hardCap !== null && impact.projectedHighAfterSave >= impact.hardCap) {
+                setPlannedEventImpact(
+                    'This event would put ' + impact.category + ' at ' + formatCurrencyFromCents(impact.projectedHighAfterSave) + ', reaching or passing its hard cap.',
+                    'cap'
+                );
+                return;
+            }
+            if (impact.warnAt !== null && impact.projectedHighAfterSave >= impact.warnAt) {
+                setPlannedEventImpact(
+                    'This event would put ' + impact.category + ' at ' + formatCurrencyFromCents(impact.projectedHighAfterSave) + ', reaching or passing its warning amount.',
+                    'warning'
+                );
+                return;
+            }
+            setPlannedEventImpact(
+                impact.category + ' would project to ' + formatCurrencyFromCents(impact.projectedHighAfterSave) + ' after this event.',
+                'info'
+            );
+        }
+
+        function renderPlannedEvents(summary) {
+            const listElement = document.getElementById('planned-events-list');
+            const plannedEvents = Array.isArray(summary.planned_events) ? summary.planned_events : [];
+
+            if (plannedEvents.length === 0) {
+                listElement.innerHTML = '<div class="budget-empty">No planned events for this month yet.</div>';
+                return;
+            }
+
+            listElement.innerHTML = plannedEvents.map(function (plannedEvent) {
+                const label = plannedEvent.label || 'Untitled planned event';
+                const lowEstimate = Number.isFinite(plannedEvent.est_low) ? formatCurrencyFromCents(plannedEvent.est_low) : '-';
+                const highEstimate = Number.isFinite(plannedEvent.est_high) ? formatCurrencyFromCents(plannedEvent.est_high) : '-';
+                const status = plannedEvent.status || 'planned';
+                return '<article class="planned-event-item">'
+                    + '<div class="planned-event-head">'
+                    + '<div class="planned-event-title">' + escapeHtml(label) + '</div>'
+                    + '<div class="planned-event-status">' + escapeHtml(status) + '</div>'
+                    + '</div>'
+                    + '<div class="planned-event-meta">'
+                    + '<span>' + escapeHtml(plannedEvent.date || 'No date set') + '</span>'
+                    + '<span>' + escapeHtml(plannedEvent.category || 'No category') + '</span>'
+                    + '<span>' + escapeHtml(lowEstimate) + ' - ' + escapeHtml(highEstimate) + '</span>'
+                    + '</div>'
+                    + '<div class="budget-line-form-actions">'
+                    + '<button type="button" data-edit-planned-event="' + escapeHtml(plannedEvent.id || '') + '">Edit</button>'
+                    + '<button type="button" data-cancel-planned-event="' + escapeHtml(plannedEvent.id || '') + '">Cancel</button>'
+                    + '</div>'
+                    + '</article>';
+            }).join('');
+        }
+
+        function showEmptyMonthState(month) {
+            budgetState.activeBudgetId = null;
+            budgetState.summary = null;
+            document.getElementById('budget-title').textContent = formatMonthLabel(month);
+            document.getElementById('budget-summary-strip').classList.add('hidden');
+            document.getElementById('budget-lines').innerHTML = '<div class="budget-empty">No budget has been created for this month yet.</div>';
+            document.getElementById('planned-events-list').innerHTML = '<div class="budget-empty">No budget has been created for this month yet.</div>';
+            document.getElementById('other-expenses-panel').classList.add('hidden');
+            setBudgetLineActionsEnabled(false);
+            setPlannedEventActionsEnabled(false);
+            setAffordabilityActionsEnabled(false);
+        }
+
+        async function quickAddBudgetLine(categoryId, categoryName, button) {
+            if (!budgetState.activeBudgetId) {
+                setError('Select a budget before adding a budget line.');
+                return;
+            }
+
+            const parsedCategoryId = Number(categoryId);
+            if (!Number.isInteger(parsedCategoryId) || !categoryName) {
+                setError('Unable to add that budget line.');
+                return;
+            }
+
+            setError('');
+            button.disabled = true;
+
+            try {
+                const response = await fetch(
+                    '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/budget-lines',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            category_id: parsedCategoryId,
+                            category: categoryName,
+                        }),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to add budget line.');
+                }
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setError(error.message || 'Unable to add budget line.');
+            } finally {
+                if (isPageActive()) {
+                    button.disabled = false;
+                }
+            }
+        }
+
+        async function loadBudgetSummary(budgetId) {
+            const linesElement = document.getElementById('budget-lines');
+            linesElement.innerHTML = '<p class="loading-state">Loading budget overview...</p>';
+            document.getElementById('other-expenses-panel').classList.add('hidden');
+            setError('');
+
+            try {
+                const response = await fetch('/budgets-backend/api/budgets/' + encodeURIComponent(budgetId) + '/summary');
+                const summary = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok || typeof summary !== 'object' || summary === null) {
+                    throw new Error(summary && summary.error ? summary.error : 'Unable to load the budget summary.');
+                }
+                budgetState.summary = summary;
+                setBudgetLineActionsEnabled(true);
+                setPlannedEventActionsEnabled(true);
+                renderSummaryCards(summary);
+                renderBudgetLines(summary);
+                renderOtherExpenses(summary);
+                renderPlannedEventCategoryOptions();
+                renderPlannedEvents(summary);
+                renderAffordabilityOptions();
+                setAffordabilityActionsEnabled(budgetLineOptions().length > 0);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                budgetState.summary = null;
+                document.getElementById('budget-summary-strip').classList.add('hidden');
+                linesElement.innerHTML = '';
+                document.getElementById('planned-events-list').innerHTML = '';
+                document.getElementById('other-expenses-panel').classList.add('hidden');
+                setBudgetLineActionsEnabled(false);
+                setPlannedEventActionsEnabled(false);
+                setAffordabilityActionsEnabled(false);
+                setError(error.message || 'Unable to load the budget summary.');
+            }
+        }
+
+        async function loadSelectedMonth() {
+            setError('');
+            syncMonthInput();
+            const selectedBudget = findBudgetByMonth(budgetState.selectedMonth);
+            if (!selectedBudget) {
+                showEmptyMonthState(budgetState.selectedMonth);
+                return;
+            }
+            budgetState.activeBudgetId = selectedBudget.id;
+            await loadBudgetSummary(selectedBudget.id);
+        }
+
+        async function loadBudgetsOverview() {
+            try {
+                const response = await fetch('/budgets-backend/api/budgets');
+                const budgets = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok || !Array.isArray(budgets)) {
+                    throw new Error('Unable to load budgets.');
+                }
+
+                budgetState.budgets = budgets.slice().sort(function (left, right) {
+                    return String(right.month || '').localeCompare(String(left.month || ''));
+                });
+                const activeBudget = budgetState.budgets.find(function (budget) {
+                    return budget.status === 'active';
+                });
+                const currentMonth = currentMonthValue();
+                budgetState.selectedMonth = budgetState.selectedMonth
+                    || (activeBudget ? activeBudget.month : null)
+                    || (findBudgetByMonth(currentMonth) ? currentMonth : null)
+                    || currentMonth;
+                syncMonthInput();
+                await loadSelectedMonth();
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                document.getElementById('budget-lines').innerHTML = '';
+                document.getElementById('budget-summary-strip').classList.add('hidden');
+                document.getElementById('other-expenses-panel').classList.add('hidden');
+                budgetState.summary = null;
+                setBudgetLineActionsEnabled(false);
+                setError(error.message || 'Unable to load budgets.');
+            }
+        }
+
+        async function startEditingBudgetLine(lineId) {
+            const line = findBudgetLine(lineId);
+            if (!line) {
+                setError('Unable to load that budget line for editing.');
+                return;
+            }
+            budgetState.editingLineId = line.id;
+            setBudgetLineFormVisible(true);
+            await loadTransactionCategories();
+            document.getElementById('budget-line-category').value = String(line.category_id || '');
+            document.getElementById('budget-line-warn-at').value = formatMoneyInputFromCents(line.warn_at);
+            document.getElementById('budget-line-hard-cap').value = formatMoneyInputFromCents(line.hard_cap);
+        }
+
+        async function deleteBudgetLine(lineId) {
+            const line = findBudgetLine(lineId);
+            if (!line) {
+                setError('Unable to find that budget line.');
+                return;
+            }
+            const confirmed = window.confirm('Remove the ' + (line.category || 'selected') + ' budget line?');
+            if (!confirmed) {
+                return;
+            }
+            setError('');
+            try {
+                const response = await fetch(
+                    '/budgets-backend/api/budget-lines/' + encodeURIComponent(lineId),
+                    {
+                        method: 'DELETE',
+                    }
+                );
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    let message = 'Unable to remove budget line.';
+                    try {
+                        const result = await response.json();
+                        if (!isPageActive()) {
+                            return;
+                        }
+                        if (result && result.error) {
+                            message = result.error;
+                        }
+                    } catch (_error) {
+                    }
+                    throw new Error(message);
+                }
+                if (budgetState.editingLineId === lineId) {
+                    setBudgetLineFormVisible(false);
+                }
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setError(error.message || 'Unable to remove budget line.');
+            }
+        }
+
+        async function saveBudgetLine(event) {
+            event.preventDefault();
+            setBudgetLineFormError('');
+
+            if (!budgetState.activeBudgetId) {
+                setBudgetLineFormError('Select a budget before adding a budget line.');
+                return;
+            }
+
+            const saveButton = document.getElementById('save-budget-line-button');
+            const formData = new FormData(event.currentTarget);
+            const selectedOption = document.getElementById('budget-line-category').selectedOptions[0];
+            const categoryIdText = formData.get('category_id');
+            const warnAtText = formData.get('warn_at');
+            const hardCapText = formData.get('hard_cap');
+            const payload = {
+                category_id: Number(categoryIdText),
+                category: selectedOption ? selectedOption.textContent : '',
+            };
+
+            try {
+                const warnAtCents = parseMoneyInputToCents(warnAtText);
+                const hardCapCents = parseMoneyInputToCents(hardCapText);
+                if (warnAtCents !== null) {
+                    payload.warn_at = warnAtCents;
+                }
+                if (hardCapCents !== null) {
+                    payload.hard_cap = hardCapCents;
+                }
+            } catch (error) {
+                setBudgetLineFormError(error.message || 'Unable to save budget line.');
+                return;
+            }
+
+            saveButton.disabled = true;
+
+            try {
+                const isEditing = Boolean(budgetState.editingLineId);
+                const response = await fetch(
+                    isEditing
+                        ? '/budgets-backend/api/budget-lines/' + encodeURIComponent(budgetState.editingLineId)
+                        : '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/budget-lines',
+                    {
+                        method: isEditing ? 'PATCH' : 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to save budget line.');
+                }
+                setBudgetLineFormVisible(false);
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setBudgetLineFormError(error.message || 'Unable to save budget line.');
+            } finally {
+                if (isPageActive()) {
+                    saveButton.disabled = false;
+                }
+            }
+        }
+
+        async function startEditingPlannedEvent(eventId) {
+            const plannedEvent = findPlannedEvent(eventId);
+            if (!plannedEvent) {
+                setError('Unable to load that planned event for editing.');
+                return;
+            }
+            budgetState.editingPlannedEventId = plannedEvent.id;
+            setPlannedEventFormVisible(true);
+            renderPlannedEventCategoryOptions(plannedEvent.category || '');
+            document.getElementById('planned-event-date').value = plannedEvent.date || '';
+            document.getElementById('planned-event-label').value = plannedEvent.label || '';
+            document.getElementById('planned-event-est-low').value = formatMoneyInputFromCents(plannedEvent.est_low);
+            document.getElementById('planned-event-est-high').value = formatMoneyInputFromCents(plannedEvent.est_high);
+            document.getElementById('planned-event-status').value = plannedEvent.status === 'confirmed' ? 'confirmed' : 'planned';
+            updatePlannedEventImpactWarning();
+        }
+
+        async function cancelPlannedEvent(eventId) {
+            const plannedEvent = findPlannedEvent(eventId);
+            if (!plannedEvent) {
+                setError('Unable to find that planned event.');
+                return;
+            }
+            const confirmed = window.confirm('Cancel the planned event ' + (plannedEvent.label || 'for ' + plannedEvent.category || 'selected') + '?');
+            if (!confirmed) {
+                return;
+            }
+            setError('');
+            try {
+                const response = await fetch(
+                    '/budgets-backend/api/planned-events/' + encodeURIComponent(eventId),
+                    {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'cancelled' }),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to cancel planned event.');
+                }
+                if (String(budgetState.editingPlannedEventId) === String(eventId)) {
+                    setPlannedEventFormVisible(false);
+                }
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setError(error.message || 'Unable to cancel planned event.');
+            }
+        }
+
+        async function savePlannedEvent(event) {
+            event.preventDefault();
+            setPlannedEventFormError('');
+
+            if (!budgetState.activeBudgetId) {
+                setPlannedEventFormError('Select a budget before adding a planned event.');
+                return;
+            }
+
+            const saveButton = document.getElementById('save-planned-event-button');
+            const formData = new FormData(event.currentTarget);
+            const estLowText = formData.get('est_low');
+            const estHighText = formData.get('est_high');
+            const dateValue = formData.get('date') || null;
+            const editingEvent = budgetState.editingPlannedEventId ? findPlannedEvent(budgetState.editingPlannedEventId) : null;
+            const budgetMonth = activeBudgetMonth();
+            const payload = {
+                date: dateValue,
+                label: formData.get('label') || null,
+                category: formData.get('category'),
+                status: formData.get('status') || 'planned',
+                source: editingEvent && editingEvent.source ? editingEvent.source : 'user',
+            };
+
+            if (!isDateInMonth(dateValue, budgetMonth)) {
+                setPlannedEventFormError('Planned event dates must stay inside ' + formatMonthLabel(budgetMonth) + '.');
+                return;
+            }
+
+            try {
+                const estLowCents = parseMoneyInputToCents(estLowText);
+                const estHighCents = parseMoneyInputToCents(estHighText);
+                if (estLowCents !== null) {
+                    payload.est_low = estLowCents;
+                }
+                if (estHighCents !== null) {
+                    payload.est_high = estHighCents;
+                }
+                if (
+                    Number.isFinite(payload.est_low)
+                    && Number.isFinite(payload.est_high)
+                    && payload.est_low > payload.est_high
+                ) {
+                    throw new Error('Estimated low must be less than or equal to estimated high.');
+                }
+            } catch (error) {
+                setPlannedEventFormError(error.message || 'Unable to save planned event.');
+                return;
+            }
+
+            saveButton.disabled = true;
+
+            try {
+                const isEditing = Boolean(budgetState.editingPlannedEventId);
+                const response = await fetch(
+                    isEditing
+                        ? '/budgets-backend/api/planned-events/' + encodeURIComponent(budgetState.editingPlannedEventId)
+                        : '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/planned-events',
+                    {
+                        method: isEditing ? 'PATCH' : 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to save planned event.');
+                }
+                setPlannedEventFormVisible(false);
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setPlannedEventFormError(error.message || 'Unable to save planned event.');
+            } finally {
+                if (isPageActive()) {
+                    saveButton.disabled = false;
+                }
+            }
+        }
+
+        document.getElementById('budget-month-select').addEventListener('change', function (event) {
+            budgetState.selectedMonth = event.target.value || currentMonthValue();
+            syncMonthInput();
+            loadSelectedMonth();
+        });
+        document.getElementById('budget-month-display').addEventListener('click', function () {
+            openBudgetMonthPicker();
+        });
+        document.getElementById('budget-line-dialog').addEventListener('close', function () {
+            budgetState.editingLineId = null;
+            document.getElementById('budget-line-form').reset();
+            setBudgetLineFormError('');
+        });
+        document.getElementById('planned-event-dialog').addEventListener('close', function () {
+            budgetState.editingPlannedEventId = null;
+            document.getElementById('planned-event-form').reset();
+            renderPlannedEventCategoryOptions();
+            setPlannedEventFormError('');
+            setPlannedEventImpact('', 'info');
+        });
+        document.getElementById('previous-budget-month-button').addEventListener('click', function () {
+            budgetState.selectedMonth = shiftMonthValue(budgetState.selectedMonth || currentMonthValue(), -1);
+            loadSelectedMonth();
+        });
+        document.getElementById('next-budget-month-button').addEventListener('click', function () {
+            budgetState.selectedMonth = shiftMonthValue(budgetState.selectedMonth || currentMonthValue(), 1);
+            loadSelectedMonth();
+        });
+        document.getElementById('show-add-budget-line-button').addEventListener('click', async function () {
+            budgetState.editingLineId = null;
+            setBudgetLineFormVisible(true);
+            await loadTransactionCategories();
+        });
+        document.getElementById('show-add-planned-event-button').addEventListener('click', function () {
+            budgetState.editingPlannedEventId = null;
+            setPlannedEventFormVisible(true);
+            renderPlannedEventCategoryOptions();
+            updatePlannedEventImpactWarning();
+        });
+        document.getElementById('cancel-add-budget-line-button').addEventListener('click', function () {
+            setBudgetLineFormVisible(false);
+        });
+        document.getElementById('cancel-planned-event-button').addEventListener('click', function () {
+            setPlannedEventFormVisible(false);
+        });
+        document.getElementById('budget-line-form').addEventListener('submit', saveBudgetLine);
+        document.getElementById('planned-event-form').addEventListener('submit', savePlannedEvent);
+        document.getElementById('affordability-form').addEventListener('submit', function (event) {
+            event.preventDefault();
+            updateAffordabilityPreview();
+        });
+        document.getElementById('planned-event-form').addEventListener('input', function (event) {
+            if (
+                event.target.id === 'planned-event-est-high'
+                || event.target.id === 'planned-event-est-low'
+                || event.target.id === 'planned-event-label'
+                || event.target.id === 'planned-event-date'
+            ) {
+                updatePlannedEventImpactWarning();
+            }
+        });
+        document.getElementById('planned-event-category').addEventListener('change', updatePlannedEventImpactWarning);
+        document.getElementById('affordability-form').addEventListener('input', function (event) {
+            if (event.target.id === 'affordability-amount') {
+                updateAffordabilityPreview();
+            }
+        });
+        document.getElementById('affordability-category').addEventListener('change', updateAffordabilityPreview);
+        document.getElementById('budget-lines').addEventListener('click', function (event) {
+            const editButton = event.target.closest('[data-edit-budget-line]');
+            if (editButton) {
+                startEditingBudgetLine(editButton.getAttribute('data-edit-budget-line'));
+                return;
+            }
+            const deleteButton = event.target.closest('[data-delete-budget-line]');
+            if (deleteButton) {
+                deleteBudgetLine(deleteButton.getAttribute('data-delete-budget-line'));
+            }
+        });
+        document.getElementById('planned-events-list').addEventListener('click', function (event) {
+            const editButton = event.target.closest('[data-edit-planned-event]');
+            if (editButton) {
+                startEditingPlannedEvent(editButton.getAttribute('data-edit-planned-event'));
+                return;
+            }
+            const cancelButton = event.target.closest('[data-cancel-planned-event]');
+            if (cancelButton) {
+                cancelPlannedEvent(cancelButton.getAttribute('data-cancel-planned-event'));
+            }
+        });
+        document.getElementById('other-expenses-panel').addEventListener('click', function (event) {
+            const quickAddButton = event.target.closest('[data-quick-add-budget-line]');
+            if (!quickAddButton) {
+                return;
+            }
+            quickAddBudgetLine(
+                quickAddButton.getAttribute('data-quick-add-budget-line'),
+                quickAddButton.getAttribute('data-quick-add-category-name'),
+                quickAddButton
+            );
+        });
+
+        loadBudgetsOverview();
+        })();
+    </script>
+</body>
+</html>

@@ -1,10 +1,20 @@
-{# Bills table fragment: Name / Amount / Every / Next billing / Paid by / Status. #}
+{# Bills table fragment, single-page layout: Name / Amount / Next billing /
+   Status / actions. The monthly total moved into the header line; Every and
+   Paid by moved off the table (they live in the Edit form) — four data
+   columns scan, seven didn't. #}
 <div class="bills-panel" id="bills-table">
-  <h2>Bills &amp; subscriptions · {{ monthly_total }}</h2>
+  <div class="bills-head">
+    <h2>Bills &amp; subscriptions</h2>
+    <span class="monthly-total">{{ monthly_total }} per month</span>
+  </div>
+  {# tabindex makes the region focusable so it can be scrolled without a mouse
+     (WCAG 2.1.1); the role/label give that focus stop a name in a screen
+     reader instead of announcing an anonymous group. #}
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Bills and subscriptions">
   <table class="bills-table">
     <thead>
       <tr>
-        <th>Name</th><th>Amount</th><th>Every</th><th>Next billing</th><th>Paid by</th><th>Status</th><th></th>
+        <th scope="col">Name</th><th scope="col">Amount</th><th scope="col">Next billing</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
@@ -12,25 +22,50 @@
       <tr data-bill-id="{{ bill.id }}">
         <td>{{ bill.name }}</td>
         <td>{{ bill.amount }}</td>
-        <td>{{ bill.cadence_label }}</td>
         <td>{{ bill.next_billing }}</td>
-        <td>{{ bill.payment_method_label }}</td>
-        <td>
-          <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
+        <td class="status">
+          <span class="chip chip-{{ bill.status_tone }}">{{ bill.status_label }}</span>
           {% if bill.needs_confirmation %}
-          <span class="confirm-prompt">Confirm this?</span>
-          <button class="confirm btn-sm" hx-post="/bills-backend/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
+          <span class="confirm-prompt">Added from Spending Alerts — keep it?</span>
           {% endif %}
         </td>
+        {# The mock's visible actions: Confirm for an unconfirmed handoff,
+           Cancel… for a live subscription. Everything else (Edit, Dispute,
+           Record payment, Cancel for plain bills) keeps working from the
+           disclosure menu — simplified presentation, same functionality.
+
+           <details> rather than a scripted dropdown: it stays in normal flow
+           so .table-scroll's overflow can't clip it, and the server never
+           emits `open`, so every path that replaces #bills-table resets the
+           menus for free. #}
         <td class="actions">
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
+          <div class="row-actions">
+            {% if bill.needs_confirmation %}
+            <button class="confirm btn-sm" data-confirm="Keep {{ bill.name }} in your bills?" hx-post="/bills-backend/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
+            {% elif bill.type == "subscription" and not bill.ended %}
+            <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+            {% endif %}
+            <details class="row-menu">
+              {# Without the per-bill label these are identical "⋯" controls
+                 to a screen reader. aria-expanded comes free. #}
+              <summary class="row-menu-toggle" aria-label="More actions for {{ bill.name }}">⋯</summary>
+              <div class="row-menu-items">
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+                {% if not (bill.type == "subscription" and not bill.ended) and not bill.needs_confirmation %}
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+                {% endif %}
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
+              </div>
+            </details>
+          </div>
         </td>
       </tr>
       {% endfor %}
+      {# Toggled by the client-side filter in app.js; never rendered by the server. #}
+      <tr class="no-match" hidden><td colspan="5">No bills match that search.</td></tr>
     </tbody>
   </table>
+  </div>
   <button hx-get="/bills-backend/ui/bills/new-form" hx-target="#modal-root">Add a bill</button>
 </div>

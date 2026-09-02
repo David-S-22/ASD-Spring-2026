@@ -1,42 +1,29 @@
-/* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
-.app-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+/* Bills feature layout: one page, one scroll — the table, then Disputes,
+   then Ask Tally. The two-track grid and the inner tab bar went with the
+   simplification; Calendar and Coming up are no longer rendered here. */
+.bills-page {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  max-width: 1320px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 1rem;
 }
 
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.bills-page .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
-.tabs button {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0.5em 0.25em;
-}
-
-.tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tab-panel {
-  grid-column: 1;
-}
-
+.disputes-section,
 .ask-tally {
-  grid-column: 2;
-  align-self: start;
-  position: sticky;
-  top: 1rem;
+  padding: 1rem;
+}
+
+.disputes-section > h3,
+.ask-tally > h3 {
+  margin-top: 0;
 }
 
 .bills-table {
@@ -44,53 +31,295 @@
   border-collapse: collapse;
 }
 
-.bills-panel {
-  overflow-x: auto;
+/* The fragment root replaces the index.html placeholder (and its class="card")
+   wholesale, so the card treatment is named directly on the fragment classes.
+   Calendar and Coming up keep theirs for anyone hitting their routes directly. */
+.bills-panel,
+.calendar-card,
+.timeline {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.25rem 0 1rem;
 }
 
+.bills-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bills-head .monthly-total {
+  color: var(--mut);
+  white-space: nowrap;
+}
+
+/* The table runs full-bleed to the panel edge and the chrome around it is
+   padded instead. Horizontal padding on the panel comes straight off the
+   table's width, and the table has none to give: the scroll container's own
+   vertical scrollbar already takes 15px, which was enough to push the table
+   back into horizontal overflow and undo #96's no-scrollbar guarantee. */
+.bills-panel > .bills-head,
+.bills-panel > button,
+.calendar-card > *,
+.timeline > * {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.timeline li {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Both axes live on the scroll container now, not split across two elements --
+   a sticky header only works against its nearest scrolling ancestor, and two
+   nested scroll contexts is how you get a header that sticks to the wrong one.
+
+   620px is kept, but the arithmetic behind it has changed completely and the
+   figures here were re-measured on 2 Sep rather than carried over. The previous
+   note said rows were ~94px because four action controls wrapped to three
+   lines; both numbers were stale. Measured in the shell before this change:
+   rows were 135px, uniformly, with the controls on FOUR lines.
+
+   After moving three of them into the row menu, rows are 47px where the name
+   fits on one line, 61-62px where it wraps to two, and 108px for GymCo, which
+   carries the Spending Alerts prompt. Twelve seeded bills plus the header come
+   to 755px, so the cap still engages and the sticky header is still doing
+   something -- about ten rows sit above the fold, which covers Spotify (row 3)
+   and GymCo (row 6), the two the demo actually touches. */
+.table-scroll {
+  max-height: 620px;
+  overflow: auto;
+}
+
+/* The scroll region is a focus stop now, so it needs a visible one. */
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.bills-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Opaque, deliberately. A translucent header lets rows scroll through it and
+     the column labels become unreadable the moment anything moves. */
+  background: var(--raised);
+  border-bottom: 2px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  /* Typography stated here rather than inherited, because inheriting meant two
+     different tables. `.bills-table thead th` (0,1,2) already outranks the
+     shell's `thead th` (0,0,2), but only for properties it actually declares --
+     and it declared none of these, so inside the shell the header rendered
+     12.8px uppercase muted and standalone it rendered 16px sentence-case ink.
+     Measured, 2 Sep. The shell's treatment is the one adopted: it is the house
+     style, it is the context Bills is normally seen in, and it is the more
+     compact of the two.
+
+     No white-space: nowrap -- the headers are deliberately allowed to wrap
+     (see the nth-child rule below), which is what holds the table's intrinsic
+     width down to something the shell's track can fit. */
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mut);
+}
+
+.bills-table .no-match td {
+  color: var(--mut);
+  text-align: center;
+  padding: 1.4em 0.6em;
+}
+
+.bills-search {
+  display: block;
+  margin: 0 0 0.75rem;
+}
+
+.bills-search input {
+  width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Padding goes UP here while the row height goes down by roughly two thirds,
+   which only looks contradictory. The rows were never tall because the cells
+   were padded; they were tall because the four action controls wrapped onto
+   four lines. Fix the wrapping (see .row-actions below) and the cells can
+   afford more room, not less. line-height is restated rather than left to
+   inherit from #bills-root so that the table's density is legible in one rule
+   instead of two files. */
 .bills-table th,
 .bills-table td {
   text-align: left;
-  padding: 0.5em 0.6em;
+  padding: var(--sp-3);
+  line-height: var(--lh);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
 
-.bills-table th,
+/* Amount / Every / Next billing keep their values on one line, but the headers
+   and the name column are allowed to wrap. Holding every one of them at nowrap
+   pinned the table's intrinsic width at 854px, 170px past the shell's track. */
 .bills-table td:nth-child(2),
-.bills-table td:nth-child(3),
-.bills-table td:nth-child(4) {
+.bills-table td:nth-child(3) {
   white-space: nowrap;
 }
 
+/* Name is the only column with no nowrap and no fixed content, so the auto
+   table algorithm settles every other column first and gives Name whatever is
+   left -- 99px in the shell, measured. At that width "Share-house utilities
+   kitty" wraps to four lines and the NAME becomes the row-height driver, which
+   is how rows stayed tall even after the action buttons stopped wrapping. The
+   floor is what stops Name being the residual column; it is a min, not a width,
+   so a wider viewport still gives it more. */
+.bills-table th:first-child,
+.bills-table td:first-child {
+  min-width: 9.5rem;
+}
+
+/* The shell's stylesheet carries `tbody tr:hover { background: #273449 }` so
+   that feature tables pulled in over htmx pick up its theme. Bills brings its
+   own light table and its own dark ink, so that rule paints #1d222c text onto a
+   #273449 row -- unreadable, and it fires whenever the pointer crosses a row.
+   Bills declares its own hover rather than leaving the shell's unopposed. */
+.bills-table tbody tr:hover {
+  background: var(--a100);
+}
+
+.bills-table tbody tr:hover .chip {
+  /* The wash sits over the row wash; keep the badge readable. */
+  border-color: currentColor;
+}
+
+/* The <td> stays a real table-cell. An earlier attempt made this element
+   display:flex, which drops it out of the column-width algorithm: the status
+   and actions cells then measured at identical x and width, painting on top of
+   one another, with the empty header column collapsed to 15px. The fix is not
+   to avoid flex, it is to put the flex on a <div> INSIDE the cell -- the cell
+   keeps its table semantics and .row-actions does the layout. */
 .bills-table .actions {
-  white-space: nowrap;
+  white-space: normal;
   text-align: right;
 }
 
-.bills-table .actions button + button {
-  margin-left: 0.25em;
+/* Re-scoped to carry an id, and that is the entire point of the change.
+   `#bills-root button.btn-sm` in theme.css is (1,1,1); the old selector here
+   was (0,2,1), so font-size and padding never applied -- measured 2 Sep as
+   13.6px / 3.4px 8.16px in BOTH contexts, which are theme.css's numbers, not
+   these. margin and white-space were uncontested and did apply, which is why
+   this rule could not simply be deleted. At (1,2,1) all four now land. */
+#bills-root .bills-table .actions button {
+  margin: 0;
+  font-size: var(--fs-sm);
+  padding: 0.3em 0.7em;
+  white-space: nowrap;
+}
+
+/* flex-start, not center: when the menu opens the <details> grows downward, and
+   centring would drag Edit down to the middle of the expanded block instead of
+   leaving it level with the toggle it sits beside. */
+#bills-root .row-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+#bills-root .row-menu {
+  position: relative;
+}
+
+/* <summary> is not a <button>, so theme.css's `#bills-root button` block does
+   not reach it -- without a full treatment here it renders as bare ink text
+   with a disclosure triangle beside it. Both marker resets are required:
+   list-style handles Firefox and current Chromium, the ::-webkit- pseudo
+   handles Safari and older Chromium. */
+#bills-root .row-menu-toggle {
+  list-style: none;
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  padding: 0.45em 0.7em;
+  cursor: pointer;
+  user-select: none;
+}
+
+#bills-root .row-menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+#bills-root .row-menu-toggle:hover,
+#bills-root .row-menu[open] > .row-menu-toggle {
+  border-color: var(--accent);
+}
+
+/* The toggle is a focus stop and the UA outline is suppressed by the reset
+   above, so it needs its own. */
+#bills-root .row-menu-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Stacked in normal flow rather than floated over the table. An absolutely
+   positioned panel is the obvious implementation and the wrong one here:
+   .table-scroll is overflow:auto, so it would be clipped on precisely the
+   bottom rows where a menu opens downward. Growing the row is the honest
+   trade -- a disclosure that takes up room while it is open.
+
+   Qualified on [open] rather than declaring display unconditionally. Chromium
+   hides a closed <details> through ::details-content with content-visibility,
+   which an id-specificity `display` on the child does not defeat -- but other
+   engines have used a plain `details:not([open]) > *:not(summary)` UA rule,
+   which it would. Scoping to [open] means this never races the UA sheet in
+   either implementation.
+
+   Worth knowing when checking this: under content-visibility the hidden
+   buttons keep non-zero getBoundingClientRect() boxes. Measuring height > 0
+   reports them as visible when they are not. checkVisibility() and
+   elementFromPoint both give the right answer. */
+#bills-root .row-menu[open] > .row-menu-items {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+
+/* Badge, prompt and Confirm get room to breathe rather than piling up as three
+   inline runs, which is what stretched the GymCo row to more than twice the
+   height of its neighbours. Same reason as .actions above: this stays a real
+   table-cell, so no display change here. */
+.bills-table .status .chip {
+  white-space: nowrap;
 }
 
 .bills-table .confirm-prompt {
   display: block;
   margin-top: 0.3em;
+  color: var(--mut);
+  font-size: 0.85em;
 }
 
-@media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-panel,
-  .ask-tally {
-    grid-column: 1;
-  }
-
-  .ask-tally {
-    position: static;
-  }
-}
+/* The single-column page needs no stacking breakpoint; the table's own
+   scroll container handles narrow viewports. */
 
 .timeline ul,
 .dispute-panel ul,
@@ -119,7 +348,7 @@
 
 .range-buttons button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -135,6 +364,7 @@
 .dispute-panel .caveat {
   color: var(--warn);
   background: var(--warn-bg);
+  border: 1px solid var(--warn-bg);
   padding: 0.5em;
   border-radius: 6px;
 }
@@ -152,15 +382,32 @@
   margin: 0.3em 0;
 }
 
+/* Both bubbles are dark now, so the difference has to come from the accent
+   wash and the border rather than light-vs-white. */
 .chat-panel .message-user {
-  background: var(--a100);
+  background: var(--a200);
+  border: 1px solid transparent;
   margin-left: 2em;
 }
 
 .chat-panel .message-assistant {
-  background: var(--card);
+  background: var(--raised);
   border: 1px solid var(--line);
   margin-right: 2em;
+}
+
+.chat-panel .chat-welcome {
+  color: var(--mut);
+  font-size: 0.9em;
+  margin: 0.4em 0;
+}
+
+/* Once a reply lands the welcome line has done its job. Replies are appended
+   with hx-swap="beforeend", so the welcome would otherwise sit above the
+   conversation for the rest of the session. Same :has() form already used for
+   #modal-root below. */
+.chat-panel .history:has(.message) .chat-welcome {
+  display: none;
 }
 
 .chat-panel .history-heading {
@@ -183,7 +430,7 @@
      underneath and the Confirm button cannot be clicked, which kills every
      write started from a modal form while leaving the route tests green. */
   z-index: 60;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,18 +451,12 @@
 }
 
 .toast {
-  background: var(--ink);
-  color: #fff;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   padding: 0.6em 1.2em;
   border-radius: 999px;
-}
-
-.tab-page {
-  display: none;
-}
-
-.tab-page.active {
-  display: block;
 }
 
 .modal-form {
@@ -223,7 +464,7 @@
   border-radius: 10px;
   padding: 1.5rem;
   min-width: 320px;
-  box-shadow: 0 10px 30px rgba(29, 34, 44, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .modal-form label {
@@ -258,14 +499,26 @@
 .error-fragment .error {
   background: var(--bad-bg);
   color: var(--bad);
+  border: 1px solid var(--bad);
   padding: 0.6em 1em;
   border-radius: 6px;
 }
 
 .disputes-tab {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
   gap: 1rem;
+}
+
+/* Destructive, so it reads as such — same palette the error fragment uses. */
+.dispute-panel .remove-dispute {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  background: transparent;
+}
+
+.dispute-panel .remove-dispute:hover {
+  background: var(--bad-bg);
 }
 
 .dispute-list ul {
@@ -309,11 +562,97 @@
   display: inline-block;
 }
 
+/* --- Suggestions: the approve/reject window ------------------------------ */
+
+.suggestions-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+
+.suggestions-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 0.4em;
+}
+
+.suggestions-badge {
+  background: var(--accent);
+  color: var(--card);
+  border-radius: 999px;
+  font-size: 0.75em;
+  min-width: 1.6em;
+  text-align: center;
+  padding: 0.1em 0.4em;
+}
+
+.suggestions-empty {
+  color: var(--mut);
+  font-size: 0.9em;
+  margin: 0.4em 0;
+}
+
+.suggestion-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+  margin: 0.5em 0;
+}
+
+/* The reply's one-line pointer at the Suggestions panel below. */
+.suggestion-pointer {
+  color: var(--mut);
+  font-size: 0.85em;
+  margin: 0.2em 0 0.3em 2em;
+}
+
+.suggestion-title {
+  font-weight: 600;
+  margin: 0 0 0.3em;
+}
+
+.suggestion-detail {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 0.4em;
+}
+
+.suggestion-detail th {
+  color: var(--mut);
+  font-weight: 400;
+  text-align: left;
+  padding-right: 0.8em;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.suggestion-old {
+  color: var(--mut);
+}
+
+.suggestion-warning,
+.suggestion-error {
+  color: var(--bad);
+  font-size: 0.9em;
+  margin: 0.3em 0;
+}
+
+.suggestion-card.status-failed {
+  border-color: var(--bad);
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 0.4em;
+}
+
+
 #modal-root:has(.modal-form) {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -322,14 +661,47 @@
 #modal-root .modal-form {
   max-height: 85vh;
   overflow-y: auto;
+}
 
+/* Was var(--muted, #666) -- Bills defines --mut, never --muted, so this always
+   fell through to #666 and is unreadable on a dark surface. */
 .working {
   font-size: 0.9em;
-  color: var(--muted, #666);
+  color: var(--mut);
   margin-left: 0.5em;
 }
 
-button:disabled {
-  opacity: 0.6;
+/* Two problems with the old `button:disabled { opacity: .6; cursor: progress }`.
+   It was unscoped, so it reached the shell's own controls -- and being (0,1,1)
+   it lost to `#bills-root button:disabled` for Bills' buttons while still
+   winning for anything the shell left at a lower specificity. Net effect: the
+   one place it applied was the wrong place.
+
+   And the intent was never "disabled", it was "request in flight" -- hence
+   cursor: progress. htmx says that directly. Both selectors are needed because
+   the two hx-disabled-elt shapes put the class in different places:
+   `find button[type=submit]` (chat_panel, dispute_form) marks the FORM, while
+   `this` (dispute_panel's Send feedback) marks the BUTTON. opacity is dropped;
+   theme.css already owns the disabled look. */
+#bills-root .htmx-request button:disabled,
+#bills-root button.htmx-request:disabled {
   cursor: progress;
+}
+
+/* Full-width chat: the input row stretches, the Ask button keeps its size,
+   and long conversations scroll inside the card instead of growing the page. */
+.chat-panel form {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.chat-panel form input[name="message"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-panel .history {
+  max-height: 24rem;
+  overflow-y: auto;
 }

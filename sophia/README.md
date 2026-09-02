@@ -9,10 +9,15 @@ shows a month-by-month "what to set aside" calendar, tracks paid/due/overdue
 status per bill, drafts dispute letters for charges that look wrong, and
 answers plain-language questions about the bills through a small chat
 assistant ("Ask Tally"). Nothing writes to the database without an explicit
-user action: chat replies with a preview card, and only `POST
-/api/chat/apply` actually executes a change, through the same CRUD routes a
-manual edit would use. Disputes are drafts only — there is no send
-integration.
+user action: every change the chat proposes becomes a **pending suggestion**,
+shown both as a card in the chat reply and in the Suggestions panel beneath
+it (with field-level detail — a before/after diff for updates, the row being
+removed for deletes). Approving applies it through the same services layer a
+manual edit uses and refreshes the table in place; rejecting discards it. The
+outcome — applied, rejected, or failed — is written back into the chat
+transcript, so the assistant's next turn knows what actually happened and
+never reports an unapproved or failed change as done. Disputes are drafts
+only — there is no send integration.
 
 ## Run it
 
@@ -52,7 +57,7 @@ Architecture diagrams:
 | Service | Port | Key env vars |
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
-| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:0.5b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
+| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
 | `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
@@ -90,8 +95,7 @@ second attempt also fails. Neither call ever raises out to the route.
    classifies the message into `{op, entity, id, fields, question, say}`.
    `question` resolves in code (`total`, `barely_using`, `upcoming`); `op`
    becomes a preview card the user must confirm before anything is written.
-   Kept deliberately short — `qwen2.5:0.5b`'s accuracy degrades fast with
-   long context.
+   Kept deliberately short — accuracy degrades with long context.
 
 ## Date engine rules
 

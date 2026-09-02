@@ -1,0 +1,31 @@
+{# One suggestion's body: title, detail rows, warning/error, approve/reject.
+   Included by suggestions_panel.html (panel cards) and chat_reply.html (the
+   chat's inline card) — one markup, one contract, both surfaces post to the
+   same /ui/suggestions/<id> endpoints so approving in either place resolves
+   both. Expects `suggestion`: id, status, title, rows, warning, error. #}
+<p class="suggestion-title">{{ suggestion.title }}</p>
+{% if suggestion.rows %}
+<table class="suggestion-detail">
+  {% for row in suggestion.rows %}
+  <tr>
+    <th scope="row">{{ row.label }}</th>
+    <td>{% if row.old is not none %}<del class="suggestion-old">{{ row.old }}</del> → {% endif %}{{ row.new }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if suggestion.warning %}<p class="suggestion-warning">{{ suggestion.warning }}</p>{% endif %}
+{% if suggestion.status == "pending" %}
+<div class="suggestion-actions">
+  <button class="confirm btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/approve"
+          hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this">Approve</button>
+  <button class="keep-it btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/reject"
+          hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this">Reject</button>
+</div>
+{% elif suggestion.status == "failed" %}
+<p class="suggestion-error">Couldn't apply: {{ suggestion.error }} — nothing was changed.</p>
+<div class="suggestion-actions">
+  <button class="keep-it btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/reject"
+          hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this">Dismiss</button>
+</div>
+{% endif %}

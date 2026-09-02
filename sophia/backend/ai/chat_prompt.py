@@ -1,8 +1,8 @@
 """Prompt and fallback for the Ask Tally chat assistant.
 
-Kept short on purpose: qwen2.5:0.5b's accuracy degrades fast with long
-context, so the bills list is compact and there are only as many
-few-shot examples as needed to pin down the op grammar.
+Kept short on purpose: accuracy degrades with long context, so the bills
+list is compact and there are only as many few-shot examples as needed to
+pin down the op grammar.
 """
 
 RESPONSE_SHAPE = (
@@ -10,14 +10,35 @@ RESPONSE_SHAPE = (
     '"entity": "bill"|"payment"|"dispute"|null, "id": <int or null>, "fields": <object or null>, '
     '"question": "total"|"barely_using"|"upcoming"|"none", "say": "<string, max 300 chars>"}. '
     'Use "question" for a question about the bills, "op"/"entity"/"fields" for a change the user wants made, '
-    "and null op when nothing needs to change."
+    "and null op when nothing needs to change. "
+    "Every op you emit is a PROPOSAL: nothing is saved until the user approves it in the app. "
+    'In "say", describe the change as proposed ("I\'ve suggested adding X — approve it to save"), '
+    "never as already done. Never claim a change happened; you will see a [suggestion ...] note "
+    "in the conversation once the user approves or rejects it, and that note is the only truth about "
+    "what was saved."
+)
+
+# Amount is asked for in dollars, not cents, and that is deliberate. The column
+# is amount_cents, but a model told to emit cents sometimes emits dollars into
+# it -- "amount_cents": 15 for a $15 bill stores fifteen cents and nothing
+# complains. Dollars in, converted in one place on the way through.
+BILL_FIELDS = (
+    'To add a bill, "fields" needs: "name", "merchant", "amount" (in dollars), '
+    '"cadence" ("weekly"|"fortnightly"|"monthly"), "next_billing_date" (YYYY-MM-DD), '
+    '"type" ("bill"|"subscription"), and "payment_method" when the user says how it is paid. '
+    "Use the merchant the user names, or repeat the name when they do not name one. "
+    "Only use values the user actually stated — NEVER invent an amount, date, or cadence. "
+    "If the user wants to add a bill but has not given the amount, the cadence, or the first "
+    'billing date, set op to null and use "say" to ask for the missing details instead.'
 )
 
 FEW_SHOT = [
     ("What do my bills add up to?", '{"op": null, "entity": null, "id": null, "fields": null, "question": "total", "say": "Here is this month\'s total."}'),
     ("Which subscriptions am I barely using?", '{"op": null, "entity": null, "id": null, "fields": null, "question": "barely_using", "say": "Checking which subscriptions keep billing without a recent confirm."}'),
-    ("I cancelled Spotify from September — remove the future payments", '{"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}, "question": "none", "say": "Marking Spotify as ending after 16 Sep."}'),
-    ("Draft a note to dispute my GymCo charge", '{"op": "create", "entity": "dispute", "id": null, "fields": {"bill_id": 6, "reason": "Charged after I cancelled"}, "question": "none", "say": "Drafting a dispute letter for GymCo."}'),
+    ("I cancelled Spotify from September — remove the future payments", '{"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}, "question": "none", "say": "I\'ve suggested ending Spotify after 16 Sep — approve it to save."}'),
+    ("Draft a note to dispute my GymCo charge", '{"op": "create", "entity": "dispute", "id": null, "fields": {"bill_id": 6, "reason": "Charged after I cancelled"}, "question": "none", "say": "I\'ve suggested opening a dispute for GymCo — approve it to draft the letter."}'),
+    ("Add Disney Plus, $15 a month, first charge 5 September, paid by card", '{"op": "create", "entity": "bill", "id": null, "fields": {"name": "Disney Plus", "merchant": "Disney Plus", "amount": 15.0, "cadence": "monthly", "next_billing_date": "2026-09-05", "type": "subscription", "payment_method": "card"}, "question": "none", "say": "I\'ve suggested adding Disney Plus at $15 a month from 5 Sep — approve it to save."}'),
+    ("Add Netflix", '{"op": null, "entity": null, "id": null, "fields": null, "question": "none", "say": "Happy to add Netflix — how much is it, how often does it bill, and when is the next charge?"}'),
 ]
 
 FALLBACK = {
@@ -38,7 +59,7 @@ def _bill_line(bill_row):
 
 
 def build(message, history, bills=None, error=None):
-    system_parts = [f"You are Tally, a bills and subscriptions assistant. {RESPONSE_SHAPE}"]
+    system_parts = [f"You are Tally, a bills and subscriptions assistant. {RESPONSE_SHAPE}", BILL_FIELDS]
     if bills:
         system_parts.append("Bills (id name amount cadence next=date type):\n" + "\n".join(_bill_line(b) for b in bills))
     messages = [{"role": "system", "content": "\n".join(system_parts)}]
