@@ -62,10 +62,95 @@
   border-collapse: collapse;
 }
 
-/* Kept only as a genuine-overflow fallback far below the shell's column width.
-   At both target widths the table now fits and no scrollbar appears. */
-.bills-panel {
-  overflow-x: auto;
+/* index.html gives these divs class="card", but each fragment root replaces the
+   whole element and brings its own class instead -- so after the first swap the
+   card treatment is gone. That was invisible while everything was white on
+   off-white; on a dark palette it is the difference between a panel and a void,
+   so the treatment names them directly. (#disputes-tab is the one fragment that
+   does return class="card".) */
+.bills-panel,
+.calendar-card,
+.timeline {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.25rem 0 1rem;
+}
+
+/* The table runs full-bleed to the panel edge and the chrome around it is
+   padded instead. Horizontal padding on the panel comes straight off the
+   table's width, and the table has none to give: the scroll container's own
+   vertical scrollbar already takes 15px, which was enough to push the table
+   back into horizontal overflow and undo #96's no-scrollbar guarantee. */
+.bills-panel > h2,
+.bills-panel > button,
+.calendar-card > *,
+.timeline > * {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.timeline li {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Both axes live on the scroll container now, not split across two elements --
+   a sticky header only works against its nearest scrolling ancestor, and two
+   nested scroll contexts is how you get a header that sticks to the wrong one.
+
+   620px, not the ~950px ten rows would need. Rows are ~94px because the four
+   action controls wrap to three lines in the shell's 684px column, so ten rows
+   plus the header comes to 991px -- taller than the viewport it has to sit in.
+   620px keeps six rows and the header on screen, which covers Spotify (row 3)
+   and GymCo (row 6): the two rows the demo actually touches. */
+.table-scroll {
+  max-height: 620px;
+  overflow: auto;
+}
+
+/* The scroll region is a focus stop now, so it needs a visible one. */
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.bills-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Opaque, deliberately. A translucent header lets rows scroll through it and
+     the column labels become unreadable the moment anything moves. */
+  background: var(--raised);
+  border-bottom: 2px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.bills-table .no-match td {
+  color: var(--mut);
+  text-align: center;
+  padding: 1.4em 0.6em;
+}
+
+.bills-search {
+  display: block;
+  margin: 0 0 0.75rem;
+}
+
+.bills-search input {
+  width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .bills-table th,
@@ -103,6 +188,11 @@
    Bills declares its own hover rather than leaving the shell's unopposed. */
 .bills-table tbody tr:hover {
   background: var(--a100);
+}
+
+.bills-table tbody tr:hover .chip {
+  /* The wash sits over the row wash; keep the badge readable. */
+  border-color: currentColor;
 }
 
 .bills-table .actions {
@@ -179,7 +269,7 @@
 
 .range-buttons button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -195,6 +285,7 @@
 .dispute-panel .caveat {
   color: var(--warn);
   background: var(--warn-bg);
+  border: 1px solid var(--warn-bg);
   padding: 0.5em;
   border-radius: 6px;
 }
@@ -212,13 +303,16 @@
   margin: 0.3em 0;
 }
 
+/* Both bubbles are dark now, so the difference has to come from the accent
+   wash and the border rather than light-vs-white. */
 .chat-panel .message-user {
-  background: var(--a100);
+  background: var(--a200);
+  border: 1px solid transparent;
   margin-left: 2em;
 }
 
 .chat-panel .message-assistant {
-  background: var(--card);
+  background: var(--raised);
   border: 1px solid var(--line);
   margin-right: 2em;
 }
@@ -257,7 +351,7 @@
      underneath and the Confirm button cannot be clicked, which kills every
      write started from a modal form while leaving the route tests green. */
   z-index: 60;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,8 +372,10 @@
 }
 
 .toast {
-  background: var(--ink);
-  color: #fff;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   padding: 0.6em 1.2em;
   border-radius: 999px;
 }
@@ -297,7 +393,7 @@
   border-radius: 10px;
   padding: 1.5rem;
   min-width: 320px;
-  box-shadow: 0 10px 30px rgba(29, 34, 44, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .modal-form label {
@@ -332,6 +428,7 @@
 .error-fragment .error {
   background: var(--bad-bg);
   color: var(--bad);
+  border: 1px solid var(--bad);
   padding: 0.6em 1em;
   border-radius: 6px;
 }
@@ -387,7 +484,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(29, 34, 44, 0.4);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -398,9 +495,11 @@
   overflow-y: auto;
 }
 
+/* Was var(--muted, #666) -- Bills defines --mut, never --muted, so this always
+   fell through to #666 and is unreadable on a dark surface. */
 .working {
   font-size: 0.9em;
-  color: var(--muted, #666);
+  color: var(--mut);
   margin-left: 0.5em;
 }
 

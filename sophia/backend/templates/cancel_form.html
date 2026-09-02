@@ -1,5 +1,5 @@
 {# Cancel-bill modal form: sets end_date, defaulting to the bill's next occurrence. #}
-<div class="modal-form" id="cancel-form">
+<div class="modal-form" data-confirm="Cancel this bill? Future payments stop after the end date." id="cancel-form">
   <h3>Cancel {{ bill.name }}</h3>
   <p>Last payment lands on {{ bill.next_occurrence }}.</p>
   <form hx-post="/bills-backend/ui/bills/{{ bill.id }}/cancel" hx-target="#bills-table" hx-swap="outerHTML">

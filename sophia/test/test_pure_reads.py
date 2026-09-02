@@ -127,3 +127,4 @@ def test_cancel_bill_refreshes_drifted_cache(client, store):
     assert response.status_code == 200
     assert (3, {"end_date": "2026-09-30"}) in store.update_bill_calls
     assert store.bills[3]["status"] == "paid"
+
