@@ -16,27 +16,27 @@
     <header class="app-header">
         <div class="brand"><span class="logo">◆</span> Tally</div>
         <nav class="navbar" id="navbar">
-            <button type="button" class="nav-tab active"
+            <button type="button" class="nav-tab active" data-page="home"
                     hx-get="/home.html" hx-target="#content" hx-swap="innerHTML">
                 Home
             </button>
-            <button type="button" class="nav-tab"
+            <button type="button" class="nav-tab" data-page="transactions"
                     hx-get="/transactions-frontend/" hx-target="#content" hx-swap="innerHTML">
                 Transactions
             </button>
-            <button type="button" class="nav-tab"
+            <button type="button" class="nav-tab" data-page="anomalies"
                     hx-get="/anomalies-frontend/" hx-target="#content" hx-swap="innerHTML">
                 Anomalies
             </button>
-            <button type="button" class="nav-tab"
+            <button type="button" class="nav-tab" data-page="savings"
                     hx-get="/savings-frontend/" hx-target="#content" hx-swap="innerHTML">
                 Savings
             </button>
-            <button type="button" class="nav-tab"
+            <button type="button" class="nav-tab" data-page="bills"
                     hx-get="/bills-frontend/" hx-target="#content" hx-swap="innerHTML">
                 Bills
             </button>
-            <button type="button" class="nav-tab"
+            <button type="button" class="nav-tab" data-page="budgets"
                     hx-get="/budgets-frontend/" hx-target="#content" hx-swap="innerHTML">
                 Budgets
             </button>
@@ -49,15 +49,46 @@
     </main>
 
     <script>
-        // Highlight the tab that was clicked.
-        document.getElementById('navbar').addEventListener('click', function (evt) {
-            const tab = evt.target.closest('.nav-tab');
-            if (!tab) return;
-            for (const el of this.querySelectorAll('.nav-tab')) {
+        const navbar = document.getElementById('navbar');
+        const content = document.getElementById('content');
+        const tabs = Array.from(navbar.querySelectorAll('.nav-tab'));
+
+        function activateTab(tab) {
+            for (const el of tabs) {
                 el.classList.remove('active');
             }
             tab.classList.add('active');
+        }
+
+        function tabFromUrl() {
+            const page = window.location.hash.slice(1);
+            return tabs.find(tab => tab.dataset.page === page) || tabs[0];
+        }
+
+        function loadPageFromUrl() {
+            const tab = tabFromUrl();
+            activateTab(tab);
+            htmx.ajax('GET', tab.getAttribute('hx-get'), {
+                target: '#content',
+                swap: 'innerHTML'
+            });
+        }
+
+        const initialTab = tabFromUrl();
+        content.setAttribute('hx-get', initialTab.getAttribute('hx-get'));
+        activateTab(initialTab);
+
+        navbar.addEventListener('click', function (evt) {
+            const tab = evt.target.closest('.nav-tab');
+            if (!tab) return;
+            activateTab(tab);
+            const fragment = `#${tab.dataset.page}`;
+            if (window.location.hash !== fragment) {
+                window.history.pushState(null, '', fragment);
+            }
         });
+
+        window.addEventListener('popstate', loadPageFromUrl);
     </script>
 </body>
 </html>
