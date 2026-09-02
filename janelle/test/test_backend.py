@@ -351,6 +351,27 @@ def test_create_transaction_forwards_request(
     )
 
 
+def test_create_transaction_rejects_agent_only_suggestion_field(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    post = Mock()
+    monkeypatch.setattr(backend_app.requests, "post", post)
+
+    response = client.post("/transactions", json={
+        "date": "2026-09-01",
+        "merchant": "Merivale",
+        "description": "Lunch",
+        "amount": 42,
+        "category_id": 81,
+        "suggested_category_id": 80,
+    })
+
+    assert response.status_code == 422
+    assert response.get_json()["code"] == "unsupported_fields"
+    post.assert_not_called()
+
+
 def test_update_transaction_forwards_request(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,

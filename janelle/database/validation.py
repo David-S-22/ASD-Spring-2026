@@ -1,3 +1,6 @@
+import base64
+import binascii
+import json
 from datetime import date, datetime, time, timezone
 from decimal import Decimal, DecimalException
 
@@ -10,6 +13,8 @@ TRANSACTION_FIELDS = {
 	"amount",
 	"category_id",
 }
+TRANSACTION_CREATE_FIELDS = TRANSACTION_FIELDS | {"suggested_category_id"}
+EXPECTED_TRANSACTION_FIELDS = {"id", "version"}
 CATEGORY_FIELDS = {"name", "type"}
 MAX_SQLITE_INTEGER = (2**63) - 1
 MAX_AMOUNT = Decimal("9999999999.99")
@@ -125,7 +130,10 @@ def parse_amount(value, field_name, status, code, require_number):
 
 
 def validate_transaction_payload(data, partial=False):
-	reject_unknown_fields(data, TRANSACTION_FIELDS)
+	reject_unknown_fields(
+		data,
+		TRANSACTION_FIELDS if partial else TRANSACTION_CREATE_FIELDS,
+	)
 	required = {"date", "merchant", "description", "amount", "category_id"}
 	if not partial:
 		missing = sorted(field for field in required if field not in data)
@@ -159,7 +167,52 @@ def validate_transaction_payload(data, partial=False):
 		)
 	if "category_id" in data:
 		values["category_id"] = parse_integer_id(data["category_id"], "category_id")
+	if "suggested_category_id" in data:
+		values["suggested_category_id"] = parse_integer_id(
+			data["suggested_category_id"],
+			"suggested_category_id",
+		)
 	return values
+
+
+def validate_expected_transaction(value):
+	if value is None:
+		return None
+	if not isinstance(value, str) or not value or len(value) > 4096:
+		raise ApiError(
+			"transaction precondition is invalid",
+			"invalid_precondition",
+			422,
+		)
+	try:
+		decoded = base64.b64decode(
+			value,
+			altchars=b"-_",
+			validate=True,
+		)
+		data = json.loads(decoded.decode("utf-8"))
+	except (
+		binascii.Error,
+		UnicodeDecodeError,
+		ValueError,
+		RecursionError,
+	) as error:
+		raise ApiError(
+			"transaction precondition is invalid",
+			"invalid_precondition",
+			422,
+		) from error
+	if not isinstance(data, dict) or set(data) != EXPECTED_TRANSACTION_FIELDS:
+		raise ApiError(
+			"transaction precondition is invalid",
+			"invalid_precondition",
+			422,
+		)
+	transaction_id = parse_integer_id(data["id"], "id")
+	return {
+		"id": transaction_id,
+		"version": parse_datetime(data["version"], "version"),
+	}
 
 
 def validate_category_payload(data, partial=False):

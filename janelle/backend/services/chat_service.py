@@ -1,5 +1,7 @@
 """AI chat orchestration for transactions."""
 
+import base64
+import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from email.utils import parsedate_to_datetime
@@ -35,28 +37,22 @@ class ChatError(Exception):
 
 
 def handle_message(message, db_url):
-    message = validate_message(message)
-    raw_transactions = database_request("get", f"{db_url}/transactions", list)
-    raw_categories = database_request("get", f"{db_url}/categories", list)
-    categories, names, ids = build_category_lookup(raw_categories)
-    transactions = [transaction_row(item, names) for item in raw_transactions]
-    result = ollama_service.parse_chat(message, transactions, categories)
+    from .transaction_orchestrator import orchestrate_transaction_request
 
-    if result["fallback"]:
-        return build_base_response(result, operation=None, fallback=True)
-    if result["operation"] == "read":
-        return build_read_response(
-            result,
-            db_url,
-            names,
-            ids,
-            transactions,
-        )
-    return build_write_preview(result, db_url, names, ids, transactions)
+    return orchestrate_transaction_request(message, db_url)
 
 
 def apply_preview(payload, db_url):
     preview = payload.get("preview") if "preview" in payload else payload
+    return execute_confirmed_write(preview, db_url)
+
+
+def execute_confirmed_write(
+    preview,
+    db_url,
+    *,
+    allow_suggested_category=False,
+):
     if not isinstance(preview, dict):
         raise ChatError("preview must be a JSON object", "invalid_preview", 400)
 
@@ -83,10 +79,56 @@ def apply_preview(payload, db_url):
         if preview.get("transaction_id") is not None or preview.get("before") is not None:
             raise ChatError("invalid create preview", "invalid_preview", 422)
         require_matching_row(preview.get("after"), expected)
-        transaction = database_request(
-            "post", f"{db_url}/transactions", dict, json=clean
-        )
-        return {"operation": operation, "transaction": transaction}
+        payload = dict(clean)
+        suggested_category_id = preview.get("suggested_category_id")
+        if suggested_category_id is not None:
+            if not allow_suggested_category:
+                raise ChatError(
+                    "suggested category metadata is not trusted",
+                    "invalid_preview",
+                    422,
+                )
+            if (
+                not is_positive_integer(suggested_category_id)
+                or suggested_category_id not in names
+                or suggested_category_id == clean["category_id"]
+            ):
+                raise ChatError(
+                    "suggested category metadata is invalid",
+                    "invalid_preview",
+                    422,
+                )
+            payload["suggested_category_id"] = suggested_category_id
+        try:
+            transaction = database_request(
+                "post",
+                f"{db_url}/transactions",
+                dict,
+                json=payload,
+            )
+        except ChatError as error:
+            if error.status < 500:
+                raise
+            return unverified_write_result(operation, error)
+        try:
+            observed = transaction_row(transaction, names)
+        except ChatError as error:
+            return unverified_write_result(
+                operation,
+                error,
+                transaction=transaction,
+            )
+        if not verify_write(operation, expected, observed):
+            return unverified_write_result(
+                operation,
+                write_verification_error(),
+                transaction=transaction,
+            )
+        return {
+            "operation": operation,
+            "transaction": transaction,
+            "verified": True,
+        }
 
     transaction_id = require_positive_id(preview.get("transaction_id"))
     try:
@@ -95,8 +137,10 @@ def apply_preview(payload, db_url):
                 "get",
                 f"{db_url}/transactions/{transaction_id}",
                 dict,
+                params={"_include_version": "true"},
             ),
             names,
+            require_version=True,
         )
     except ChatError as error:
         if error.code == "transaction_not_found":
@@ -108,8 +152,45 @@ def apply_preview(payload, db_url):
     if operation == "delete":
         if fields or preview.get("after") is not None:
             raise ChatError("invalid delete preview", "invalid_preview", 422)
-        database_request("delete", f"{db_url}/transactions/{transaction_id}")
-        return {"operation": operation, "deleted": current}
+        precondition = expected_transaction_header(current)
+        try:
+            database_request(
+                "delete",
+                f"{db_url}/transactions/{transaction_id}",
+                headers={"X-Expected-Transaction": precondition},
+            )
+        except ChatError as error:
+            if error.status < 500:
+                raise
+            return unverified_write_result(
+                operation,
+                error,
+                deleted=current,
+            )
+        try:
+            database_request(
+                "get",
+                f"{db_url}/transactions/{transaction_id}",
+                dict,
+            )
+        except ChatError as error:
+            if error.code != "transaction_not_found":
+                return unverified_write_result(
+                    operation,
+                    error,
+                    deleted=current,
+                )
+        else:
+            return unverified_write_result(
+                operation,
+                write_verification_error(),
+                deleted=current,
+            )
+        return {
+            "operation": operation,
+            "deleted": current,
+            "verified": True,
+        }
 
     clean = validate_write_fields(fields, names, ids)
     if not clean:
@@ -118,10 +199,63 @@ def apply_preview(payload, db_url):
         preview.get("after"),
         build_after_row(current, clean, names),
     )
-    transaction = database_request(
-        "patch", f"{db_url}/transactions/{transaction_id}", dict, json=clean
+    expected = build_after_row(current, clean, names)
+    precondition = expected_transaction_header(current)
+    try:
+        transaction = database_request(
+            "patch",
+            f"{db_url}/transactions/{transaction_id}",
+            dict,
+            json=clean,
+            headers={"X-Expected-Transaction": precondition},
+        )
+    except ChatError as error:
+        if error.status < 500:
+            raise
+        return unverified_write_result(
+            operation,
+            error,
+            transaction=current,
+        )
+    try:
+        observed = transaction_row(transaction, names)
+    except ChatError as error:
+        return unverified_write_result(
+            operation,
+            error,
+            transaction=transaction,
+        )
+    if not verify_write(operation, expected, observed):
+        return unverified_write_result(
+            operation,
+            write_verification_error(),
+            transaction=transaction,
+        )
+    return {
+        "operation": operation,
+        "transaction": transaction,
+        "verified": True,
+    }
+
+
+def execute_read_plan(plan, db_url, context):
+    return build_read_response(
+        plan,
+        db_url,
+        context["category_names"],
+        context["category_ids"],
+        context.get("available_transactions", []),
     )
-    return {"operation": operation, "transaction": transaction}
+
+
+def execute_write_preview(plan, db_url, context):
+    return build_write_preview(
+        plan,
+        db_url,
+        context["category_names"],
+        context["category_ids"],
+        context.get("available_transactions", []),
+    )
 
 
 def build_read_response(result, db_url, names, ids, available_transactions):
@@ -130,16 +264,23 @@ def build_read_response(result, db_url, names, ids, available_transactions):
         available_transactions,
     )
     if result["transaction_id"] is not None:
-        try:
-            raw_rows = [database_request(
-                "get",
-                f"{db_url}/transactions/{result['transaction_id']}",
-                dict,
-            )]
-        except ChatError as error:
-            if error.code != "transaction_not_found":
-                raise
-            raw_rows = []
+        if filters:
+            raw_rows = [
+                item
+                for item in query_transactions(db_url, filters)
+                if item.get("id") == result["transaction_id"]
+            ]
+        else:
+            try:
+                raw_rows = [database_request(
+                    "get",
+                    f"{db_url}/transactions/{result['transaction_id']}",
+                    dict,
+                )]
+            except ChatError as error:
+                if error.code != "transaction_not_found":
+                    raise
+                raw_rows = []
     else:
         raw_rows = query_transactions(db_url, filters)
 
@@ -236,17 +377,32 @@ def find_matching_transactions(
 ):
     transaction_id = result["transaction_id"]
     if transaction_id is not None:
+        filters = resolve_search_filters(
+            validate_filters(result["filters"], names, ids),
+            available_transactions,
+        )
+        if filters:
+            return [
+                transaction_row(item, names, require_version=True)
+                for item in query_transactions(
+                    db_url,
+                    filters,
+                    include_version=True,
+                )
+                if item.get("id") == transaction_id
+            ]
         try:
             item = database_request(
                 "get",
                 f"{db_url}/transactions/{transaction_id}",
                 dict,
+                params={"_include_version": "true"},
             )
         except ChatError as error:
             if error.code == "transaction_not_found":
                 return []
             raise
-        return [transaction_row(item, names)]
+        return [transaction_row(item, names, require_version=True)]
 
     filters = resolve_search_filters(
         validate_filters(result["filters"], names, ids),
@@ -255,15 +411,22 @@ def find_matching_transactions(
     if not filters:
         return []
     return [
-        transaction_row(item, names)
-        for item in query_transactions(db_url, filters)
+        transaction_row(item, names, require_version=True)
+        for item in query_transactions(
+            db_url,
+            filters,
+            include_version=True,
+        )
     ]
 
 
-def query_transactions(db_url, filters):
+def query_transactions(db_url, filters, include_version=False):
     dates = filters.get("dates")
     if dates is None:
-        options = {"params": filters} if filters else {}
+        params = dict(filters)
+        if include_version:
+            params["_include_version"] = "true"
+        options = {"params": params} if params else {}
         return database_request(
             "get",
             f"{db_url}/transactions",
@@ -283,6 +446,8 @@ def query_transactions(db_url, filters):
             "date_from": transaction_date,
             "date_to": transaction_date,
         }
+        if include_version:
+            date_filters["_include_version"] = "true"
         for item in database_request(
             "get",
             f"{db_url}/transactions",
@@ -307,11 +472,18 @@ def query_transactions(db_url, filters):
 
 
 def database_request(method, url, expected=None, **options):
-    response = getattr(requests, method)(
-        url,
-        timeout=config.DATABASE_TIMEOUT_SECONDS,
-        **options,
-    )
+    try:
+        response = getattr(requests, method)(
+            url,
+            timeout=config.DATABASE_TIMEOUT_SECONDS,
+            **options,
+        )
+    except requests.RequestException as error:
+        raise ChatError(
+            "transactions database is unavailable",
+            "database_unavailable",
+            503,
+        ) from error
     if response.status_code == 204:
         if expected is None:
             return None
@@ -365,7 +537,7 @@ def build_category_lookup(rows):
     return categories, names, ids
 
 
-def transaction_row(item, names):
+def transaction_row(item, names, *, require_version=False):
     try:
         transaction_id = item["id"]
         category_id = item["category_id"]
@@ -378,6 +550,15 @@ def transaction_row(item, names):
             "category_id": category_id,
             "category_name": names[category_id],
         }
+        version = item.get("version")
+        if require_version:
+            if not isinstance(version, str) or not version:
+                raise invalid_database_error()
+            row["version"] = version
+        elif version is not None:
+            if not isinstance(version, str):
+                raise invalid_database_error()
+            row["version"] = version
     except (KeyError, TypeError, ValueError) as error:
         raise invalid_database_error() from error
     if not is_positive_integer(transaction_id):
@@ -385,7 +566,13 @@ def transaction_row(item, names):
     return row
 
 
-def validate_write_fields(fields, names, ids, create=False):
+def validate_write_fields(
+    fields,
+    names,
+    ids,
+    create=False,
+    require_category=True,
+):
     if not isinstance(fields, dict):
         raise ChatError("fields must be an object", "invalid_preview", 422)
     unknown = sorted(set(fields) - MODEL_FIELDS)
@@ -416,21 +603,27 @@ def validate_write_fields(fields, names, ids, create=False):
 
     category_id = fields.get("category_id")
     category_name = fields.get("category")
-    if category_id is not None or category_name is not None or create:
+    if category_id is not None or category_name is not None:
         clean["category_id"] = resolve_category_id(
-            category_id, category_name, names, ids, use_default=create
+            category_id,
+            category_name,
+            names,
+            ids,
         )
     if create:
         missing = [
             key
-            for key in ("date", "merchant", "description", "amount", "category_id")
+            for key in ("date", "merchant", "description", "amount")
             if key not in clean
         ]
+        if require_category and "category_id" not in clean:
+            missing.append("category_id")
         if missing:
             raise ChatError(
                 f"missing required fields: {', '.join(missing)}",
                 "missing_fields",
                 422,
+                missing_fields=missing,
             )
     return clean
 
@@ -509,7 +702,6 @@ def resolve_category_id(
     category_name,
     names,
     ids,
-    use_default=False,
 ):
     named_id = None
     if category_name is not None:
@@ -530,8 +722,6 @@ def resolve_category_id(
         return category_id
     if named_id is not None:
         return named_id
-    if use_default and "uncategorised" in ids:
-        return ids["uncategorised"]
     raise ChatError("category is required", "category_required", 422)
 
 
@@ -680,9 +870,17 @@ def build_after_row(before, fields, names):
 
 
 def rows_match(candidate, expected):
-    return isinstance(candidate, dict) and all(
-        key in candidate and values_match(candidate[key], expected[key])
-        for key in ROW_FIELDS
+    return (
+        isinstance(candidate, dict)
+        and all(
+            key in candidate
+            and values_match(candidate[key], expected[key])
+            for key in ROW_FIELDS
+        )
+        and (
+            "version" not in expected
+            or candidate.get("version") == expected["version"]
+        )
     )
 
 
@@ -704,6 +902,67 @@ def values_match(left, right):
     ):
         return Decimal(str(left)) == Decimal(str(right))
     return left == right
+
+
+def verify_write(operation, expected, actual):
+    if operation == "delete":
+        return actual is None
+    if not isinstance(expected, dict) or not isinstance(actual, dict):
+        return False
+    for key in ROW_FIELDS:
+        if key == "id" and expected.get(key) is None:
+            continue
+        if key not in expected or key not in actual:
+            return False
+        if key == "date":
+            try:
+                if parse_transaction_date(expected[key]) != parse_transaction_date(
+                    actual[key]
+                ):
+                    return False
+            except ChatError:
+                return False
+        elif not values_match(expected[key], actual[key]):
+            return False
+    return True
+
+
+def unverified_write_result(
+    operation,
+    error,
+    *,
+    transaction=None,
+    deleted=None,
+):
+    result = {
+        "operation": operation,
+        "verified": False,
+        "write_outcome_unknown": True,
+        "verification_error": {
+            "message": error.message,
+            "code": error.code,
+        },
+    }
+    if transaction is not None:
+        result["transaction"] = transaction
+    if deleted is not None:
+        result["deleted"] = deleted
+    return result
+
+
+def expected_transaction_header(transaction):
+    payload = {
+        "id": transaction["id"],
+        "version": transaction.get("version"),
+    }
+    if not isinstance(payload["version"], str) or not payload["version"]:
+        raise invalid_database_error()
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(encoded).decode("ascii")
 
 
 def validate_message(value):
@@ -757,4 +1016,12 @@ def stale_preview_error():
         "the transaction changed or no longer exists; request a new preview",
         "stale_preview",
         409,
+    )
+
+
+def write_verification_error():
+    return ChatError(
+        "the transaction write could not be verified",
+        "write_verification_failed",
+        502,
     )

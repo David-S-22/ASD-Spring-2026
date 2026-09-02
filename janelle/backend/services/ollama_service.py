@@ -16,6 +16,7 @@ KEYS = {
     "operation", "transaction_id", "fields", "filters", "calculation",
     "handoff", "reply",
 }
+PLAN_INTERNAL_KEYS = {"planning_error", "retryable"}
 OPERATIONS = {"create", "read", "update", "delete"}
 CALCULATIONS = {"none", "count", "sum", "average", "largest"}
 HANDOFFS = {"none"}
@@ -36,8 +37,9 @@ DATE_INTENT = re.compile(
     r"(?:day|week|fortnight|month|quarter|year)s?|"
     r"since|before|after|between|"
     r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
-    r"january|february|march|april|may|june|july|august|"
-    r"september|october|november|december"
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+    r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|"
+    r"oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
     r")\b|"
     r"\b(?:19|20)\d{2}(?:-\d{1,2}(?:-\d{1,2})?)?\b|"
     r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b",
@@ -67,21 +69,48 @@ MAX_AMOUNT = re.compile(
     r"\$?([0-9][0-9,]*(?:\.\d{1,2})?)\b",
     re.IGNORECASE,
 )
+CURRENCY_AMOUNT = re.compile(
+    r"(?<![a-z0-9])(?:aud\s*)?\$\s*"
+    r"(-?[0-9][0-9,]*(?:\.\d{1,2})?)",
+    re.IGNORECASE,
+)
+EXPLICIT_DESCRIPTION = re.compile(
+    r"\bdescription\s*(?:is|:|=)\s*"
+    r"(?:\"(?P<double>[^\"]+)\"|'(?P<single>[^']+)'|"
+    r"(?P<plain>[^,;\n.]+))",
+    re.IGNORECASE,
+)
+REQUESTED_CHANGE = re.compile(
+    r"^\s*Requested change:\s*",
+    re.IGNORECASE | re.MULTILINE,
+)
 MONTHS = {
     "january": 1,
+    "jan": 1,
     "february": 2,
+    "feb": 2,
     "march": 3,
+    "mar": 3,
     "april": 4,
+    "apr": 4,
     "may": 5,
     "june": 6,
+    "jun": 6,
     "july": 7,
+    "jul": 7,
     "august": 8,
+    "aug": 8,
     "september": 9,
+    "sept": 9,
+    "sep": 9,
     "october": 10,
+    "oct": 10,
     "november": 11,
+    "nov": 11,
     "december": 12,
+    "dec": 12,
 }
-MONTH_NAMES = "|".join(MONTHS)
+MONTH_NAMES = "|".join(sorted(MONTHS, key=len, reverse=True))
 DAY_MONTH = re.compile(
     rf"\b(?P<day>\d{{1,2}})(?:st|nd|rd|th)?\s+"
     rf"(?P<month>{MONTH_NAMES})(?:\s+(?P<year>\d{{4}}))?\b",
@@ -99,7 +128,8 @@ DATE_RANGE_INTENT = re.compile(
 )
 CATEGORY_ALIASES = {
     "Dining": re.compile(
-        r"\b(?:eating|dining)\s+out\b|\brestaurants?\b",
+        r"\b(?:eating|dining)\s+out\b|\brestaurants?\b|"
+        r"\bcaf(?:e|é)s?\b|\bcoffee\s+shops?\b",
         re.IGNORECASE,
     ),
     "Groceries": re.compile(
@@ -118,48 +148,86 @@ FALLBACK = {
 }
 
 
-def parse_chat(message, transactions, categories):
-    error = None
-    for _attempt in range(2):
-        try:
-            response = requests.post(
-                f"{config.OLLAMA_URL}/api/chat",
-                json={
-                    "model": config.CHAT_MODEL,
-                    "messages": build_messages(
-                        message,
-                        transactions,
-                        categories,
-                        error,
-                    ),
-                    "format": "json",
-                    "stream": False,
-                    "options": {"temperature": 0},
-                },
-                timeout=config.AI_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
-            data = json.loads(response.json()["message"]["content"])
-        except requests.RequestException as request_error:
-            return {
-                **FALLBACK,
-                "reply": (
-                    "Tally could not reach the AI service. "
-                    "No changes were made."
+def create_plan(message, categories, previous_observation=None):
+    try:
+        response = requests.post(
+            f"{config.OLLAMA_URL}/api/chat",
+            json={
+                "model": config.CHAT_MODEL,
+                "messages": build_messages(
+                    message,
+                    categories,
+                    previous_observation,
                 ),
-                "fallback": True,
-            }
-        except (KeyError, TypeError, ValueError, RecursionError) as response_error:
-            error = str(response_error)
-            continue
+                "format": "json",
+                "stream": False,
+                "options": {"temperature": 0},
+            },
+            timeout=config.AI_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data = json.loads(response.json()["message"]["content"])
+    except requests.RequestException:
+        return {
+            **FALLBACK,
+            "reply": (
+                "Tally could not reach the AI service. "
+                "No changes were made."
+            ),
+            "fallback": True,
+            "planning_error": "planner_unavailable",
+            "retryable": False,
+        }
+    except (KeyError, TypeError, ValueError, RecursionError) as error:
+        return {
+            **FALLBACK,
+            "fallback": True,
+            "planning_error": str(error) or "invalid planner response",
+            "retryable": True,
+        }
 
-        error = validate_chat_response(data, categories)
-        if error is None:
-            data = normalize_read_query(data, message, categories)
-            error = semantic_validation_error(data, message)
-        if error is None:
-            return {**data, "fallback": False}
-    return {**FALLBACK, "fallback": True}
+    error = validate_chat_response(data, categories)
+    if error is None:
+        data = normalize_plan(data, message, categories)
+        error = semantic_validation_error(data, message, categories)
+    if error is not None:
+        return {
+            **FALLBACK,
+            "fallback": True,
+            "planning_error": error,
+            "retryable": True,
+        }
+    return {
+        **data,
+        "fallback": False,
+        "planning_error": None,
+        "retryable": False,
+    }
+
+
+def parse_chat(message, transactions, categories):
+    previous_observation = None
+    result = None
+    for _attempt in range(2):
+        result = create_plan(message, categories, previous_observation)
+        if not result["fallback"] or not result["retryable"]:
+            return public_plan(result)
+        previous_observation = {
+            "status": "failed",
+            "error": {
+                "code": "invalid_plan",
+                "message": result["planning_error"],
+            },
+        }
+    return public_plan(result or {**FALLBACK, "fallback": True})
+
+
+def public_plan(plan):
+    return {
+        key: value
+        for key, value in plan.items()
+        if key not in PLAN_INTERNAL_KEYS
+    }
 
 
 def validate_chat_response(data, categories=()):
@@ -238,7 +306,14 @@ def validate_chat_response(data, categories=()):
         value = filters.get(key)
         if value is not None and not is_iso_date(value):
             return f"{key} must be an ISO date"
-    if error := category_validation_error(fields, filters, categories):
+    if fields.get("date") is not None and not is_iso_date(fields["date"]):
+        return "date must be an ISO date"
+    if error := category_validation_error(
+        operation,
+        fields,
+        filters,
+        categories,
+    ):
         return error
     exact_date_filters = (
         filters.get("date") is not None,
@@ -256,15 +331,8 @@ def validate_chat_response(data, categories=()):
             "or since"
         )
 
-    if operation == "create":
-        if transaction_id is not None:
-            return "create must not include transaction_id"
-        missing = [
-            key for key in ("date", "merchant", "description", "amount")
-            if fields.get(key) is None
-        ]
-        if missing:
-            return f"create is missing fields: {', '.join(missing)}"
+    if operation == "create" and transaction_id is not None:
+        return "create must not include transaction_id"
     if operation == "update" and (
         not fields or (transaction_id is None and not filters)
     ):
@@ -277,7 +345,7 @@ def validate_chat_response(data, categories=()):
     return None
 
 
-def build_messages(message, transactions, categories, error):
+def build_messages(message, categories, previous_observation):
     prompt = (
         Path(__file__).resolve().parent.parent
         / "prompts"
@@ -302,8 +370,6 @@ def build_messages(message, transactions, categories, error):
         f"\nPrevious calendar week: {last_week_start.isoformat()} "
         f"to {last_week_end.isoformat()}."
         f"\nCategories: {json.dumps(categories, separators=(',', ':'))}"
-        f"\nRecent transactions: "
-        f"{json.dumps(transaction_context(transactions), separators=(',', ':'))}"
     )
     examples = [
         (
@@ -434,10 +500,14 @@ def build_messages(message, transactions, categories, error):
             },
         ])
     messages.append({"role": "user", "content": message})
-    if error:
+    if previous_observation:
         messages.append({
             "role": "user",
-            "content": f"Invalid response: {error}. Return corrected JSON only.",
+            "content": (
+                "The previous plan was rejected by trusted application code: "
+                f"{json.dumps(previous_observation, separators=(',', ':'))}. "
+                "Return corrected JSON only."
+            ),
         })
     return messages
 
@@ -456,15 +526,67 @@ def transaction_context(transactions):
     ]
 
 
-def category_validation_error(fields, filters, categories):
+def category_validation_error(operation, fields, filters, categories):
     ids = {item["id"] for item in categories}
     names = {item["name"].casefold() for item in categories}
-    for source in (fields, filters):
+    for source_name, source in (("fields", fields), ("filters", filters)):
+        if operation == "create" and source_name == "fields":
+            continue
         if source.get("category_id") is not None and source["category_id"] not in ids:
             return "category_id must match an available category"
         if source.get("category") is not None and source["category"].strip().casefold() not in names:
             return "category must match an available category"
     return None
+
+
+def normalize_plan(data, message, categories):
+    if data["operation"] == "read":
+        return normalize_read_query(data, message, categories)
+    if data["operation"] == "create":
+        return normalize_create_plan(data, message, categories)
+    return data
+
+
+def normalize_create_plan(data, message, categories):
+    normalized = {
+        **data,
+        "fields": dict(data["fields"]),
+    }
+    fields = normalized["fields"]
+    for key in tuple(fields):
+        if fields[key] is None:
+            fields.pop(key)
+    for key in ("merchant", "description"):
+        value = fields.get(key)
+        if value is not None and not text_value_is_grounded(value, message):
+            fields.pop(key)
+    value = fields.get("date")
+    if value is not None and not date_value_is_grounded(value, message):
+        fields.pop("date")
+    grounded = grounded_dates(message)
+    if len(grounded) == 1:
+        fields["date"] = next(iter(grounded))
+
+    description = explicit_description(message)
+    if description is not None:
+        fields["description"] = description
+
+    value = fields.get("amount")
+    if value is not None and not amount_value_is_grounded(value, message):
+        fields.pop("amount")
+    if "amount" not in fields:
+        amount = explicit_currency_amount(message)
+        if amount is not None:
+            fields["amount"] = amount
+
+    category = explicit_category_in_message(message, categories)
+    if category is not None:
+        fields.pop("category_id", None)
+        fields["category"] = category
+    elif category := category_in_message(message, categories):
+        fields.pop("category_id", None)
+        fields["category"] = category
+    return normalized
 
 
 def normalize_read_query(data, message, categories):
@@ -578,24 +700,90 @@ def parse_amount(value):
     return float(value.replace(",", ""))
 
 
-def category_in_message(message, categories):
-    category_names = {item["name"]: item["name"] for item in categories}
-    for name, pattern in CATEGORY_ALIASES.items():
-        if name in category_names and pattern.search(message):
-            return name
-    for category in sorted(
-        categories,
-        key=lambda item: len(item["name"]),
-        reverse=True,
-    ):
-        name = re.escape(category["name"])
-        patterns = (
-            rf"\b{name}\s+(?:purchases?|transactions?|spend|spending|expenses?)\b",
-            rf"\b(?:category|on|for|in)\s+{name}\b",
-        )
-        if any(re.search(pattern, message, re.IGNORECASE) for pattern in patterns):
-            return category["name"]
+def explicit_currency_amount(message):
+    for segment in reversed(conversation_segments(message)):
+        amounts = {
+            parse_amount(match.group(1))
+            for match in CURRENCY_AMOUNT.finditer(segment)
+        }
+        if amounts:
+            return next(iter(amounts)) if len(amounts) == 1 else None
     return None
+
+
+def explicit_description(message):
+    matches = list(EXPLICIT_DESCRIPTION.finditer(message))
+    if not matches:
+        return None
+    match = matches[-1]
+    value = next(
+        (
+            group
+            for group in (
+                match.group("double"),
+                match.group("single"),
+                match.group("plain"),
+            )
+            if group is not None
+        ),
+        "",
+    ).strip()
+    return value or None
+
+
+def category_in_message(message, categories):
+    for segment in reversed(conversation_segments(message)):
+        category_names = {item["name"]: item["name"] for item in categories}
+        for name, pattern in CATEGORY_ALIASES.items():
+            if name in category_names and pattern.search(segment):
+                return name
+        for category in sorted(
+            categories,
+            key=lambda item: len(item["name"]),
+            reverse=True,
+        ):
+            name = re.escape(category["name"])
+            patterns = (
+                rf"\b{name}\s+(?:purchases?|transactions?|spend|spending|expenses?)\b",
+                rf"\b(?:category|on|for|in)\s+{name}\b",
+            )
+            if any(
+                re.search(pattern, segment, re.IGNORECASE)
+                for pattern in patterns
+            ):
+                return category["name"]
+    return None
+
+
+def explicit_category_in_message(message, categories):
+    for segment in reversed(conversation_segments(message)):
+        for category in sorted(
+            categories,
+            key=lambda item: len(item["name"]),
+            reverse=True,
+        ):
+            name = re.escape(category["name"])
+            patterns = (
+                rf"\b(?:category|under|as)\s+(?:the\s+)?{name}"
+                rf"(?:\s+category)?\b",
+                rf"\b{name}\s+category\b",
+                rf"\b(?:in|to)\s+(?:the\s+)?{name}"
+                rf"(?=\s*(?:$|[,.!?;]|\bcategory\b))",
+            )
+            if any(
+                re.search(pattern, segment, re.IGNORECASE)
+                for pattern in patterns
+            ):
+                return category["name"]
+    return None
+
+
+def conversation_segments(message):
+    return [
+        segment.strip()
+        for segment in REQUESTED_CHANGE.split(message)
+        if segment.strip()
+    ]
 
 
 def remove_unmentioned_category(filters, message, categories):
@@ -625,7 +813,7 @@ def words_overlap(value, message):
     return bool(words & message_words)
 
 
-def semantic_validation_error(data, message):
+def semantic_validation_error(data, message, categories):
     has_date_filter = any(
         data["filters"].get(key) is not None
         for key in DATE_FILTERS
@@ -635,7 +823,201 @@ def semantic_validation_error(data, message):
             "date filters require a date or time period in the user request; "
             "remove date_from, date_to, and since"
         )
+    return write_grounding_error(data, message, categories)
+
+
+def write_grounding_error(data, message, categories):
+    if not isinstance(data, dict):
+        return "transaction plan must be an object"
+    operation = data.get("operation")
+    fields = data.get("fields")
+    filters = data.get("filters")
+    if operation not in {"create", "update", "delete"}:
+        return None
+    if not isinstance(fields, dict) or not isinstance(filters, dict):
+        return None
+
+    if operation in {"create", "update"}:
+        for key in ("merchant", "description"):
+            value = fields.get(key)
+            if (
+                value is not None
+                and not text_value_is_grounded(value, message)
+            ):
+                return (
+                    f"{key} must be explicitly grounded in the user request"
+                )
+        if (
+            fields.get("amount") is not None
+            and not amount_value_is_grounded(fields["amount"], message)
+        ):
+            return "amount must be explicitly grounded in the user request"
+        if (
+            fields.get("date") is not None
+            and not date_value_is_grounded(fields["date"], message)
+        ):
+            return "date must be explicitly grounded in the user request"
+        if operation == "update" and (
+            fields.get("category") is not None
+            or fields.get("category_id") is not None
+        ):
+            planned_category = planned_category_name(fields, categories)
+            explicit_category = explicit_category_in_message(
+                message,
+                categories,
+            )
+            if (
+                planned_category is None
+                or explicit_category is None
+                or planned_category.casefold()
+                != explicit_category.casefold()
+            ):
+                return (
+                    "updated category must be explicitly grounded in the "
+                    "user request"
+                )
+
+    if operation in {"update", "delete"}:
+        for key in ("q", "merchant"):
+            value = filters.get(key)
+            if (
+                value is not None
+                and not text_value_is_grounded(value, message)
+            ):
+                return (
+                    f"{key} filter must be grounded in the user request"
+                )
+        expected_amounts = extract_amount_filters(message)
+        for key in ("min_amount", "max_amount"):
+            if filters.get(key) is not None and (
+                key not in expected_amounts
+                or not math.isclose(
+                    float(filters[key]),
+                    float(expected_amounts[key]),
+                    abs_tol=0.000001,
+                )
+            ):
+                return (
+                    f"{key} filter must be grounded in the user request"
+                )
+        if (
+            filters.get("category") is not None
+            or filters.get("category_id") is not None
+        ):
+            planned_category = planned_category_name(filters, categories)
+            requested_category = category_in_message(message, categories)
+            if (
+                planned_category is None
+                or requested_category is None
+                or planned_category.casefold()
+                != requested_category.casefold()
+            ):
+                return (
+                    "category filter must be grounded in the user request"
+                )
+        if not date_filters_are_grounded(filters, message):
+            return "date filters must match the user request"
     return None
+
+
+def text_value_is_grounded(value, message):
+    value_words = {
+        word
+        for word in re.findall(r"[^\W_]+", value.casefold())
+        if len(word) >= 3
+    }
+    message_words = set(
+        re.findall(r"[^\W_]+", message.casefold())
+    )
+    if value_words:
+        return value_words <= message_words
+    return str(value).strip().casefold() in message.casefold()
+
+
+def amount_value_is_grounded(value, message):
+    amounts = []
+    for match in re.finditer(
+        r"(?<![a-z0-9])(?:aud\s*)?\$?\s*"
+        r"(-?[0-9][0-9,]*(?:\.\d{1,2})?)",
+        message,
+        re.IGNORECASE,
+    ):
+        try:
+            amounts.append(float(match.group(1).replace(",", "")))
+        except ValueError:
+            continue
+    return any(
+        math.isclose(float(value), amount, abs_tol=0.000001)
+        for amount in amounts
+    )
+
+
+def date_value_is_grounded(value, message):
+    if not DATE_INTENT.search(message):
+        return False
+    expected_dates = grounded_dates(message)
+    return value in expected_dates
+
+
+def grounded_dates(message):
+    lowered = message.casefold()
+    today = date.today()
+    dates = set()
+    if re.search(r"\b(?:today|tonight)\b", lowered):
+        dates.add(today.isoformat())
+    if re.search(r"\byesterday\b", lowered):
+        dates.add((today - timedelta(days=1)).isoformat())
+    if re.search(r"\btomorrow\b", lowered):
+        dates.add((today + timedelta(days=1)).isoformat())
+    dates.update(
+        re.findall(r"\b(?:19|20)\d{2}-\d{2}-\d{2}\b", message)
+    )
+    extracted = extract_date_filters(message)
+    if extracted.get("date"):
+        dates.add(extracted["date"])
+    dates.update(extracted.get("dates", []))
+    return dates
+
+
+def planned_category_name(source, categories):
+    category_name = source.get("category")
+    if isinstance(category_name, str):
+        return category_name.strip()
+    category_id = source.get("category_id")
+    return next(
+        (
+            category["name"]
+            for category in categories
+            if category["id"] == category_id
+        ),
+        None,
+    )
+
+
+def date_filters_are_grounded(filters, message):
+    planned = {
+        key: filters[key]
+        for key in DATE_FILTERS
+        if filters.get(key) is not None
+    }
+    if not planned:
+        return True
+    if not DATE_INTENT.search(message):
+        return False
+    expected = extract_date_filters(message)
+    if not expected:
+        return True
+    if expected.get("date"):
+        value = expected["date"]
+        return (
+            planned == {"date": value}
+            or planned == {"dates": [value]}
+            or planned == {
+                "date_from": value,
+                "date_to": value,
+            }
+        )
+    return planned == expected
 
 
 def is_iso_date(value):

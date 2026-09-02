@@ -1,9 +1,13 @@
 <section id="transaction-chat-panel"
          class="transaction-chat-panel"
-         aria-labelledby="transaction-chat-title">
+         aria-labelledby="transaction-chat-title"
+         hx-on:transaction-completed="document.getElementById('transaction-chat-input').value = ''">
     <div class="transaction-chat-heading">
         <h2 id="transaction-chat-title">Ask Tally</h2>
-        <p>Answers use your transaction history.</p>
+        <p>
+            Answers use your transaction history. Changes are only saved
+            after you review and confirm them.
+        </p>
     </div>
 
     <div class="transaction-chat-prompts"
