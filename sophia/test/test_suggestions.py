@@ -49,11 +49,11 @@ def test_approve_applies_and_refreshes_the_bills_table(live_client, monkeypatch)
     response = live_client.post(f"/ui/suggestions/{suggestion_id}/approve")
     assert response.status_code == 200
     body = _text(response)
-    # The response carries the refreshed panel plus the bills views out of
-    # band — the table shows the new row without any manual refresh.
+    # The response carries the refreshed panel plus the bills table out of
+    # band — the table shows the new row without any manual refresh. (Coming
+    # up and the Calendar are no longer on the page, so they don't ride along.)
     assert 'id="bills-table" hx-swap-oob="true"' in body
-    assert 'id="timeline" hx-swap-oob="true"' in body
-    assert 'id="calendar-card" hx-swap-oob="true"' in body
+    assert 'id="timeline"' not in body and 'id="calendar-card"' not in body
     assert "Disney Plus" in body
     created = [b for b in bills_db_module.list_bills() if b["name"] == "Disney Plus"]
     assert len(created) == 1 and created[0]["source"] == "chat"

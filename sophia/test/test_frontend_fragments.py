@@ -18,21 +18,23 @@ def test_bills_fragment_verbatim_header_and_columns(live_client):
     response = live_client.get("/ui/bills")
     assert response.status_code == 200
     text = _text(response)
-    assert "Bills & subscriptions ·" in text
+    assert "Bills & subscriptions" in text
+    assert "per month" in text  # the monthly total moved into the header line
     # Matched on the closing tag rather than "<th>Name</th>": the cells now carry
     # scope="col", so the opening tag is no longer bare.
-    for column in ("Name", "Amount", "Every", "Next billing", "Paid by", "Status"):
+    for column in ("Name", "Amount", "Next billing", "Status"):
         assert f">{column}</th>" in text
+    # Every and Paid by moved off the table (they live in the Edit form).
+    for gone in ("Every", "Paid by"):
+        assert f">{gone}</th>" not in text
     assert "Add a bill" in text
     # The prompt names where the bill came from. It only appears for a
     # source=f4_handoff bill that has not been confirmed -- GymCo in the seed.
     assert "Added from Spending Alerts — keep it?" in text
-    assert "Direct debit" in text
-    assert "Fortnight" in text
 
 
 def test_bills_table_column_order_is_pinned(live_client):
-    """app.js filters rows with SEARCHABLE_CELLS = [0, 2, 4, 5], which indexes
+    """app.js filters rows with SEARCHABLE_CELLS = [0, 3], which indexes
     cells by POSITION. Reordering or inserting a column makes the filter search
     the wrong ones -- and it fails silently: no error, the search simply stops
     matching. Nothing else in the suite holds that contract.
@@ -40,7 +42,7 @@ def test_bills_table_column_order_is_pinned(live_client):
     text = _text(live_client.get("/ui/bills"))
     headers = re.findall(r"<th[^>]*>(.*?)</th>", text, re.S)
     labels = [re.sub(r"<[^>]+>", "", header).strip() for header in headers]
-    assert labels == ["Name", "Amount", "Every", "Next billing", "Paid by", "Status", "Actions"]
+    assert labels == ["Name", "Amount", "Next billing", "Status", "Actions"]
 
 
 def test_actions_column_is_named_for_screen_readers(live_client):
@@ -69,17 +71,21 @@ def test_row_menus_render_closed_on_every_bills_table_path(live_client):
         assert not any("open" in tag for tag in tags), f"{label} shipped an open menu"
 
 
-def test_each_row_has_one_inline_action_and_three_behind_the_menu(live_client):
-    """Rows were 135px in the shell because four action buttons wrapped onto four
-    lines. One inline plus three in the disclosure is what makes a row one line.
+def test_each_row_has_at_most_one_inline_action_and_the_rest_behind_the_menu(live_client):
+    """The mock's visible actions only: Confirm for an unconfirmed handoff,
+    Cancel… for a live subscription, nothing inline for plain bills — and every
+    row still reaches all four flows (Edit / Cancel / Dispute / Record payment)
+    counting the disclosure menu. Rows stay one line either way.
     """
     text = _text(live_client.get("/ui/bills"))
     cells = re.findall(r'<td class="actions">(.*?)</td>', text, re.S)
     assert cells, "no actions cells rendered"
     for cell in cells:
         inline, menu = cell.split("<details", 1)
-        assert inline.count("<button") == 1, "expected exactly one inline action"
-        assert menu.count("<button") == 3, "expected three actions behind the menu"
+        assert inline.count("<button") <= 1, "expected at most one inline action"
+        assert 3 <= menu.count("<button") <= 4, "menu carries the remaining actions"
+        total = inline.count("<button") + menu.count("<button")
+        assert total == 4, "every flow stays reachable"
 
 
 def test_every_gated_write_trigger_names_its_change(live_client):
@@ -340,4 +346,4 @@ def test_total_answer_names_both_figures_and_quotes_the_header_number(live_clien
     assert "ongoing monthly total" in answer
 
     rate = answer.split("ongoing monthly total across all bills is ")[1].rstrip(".")
-    assert f"subscriptions · {rate}" in header
+    assert f"{rate} per month" in header

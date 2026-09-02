@@ -40,9 +40,11 @@ def test_post_ui_bills_add_returns_html_and_toast_and_oob(live_client):
     assert response.content_type.startswith("text/html")
     assert "HX-Trigger" in response.headers
     assert json.loads(response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
+    # Single-page layout: the write response is the refreshed table alone —
+    # Coming up and the Calendar are no longer on the page to refresh.
     body = response.get_data(as_text=True)
-    assert 'id="timeline"' in body and 'hx-swap-oob="true"' in body
-    assert 'id="calendar-card"' in body
+    assert 'id="bills-table"' in body
+    assert 'id="timeline"' not in body and 'id="calendar-card"' not in body
 
     fetched = bills_db_module.get_bill(bill_id)
     assert fetched["name"] == bill_name
@@ -59,7 +61,7 @@ def test_post_ui_bills_edit_changes_db_and_returns_oob(live_client):
     )
     assert response.status_code == 200
     assert json.loads(response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
-    assert 'hx-swap-oob="true"' in response.get_data(as_text=True)
+    assert 'id="bills-table"' in response.get_data(as_text=True)
     assert bills_db_module.get_bill(bill_id)["name"] == "Renamed Streaming"
 
 
@@ -98,7 +100,7 @@ def test_post_ui_payments_records_payment_and_refreshes_projection(live_client):
     response = live_client.post("/ui/payments", data={"bill_id": str(bill_id), "date": "2026-08-20", "amount": "12.50"})
     assert response.status_code == 201, response.get_data(as_text=True)
     assert "HX-Trigger" in response.headers
-    assert 'hx-swap-oob="true"' in response.get_data(as_text=True)
+    assert 'id="bills-table"' in response.get_data(as_text=True)
     payments = bills_db_module.list_bill_payments(bill_id)
     assert any(p["amount_cents"] == 1250 for p in payments)
 

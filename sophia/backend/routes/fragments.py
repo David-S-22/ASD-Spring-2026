@@ -131,6 +131,8 @@ def _render_bills_table():
                 # JSON API publishes and is untouched.
                 "status_tone": "upcoming" if status == "paid" and label.startswith("Due ") else status,
                 "needs_confirmation": bill.source == "f4_handoff" and bill.confirmed_at is None,
+                "type": bill.type,
+                "ended": bill.end_date is not None,
             }
         )
     monthly_total = money.format_actual(sum(b.amount_cents * expected_per_month(b.cadence) for b in bills))
@@ -209,10 +211,11 @@ def timeline_fragment():
 
 
 def _bills_write_response(toast_text, status=200, refresh_projection=True):
+    # The single-page layout no longer renders Coming up or the Calendar, so
+    # writes refresh only the table. refresh_projection is kept in the
+    # signature (callers still state intent) but is now a no-op — the
+    # /ui/timeline and /ui/calendar routes remain for direct use.
     html = _render_bills_table()
-    if refresh_projection:
-        html += _render_timeline(oob=True)
-        html += _render_calendar_card(oob=True)
     response = make_response(html, status)
     response.headers.update(_toast_headers(toast_text))
     return response
@@ -622,7 +625,7 @@ def _suggestion_action_response(action, suggestion_id):
     status = row["status"] if row else "failed"
     html = _render_suggestions_panel() + adapt_html
     if status == "applied":
-        html += _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
+        html += _render_bills_table_oob()
     response = make_response(html, 200)
     # The panel is the only surface that renders a decidable suggestion, and
     # this response replaces it wholesale — nothing else needs telling.
@@ -709,7 +712,7 @@ def chat_apply():
         message_id=message_id,
     )
     applied_html = render_template("chat_applied.html")
-    html = applied_html + _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
+    html = applied_html + _render_bills_table_oob()
     response = make_response(html, 200)
     response.headers.update(_toast_headers("Done — change saved."))
     return response

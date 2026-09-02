@@ -1,60 +1,29 @@
-/* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
-/* The panel pair sizes from this container, never from the viewport, and the
-   two tracks say what they actually need rather than trading on a percentage.
-
-   The table track floors at its own min-content (673px measured): that is the
-   width below which the action controls start disappearing, so it is the width
-   the table refuses to go under. 1fr gives it everything spare above that.
-
-   The chat track wants 320px and will surrender down to 240px, and only when
-   the table would otherwise be squeezed below its floor. So at the shell's
-   1052px column the chat gets its full 320px, and in the narrow band just above
-   the stacking breakpoint it gives up pixels one at a time instead of the table
-   clipping. An earlier version used clamp() with a percentage; it hit 320px
-   only above ~1230px and left the chat at 263px in the shell, which is the
-   cramped state this was supposed to fix. */
-.app-shell {
-  display: grid;
-  grid-template-columns: minmax(min-content, 1fr) minmax(240px, 320px);
+/* Bills feature layout: one page, one scroll — the table, then Disputes,
+   then Ask Tally. The two-track grid and the inner tab bar went with the
+   simplification; Calendar and Coming up are no longer rendered here. */
+.bills-page {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  max-width: 1320px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 1rem;
 }
 
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.bills-page .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
-.tabs button {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0.5em 0.25em;
-}
-
-.tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tab-panel {
-  grid-column: 1;
-  /* Grid items default to min-width:auto, which is the intrinsic width for a
-     table. The track above is already capped; this stops the item overflowing
-     the track it sits in. */
-  min-width: 0;
-}
-
+.disputes-section,
 .ask-tally {
-  grid-column: 2;
-  align-self: start;
-  position: sticky;
-  top: 1rem;
+  padding: 1rem;
+}
+
+.disputes-section > h3,
+.ask-tally > h3 {
+  margin-top: 0;
 }
 
 .bills-table {
@@ -62,12 +31,9 @@
   border-collapse: collapse;
 }
 
-/* index.html gives these divs class="card", but each fragment root replaces the
-   whole element and brings its own class instead -- so after the first swap the
-   card treatment is gone. That was invisible while everything was white on
-   off-white; on a dark palette it is the difference between a panel and a void,
-   so the treatment names them directly. (#disputes-tab is the one fragment that
-   does return class="card".) */
+/* The fragment root replaces the index.html placeholder (and its class="card")
+   wholesale, so the card treatment is named directly on the fragment classes.
+   Calendar and Coming up keep theirs for anyone hitting their routes directly. */
 .bills-panel,
 .calendar-card,
 .timeline {
@@ -77,12 +43,24 @@
   padding: 0.25rem 0 1rem;
 }
 
+.bills-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bills-head .monthly-total {
+  color: var(--mut);
+  white-space: nowrap;
+}
+
 /* The table runs full-bleed to the panel edge and the chrome around it is
    padded instead. Horizontal padding on the panel comes straight off the
    table's width, and the table has none to give: the scroll container's own
    vertical scrollbar already takes 15px, which was enough to push the table
    back into horizontal overflow and undo #96's no-scrollbar guarantee. */
-.bills-panel > h2,
+.bills-panel > .bills-head,
 .bills-panel > button,
 .calendar-card > *,
 .timeline > * {
@@ -197,8 +175,7 @@
    and the name column are allowed to wrap. Holding every one of them at nowrap
    pinned the table's intrinsic width at 854px, 170px past the shell's track. */
 .bills-table td:nth-child(2),
-.bills-table td:nth-child(3),
-.bills-table td:nth-child(4) {
+.bills-table td:nth-child(3) {
   white-space: nowrap;
 }
 
@@ -341,25 +318,8 @@
   font-size: 0.85em;
 }
 
-/* Stack below 1024px. The old breakpoint was 900px, which left a broken band:
-   at a 1000px window the table track fell to 617px against a 673px min-content,
-   so 36 action controls clipped and the scrollbar returned while the panels
-   were still side by side. Side-by-side survives to ~1009px in the shell and
-   ~961px standalone once the chat can give way to 240px; 1024 clears both. */
-@media (max-width: 1024px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-panel,
-  .ask-tally {
-    grid-column: 1;
-  }
-
-  .ask-tally {
-    position: static;
-  }
-}
+/* The single-column page needs no stacking breakpoint; the table's own
+   scroll container handles narrow viewports. */
 
 .timeline ul,
 .dispute-panel ul,
@@ -497,14 +457,6 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   padding: 0.6em 1.2em;
   border-radius: 999px;
-}
-
-.tab-page {
-  display: none;
-}
-
-.tab-page.active {
-  display: block;
 }
 
 .modal-form {
@@ -734,4 +686,22 @@
 #bills-root .htmx-request button:disabled,
 #bills-root button.htmx-request:disabled {
   cursor: progress;
+}
+
+/* Full-width chat: the input row stretches, the Ask button keeps its size,
+   and long conversations scroll inside the card instead of growing the page. */
+.chat-panel form {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.chat-panel form input[name="message"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-panel .history {
+  max-height: 24rem;
+  overflow-y: auto;
 }
