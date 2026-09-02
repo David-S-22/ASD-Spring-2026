@@ -126,7 +126,12 @@ def parse_chat(message, transactions, categories):
                 f"{config.OLLAMA_URL}/api/chat",
                 json={
                     "model": config.CHAT_MODEL,
-                    "messages": _messages(message, transactions, categories, error),
+                    "messages": build_messages(
+                        message,
+                        transactions,
+                        categories,
+                        error,
+                    ),
                     "format": "json",
                     "stream": False,
                     "options": {"temperature": 0},
@@ -150,8 +155,8 @@ def parse_chat(message, transactions, categories):
 
         error = validate_chat_response(data, categories)
         if error is None:
-            data = _normalize_read_query(data, message, categories)
-            error = _semantic_error(data, message)
+            data = normalize_read_query(data, message, categories)
+            error = semantic_validation_error(data, message)
         if error is None:
             return {**data, "fallback": False}
     return {**FALLBACK, "fallback": True}
@@ -172,7 +177,7 @@ def validate_chat_response(data, categories=()):
     calculation = data["calculation"]
     if operation not in OPERATIONS:
         return f"operation must be one of {sorted(OPERATIONS)}"
-    if transaction_id is not None and not _positive_id(transaction_id):
+    if transaction_id is not None and not is_positive_id(transaction_id):
         return "transaction_id must be a positive integer or null"
     if not isinstance(fields, dict) or not isinstance(filters, dict):
         return "fields and filters must be JSON objects"
@@ -180,14 +185,14 @@ def validate_chat_response(data, categories=()):
         return f"unsupported fields: {', '.join(unknown)}"
     if unknown := sorted(set(filters) - FILTERS):
         return f"unsupported filters: {', '.join(unknown)}"
-    if _invalid_calculation(calculation):
+    if is_invalid_calculation(calculation):
         return (
             "calculation must be count, sum, average, largest, none, "
             "or a unique list"
         )
     if data["handoff"] not in HANDOFFS:
         return f"handoff must be one of {sorted(HANDOFFS)}"
-    if not _one_line(data["reply"], 300):
+    if not is_one_line(data["reply"], 300):
         return "reply must be one non-empty line of at most 300 characters"
 
     for source, keys in (
@@ -200,32 +205,40 @@ def validate_chat_response(data, categories=()):
             },
         ),
     ):
-        if any(value is not None and not _one_line(value) for key in keys if (value := source.get(key)) is not None):
+        if any(
+            value is not None and not is_one_line(value)
+            for key in keys
+            if (value := source.get(key)) is not None
+        ):
             return "text fields must be non-empty strings"
     for source, keys in (
         (fields, {"amount"}),
         (filters, {"min_amount", "max_amount"}),
     ):
-        if any(value is not None and not _number(value) for key in keys if (value := source.get(key)) is not None):
+        if any(
+            value is not None and not is_number(value)
+            for key in keys
+            if (value := source.get(key)) is not None
+        ):
             return "amount fields must be finite numbers"
     for source in (fields, filters):
         value = source.get("category_id")
-        if value is not None and not _positive_id(value):
+        if value is not None and not is_positive_id(value):
             return "category_id must be a positive integer"
     dates = filters.get("dates")
     if dates is not None and (
         not isinstance(dates, list)
         or not dates
         or len(dates) > 31
-        or any(not _iso_date(value) for value in dates)
+        or any(not is_iso_date(value) for value in dates)
         or len(dates) != len(set(dates))
     ):
         return "dates must be a unique list of 1 to 31 ISO dates"
     for key in ("date", "date_from", "date_to", "since"):
         value = filters.get(key)
-        if value is not None and not _iso_date(value):
+        if value is not None and not is_iso_date(value):
             return f"{key} must be an ISO date"
-    if error := _category_error(fields, filters, categories):
+    if error := category_validation_error(fields, filters, categories):
         return error
     exact_date_filters = (
         filters.get("date") is not None,
@@ -264,7 +277,7 @@ def validate_chat_response(data, categories=()):
     return None
 
 
-def _messages(message, transactions, categories, error):
+def build_messages(message, transactions, categories, error):
     prompt = (
         Path(__file__).resolve().parent.parent
         / "prompts"
@@ -290,7 +303,7 @@ def _messages(message, transactions, categories, error):
         f"to {last_week_end.isoformat()}."
         f"\nCategories: {json.dumps(categories, separators=(',', ':'))}"
         f"\nRecent transactions: "
-        f"{json.dumps(_transaction_context(transactions), separators=(',', ':'))}"
+        f"{json.dumps(transaction_context(transactions), separators=(',', ':'))}"
     )
     examples = [
         (
@@ -429,7 +442,7 @@ def _messages(message, transactions, categories, error):
     return messages
 
 
-def _transaction_context(transactions):
+def transaction_context(transactions):
     return [
         {
             "id": item["id"],
@@ -443,7 +456,7 @@ def _transaction_context(transactions):
     ]
 
 
-def _category_error(fields, filters, categories):
+def category_validation_error(fields, filters, categories):
     ids = {item["id"] for item in categories}
     names = {item["name"].casefold() for item in categories}
     for source in (fields, filters):
@@ -454,7 +467,7 @@ def _category_error(fields, filters, categories):
     return None
 
 
-def _normalize_read_query(data, message, categories):
+def normalize_read_query(data, message, categories):
     if data["operation"] != "read":
         return data
 
@@ -465,23 +478,23 @@ def _normalize_read_query(data, message, categories):
     if LIST_INTENT.search(message) and not RANKING_INTENT.search(message):
         normalized["calculation"] = "none"
 
-    date_filters = _date_filters(message)
+    date_filters = extract_date_filters(message)
     if date_filters:
         for key in DATE_FILTERS:
             normalized["filters"].pop(key, None)
         normalized["filters"].update(date_filters)
 
-    amount_filters = _amount_filters(message)
+    amount_filters = extract_amount_filters(message)
     for key in ("min_amount", "max_amount"):
         normalized["filters"].pop(key, None)
     normalized["filters"].update(amount_filters)
 
-    category = _category_in_message(message, categories)
+    category = category_in_message(message, categories)
     if category is not None:
         normalized["filters"].pop("category_id", None)
         normalized["filters"]["category"] = category
     else:
-        _remove_unmentioned_category(
+        remove_unmentioned_category(
             normalized["filters"],
             message,
             categories,
@@ -489,7 +502,7 @@ def _normalize_read_query(data, message, categories):
     return normalized
 
 
-def _date_filters(message):
+def extract_date_filters(message):
     matches = []
     for pattern in (DAY_MONTH, MONTH_DAY):
         for match in pattern.finditer(message):
@@ -497,7 +510,7 @@ def _date_filters(message):
             day = int(match.group("day"))
             year = match.group("year")
             try:
-                value = _resolve_date(month, day, year)
+                value = resolve_date(month, day, year)
             except ValueError:
                 continue
             matches.append((match.start(), value))
@@ -526,7 +539,7 @@ def _date_filters(message):
     return {"date": value}
 
 
-def _resolve_date(month, day, year):
+def resolve_date(month, day, year):
     if year is not None:
         return date(int(year), month, day)
     today = date.today()
@@ -534,10 +547,10 @@ def _resolve_date(month, day, year):
     return value if value <= today else date(today.year - 1, month, day)
 
 
-def _amount_filters(message):
+def extract_amount_filters(message):
     if match := AMOUNT_BETWEEN.search(message):
-        first = _amount(match.group(1))
-        second = _amount(match.group(2))
+        first = parse_amount(match.group(1))
+        second = parse_amount(match.group(2))
         return {
             "min_amount": min(first, second),
             "max_amount": max(first, second),
@@ -545,14 +558,14 @@ def _amount_filters(message):
 
     filters = {}
     if match := MIN_AMOUNT.search(message):
-        amount = _amount(match.group(2))
+        amount = parse_amount(match.group(2))
         filters["min_amount"] = (
             amount
             if match.group(1).casefold() == "at least"
             else round(amount + 0.01, 2)
         )
     if match := MAX_AMOUNT.search(message):
-        amount = _amount(match.group(2))
+        amount = parse_amount(match.group(2))
         filters["max_amount"] = (
             amount
             if match.group(1).casefold() == "at most"
@@ -561,11 +574,11 @@ def _amount_filters(message):
     return filters
 
 
-def _amount(value):
+def parse_amount(value):
     return float(value.replace(",", ""))
 
 
-def _category_in_message(message, categories):
+def category_in_message(message, categories):
     category_names = {item["name"]: item["name"] for item in categories}
     for name, pattern in CATEGORY_ALIASES.items():
         if name in category_names and pattern.search(message):
@@ -585,7 +598,7 @@ def _category_in_message(message, categories):
     return None
 
 
-def _remove_unmentioned_category(filters, message, categories):
+def remove_unmentioned_category(filters, message, categories):
     category_name = filters.get("category")
     if category_name is None and filters.get("category_id") is not None:
         category_name = next(
@@ -596,13 +609,13 @@ def _remove_unmentioned_category(filters, message, categories):
             ),
             None,
         )
-    if category_name is None or _words_overlap(category_name, message):
+    if category_name is None or words_overlap(category_name, message):
         return
     filters.pop("category", None)
     filters.pop("category_id", None)
 
 
-def _words_overlap(value, message):
+def words_overlap(value, message):
     words = {
         word
         for word in re.findall(r"[a-z0-9]+", value.casefold())
@@ -612,7 +625,7 @@ def _words_overlap(value, message):
     return bool(words & message_words)
 
 
-def _semantic_error(data, message):
+def semantic_validation_error(data, message):
     has_date_filter = any(
         data["filters"].get(key) is not None
         for key in DATE_FILTERS
@@ -625,7 +638,7 @@ def _semantic_error(data, message):
     return None
 
 
-def _iso_date(value):
+def is_iso_date(value):
     if not isinstance(value, str):
         return False
     try:
@@ -634,7 +647,7 @@ def _iso_date(value):
         return False
 
 
-def _invalid_calculation(value):
+def is_invalid_calculation(value):
     if isinstance(value, str):
         return value not in CALCULATIONS
     return (
@@ -646,11 +659,11 @@ def _invalid_calculation(value):
     )
 
 
-def _positive_id(value):
+def is_positive_id(value):
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
-def _number(value):
+def is_number(value):
     return (
         isinstance(value, (int, float))
         and not isinstance(value, bool)
@@ -658,7 +671,7 @@ def _number(value):
     )
 
 
-def _one_line(value, maximum=None):
+def is_one_line(value, maximum=None):
     return (
         isinstance(value, str)
         and bool(value.strip())
