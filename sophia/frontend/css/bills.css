@@ -558,6 +558,17 @@
   gap: 1rem;
 }
 
+/* Destructive, so it reads as such — same palette the error fragment uses. */
+.dispute-panel .remove-dispute {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  background: transparent;
+}
+
+.dispute-panel .remove-dispute:hover {
+  background: var(--bad-bg);
+}
+
 .dispute-list ul {
   list-style: none;
   padding: 0;

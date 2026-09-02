@@ -386,3 +386,51 @@ def test_ui_chat_apply_refuses_an_amount_that_is_not_a_number(live_client):
     )
     assert response.status_code == 422
     assert "must be an amount" in _text(response)
+
+
+def test_ui_dispute_delete_removes_it_and_refreshes_the_list(live_client, monkeypatch):
+    """The Disputes tab's remove button: dispute and its drafts go, the panel
+    falls back to the next dispute (or the empty state), and the list arrives
+    refreshed out of band so the removed row doesn't linger."""
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    bill_id, _response, _name = _add_bill(live_client)
+    created = live_client.post("/ui/disputes", data={"bill_id": str(bill_id), "reason": "Duplicate charge"})
+    assert created.status_code == 201
+    dispute_id = max(d["id"] for d in bills_db_module.list_disputes())
+    assert bills_db_module.list_dispute_drafts(dispute_id)
+
+    response = live_client.post(f"/ui/disputes/{dispute_id}/delete")
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger")
+    body = response.get_data(as_text=True)
+    assert 'id="dispute-list" hx-swap-oob="true"' in body
+    assert "Duplicate charge" not in body
+    assert bills_db_module.get_dispute(dispute_id) is None
+    assert bills_db_module.list_dispute_drafts(dispute_id) == []
+
+
+def test_ui_dispute_delete_missing_is_a_clean_422(live_client):
+    response = live_client.post("/ui/disputes/99999/delete")
+    assert response.status_code == 422
+    assert "dispute not found" in response.get_data(as_text=True)
+
+
+def test_ui_dispute_status_change_refreshes_the_list_chips(live_client, monkeypatch):
+    """Marking a dispute sent used to leave the list row's 'draft' chip
+    standing until the tab was reopened."""
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    bill_id, _response, _name = _add_bill(live_client)
+    live_client.post("/ui/disputes", data={"bill_id": str(bill_id), "reason": "Chip check"})
+    dispute_id = max(d["id"] for d in bills_db_module.list_disputes())
+
+    response = live_client.post(f"/ui/disputes/{dispute_id}/status", data={"status": "sent"})
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="dispute-list" hx-swap-oob="true"' in body
+    assert "chip-dispute-sent" in body

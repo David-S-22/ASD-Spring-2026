@@ -406,7 +406,10 @@ def dispute_panel():
 
 
 def _dispute_write_response(dispute_id, toast_text, status=200):
-    html = _render_dispute_panel(dispute_id=dispute_id)
+    # The list rides along out of band so its status chips track the panel —
+    # marking a dispute sent used to leave the row's "draft" chip standing
+    # until the tab was reopened.
+    html = _render_dispute_panel(dispute_id=dispute_id) + _render_dispute_list(oob=True)
     response = make_response(html, status)
     response.headers.update(_toast_headers(toast_text))
     return response
@@ -435,7 +438,7 @@ def disputes_regenerate(dispute_id):
     return _dispute_write_response(dispute_id, "Done — change saved.")
 
 
-def _render_disputes_tab():
+def _dispute_list_rows():
     disputes = bills_db.list_disputes()
     bills_by_id = {b["id"]: b for b in bills_db.list_bills()}
     rows = []
@@ -450,12 +453,32 @@ def _render_disputes_tab():
                 "opened_at": _short_date(date.fromisoformat(d["opened_at"])),
             }
         )
-    return render_template("disputes_tab.html", disputes=rows)
+    return rows
+
+
+def _render_dispute_list(oob=False):
+    return render_template("dispute_list.html", disputes=_dispute_list_rows(), oob=oob)
+
+
+def _render_disputes_tab():
+    return render_template("disputes_tab.html", disputes=_dispute_list_rows())
 
 
 @bp.get("/disputes-tab")
 def disputes_tab():
     return _render_disputes_tab()
+
+
+@bp.post("/disputes/<int:dispute_id>/delete")
+def disputes_delete(dispute_id):
+    disputes_service.delete_dispute(dispute_id)
+    # No dispute_id: the panel falls back to the first remaining dispute, or
+    # the empty state once the last one is gone. The list refresh drops the
+    # removed row.
+    html = _render_dispute_panel() + _render_dispute_list(oob=True)
+    response = make_response(html, 200)
+    response.headers.update(_toast_headers("Done — removed."))
+    return response
 
 
 # --- suggestions: the approve/reject window ---------------------------------
