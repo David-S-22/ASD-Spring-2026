@@ -288,10 +288,44 @@ billsRoot.addEventListener("toast", function (evt) {
   showToast(typeof text === "string" ? text : "Done.");
 });
 
+// The Disputes card is collapsed by default: a grid of tiles, with the letter
+// panel BELOW them and hidden until a tile is clicked. On a full grid the panel
+// therefore opens off-screen, so opening it has to bring it into view.
+//
+// Only the closed -> open transition scrolls. Every write inside an open panel
+// (Mark sent, Regenerate) re-renders it through the same target, and scrolling
+// on each of those yanks the page out from under whoever just clicked.
+function revealDisputePanel() {
+  var panel = document.getElementById("dispute-panel");
+  if (panel && !panel.hidden) {
+    panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+var disputePanelWasHidden = false;
+
+billsRoot.addEventListener("htmx:beforeSwap", function (evt) {
+  var target = evt.detail && evt.detail.target;
+  disputePanelWasHidden = !!(target && target.id === "dispute-panel" && target.hidden);
+});
+
+billsRoot.addEventListener("htmx:afterSettle", function () {
+  if (disputePanelWasHidden) {
+    disputePanelWasHidden = false;
+    revealDisputePanel();
+  }
+});
+
 // Historically switched inner tabs; with the single-page layout the server's
-// switchTab trigger (sent when a dispute is opened) scrolls the Disputes
-// section into view instead — same intent, no tabs.
+// switchTab trigger (sent when a dispute is created) reveals the freshly opened
+// letter instead — same intent, no tabs. Falls back to the section heading when
+// the panel did not open, so the card is still found.
 billsRoot.addEventListener("switchTab", function () {
+  var panel = document.getElementById("dispute-panel");
+  if (panel && !panel.hidden) {
+    revealDisputePanel();
+    return;
+  }
   var section = document.getElementById("disputes-section");
   if (section) {
     section.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -401,6 +435,16 @@ billsRoot.addEventListener("click", function (evt) {
   var setAside = evt.target.closest('[data-action="set-aside"]');
   if (setAside) {
     showToast(setAside.getAttribute("data-toast") || "Done — change saved.");
+    return;
+  }
+
+  var closeDispute = evt.target.closest('[data-action="close-dispute-panel"]');
+  if (closeDispute) {
+    var panel = document.getElementById("dispute-panel");
+    if (panel) {
+      panel.innerHTML = "";
+      panel.hidden = true;
+    }
     return;
   }
 

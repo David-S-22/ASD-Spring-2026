@@ -734,3 +734,55 @@
   max-height: 24rem;
   overflow-y: auto;
 }
+
+
+/* --- Collapsed disputes (preview) ---------------------------------------- */
+
+.collapsed-disputes {
+  display: block;
+}
+
+.collapsed-disputes .dispute-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.collapsed-disputes .dispute-list ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.collapsed-disputes .dispute-list ul li {
+  display: block;
+}
+
+.collapsed-disputes .dispute-list-item {
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+}
+
+.collapsed-disputes .dispute-list-item:hover {
+  border-color: var(--accent);
+}
+
+.collapsed-disputes .dispute-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  position: relative;
+}
+
+/* In flow, right-aligned — NOT absolutely positioned. Out of flow it reserved
+   no space, and the panel's first in-flow child is conditional: with no
+   context line and a single draft version that child is the letter textarea at
+   width:100%, which then ran 24px UNDER the button. Measured on the seed: 2 of
+   10 disputes, where elementFromPoint at the textarea's top-right returned the
+   Close button — so clicking into the letter closed the panel instead. */
+.collapsed-disputes .dispute-panel .close-dispute {
+  display: block;
+  margin: 0 0 0.6rem auto;
+}

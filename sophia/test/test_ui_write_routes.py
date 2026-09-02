@@ -8,6 +8,7 @@ background thread, temp seeded SQLite) so "DB state changed" is checked
 against the real service, not a mock.
 """
 import json
+import re
 
 from sophia.backend.clients import bills_db as bills_db_module
 from conftest import response_text as _text
@@ -412,6 +413,88 @@ def test_ui_dispute_delete_removes_it_and_refreshes_the_list(live_client, monkey
     assert "Duplicate charge" not in body
     assert bills_db_module.get_dispute(dispute_id) is None
     assert bills_db_module.list_dispute_drafts(dispute_id) == []
+
+
+def test_disputes_tab_starts_collapsed_and_fetches_no_panel(live_client):
+    """The Disputes card opens as tiles only. Two contracts app.js leans on:
+    the panel is hidden (its scroll-on-open keys off the hidden -> visible
+    transition), and nothing fetches a panel on load -- a stray hx-trigger="load"
+    here would open someone's letter unasked and defeat the whole layout."""
+    text = _text(live_client.get("/ui/disputes-tab"))
+    assert "collapsed-disputes" in text
+    panel = re.search(r'<div id="dispute-panel"[^>]*>', text)
+    assert panel, "the tab must ship a panel placeholder for writes to target"
+    assert "hidden" in panel.group(0)
+    assert "hx-trigger" not in panel.group(0)
+    assert 'hx-target="#dispute-panel"' in text, "tiles must target the panel"
+
+
+def test_open_dispute_panel_is_not_hidden(live_client):
+    """The counterweight to every "panel is hidden" assertion in this file.
+    Without it, making the panel permanently hidden -- which would kill the
+    feature outright -- passes the entire suite."""
+    dispute_id = bills_db_module.list_disputes()[0]["id"]
+    text = _text(live_client.get(f"/ui/disputes?dispute_id={dispute_id}"))
+    panel = re.search(r'<div class="dispute-panel" id="dispute-panel"[^>]*>', text)
+    assert panel, "panel root missing"
+    assert "hidden" not in panel.group(0), "a panel showing a dispute must be visible"
+    assert "close-dispute-panel" in text
+
+
+def test_creating_a_dispute_refreshes_the_tile_grid(live_client, monkeypatch):
+    """Every other dispute write appends the list out of band; create did not.
+    The grid is only ever populated by #disputes-tab's one-shot hx-trigger="load",
+    so a freshly drafted dispute had no tile -- and once Close wiped the panel
+    there was no control left anywhere that could reopen it. A page reload was
+    the only recovery, and drafting again burns a second AI call and inserts a
+    duplicate, because create_dispute does not dedupe."""
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    bill_id, _r, _n = _add_bill(live_client)
+    body = live_client.post(
+        "/ui/disputes", data={"bill_id": str(bill_id), "reason": "Charged after cancelling"}
+    ).get_data(as_text=True)
+
+    assert 'id="dispute-list" hx-swap-oob="true"' in body, "the tile grid must ride along"
+    new_id = max(d["id"] for d in bills_db_module.list_disputes())
+    assert f"dispute_id={new_id}" in body, "the new dispute needs a tile that can reopen it"
+
+
+def test_ui_dispute_delete_collapses_the_panel_instead_of_opening_another(live_client, monkeypatch):
+    """With the collapsed-by-default Disputes card, removing a dispute must
+    leave the panel shut. The old always-open layout fell back to disputes[0],
+    which now reads as "I deleted one and an unrelated dispute sprang open" --
+    and the swapped-in panel carries no hidden attribute, so nothing collapses
+    it again short of finding the Close button on a letter you never asked for.
+    """
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        lambda model, messages, timeout=None: (_ for _ in ()).throw(RuntimeError("no model in tests")),
+    )
+    doomed_bill_id, _r, _n = _add_bill(live_client)
+    live_client.post("/ui/disputes", data={"bill_id": str(doomed_bill_id), "reason": "Delete this one"})
+    doomed_id = max(d["id"] for d in bills_db_module.list_disputes())
+    # The seed ships disputes of its own, so survivors are guaranteed here --
+    # which is exactly the case that used to spring one of them open.
+    assert len(bills_db_module.list_disputes()) > 1
+
+    body = live_client.post(f"/ui/disputes/{doomed_id}/delete").get_data(as_text=True)
+
+    panel = body.split('id="dispute-list"')[0]
+    assert "close-dispute" not in panel, "deleting one dispute must not open another"
+    assert 'class="empty"' in panel, "the panel should come back as the empty state"
+    assert re.search(r'id="dispute-panel"[^>]*\shidden', panel), "the collapsed panel must come back hidden"
+
+
+def test_empty_dispute_panel_is_hidden_so_it_leaves_no_stray_rule(live_client):
+    """The collapsed layout gives .dispute-panel a top border and padding, so an
+    empty-but-visible panel paints a horizontal rule under the tile grid with no
+    Close button to dismiss it (the button is only rendered when a dispute is)."""
+    text = live_client.get("/ui/disputes?dispute_id=99999").get_data(as_text=True)
+    assert 'id="dispute-panel"' in text
+    assert "hidden" in text
 
 
 def test_ui_dispute_delete_missing_is_a_clean_422(live_client):

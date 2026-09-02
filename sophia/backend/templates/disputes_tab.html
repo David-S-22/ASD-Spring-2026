@@ -1,5 +1,7 @@
-{# Disputes tab: left list of disputes, right the selected dispute's panel. #}
-<div class="disputes-tab">
+{# Disputes, collapsed by default: a compact grid of dispute cards and nothing
+   else. Clicking a card loads the full letter panel BELOW the list; a Close
+   button on the panel collapses it again. No panel is fetched on load. #}
+<div class="disputes-tab collapsed-disputes">
   {% include "dispute_list.html" %}
-  <div id="dispute-panel" class="dispute-panel" hx-get="/bills-backend/ui/disputes" hx-trigger="load" hx-swap="outerHTML"></div>
+  <div id="dispute-panel" class="dispute-panel" hidden></div>
 </div>

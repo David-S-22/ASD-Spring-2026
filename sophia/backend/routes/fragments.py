@@ -361,7 +361,14 @@ def dispute_form(bill_id):
     return render_template("dispute_form.html", bill=bill)
 
 
-def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False):
+def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False, collapsed=False):
+    # collapsed=True renders the empty (hidden) panel without consulting the
+    # fallback below. The no-argument GET keeps that fallback -- it is a
+    # published read and two fragment tests hold it -- but a write that ends
+    # with nothing selected wants the panel shut, not someone else's letter.
+    if collapsed:
+        return render_template("dispute_panel.html", dispute=None, draft=None, context_line=None, versions=[], selected_version=None, oob=oob)
+
     disputes = bills_db.list_disputes()
     dispute = None
     if dispute_id is not None:
@@ -421,7 +428,11 @@ def _dispute_write_response(dispute_id, toast_text, status=200):
 @bp.post("/disputes")
 def disputes_create():
     dispute = disputes_service.create_dispute(request.form.get("bill_id", type=int), request.form.get("reason"))
-    html = _render_dispute_panel(dispute_id=dispute["id"])
+    # The list rides along, as it does for every other dispute write. It used
+    # not to, and the grid is only ever filled by #disputes-tab's one-shot
+    # hx-trigger="load" — so a new dispute had no tile, and Close then wiped
+    # the only way back to the letter that had just cost an AI call.
+    html = _render_dispute_panel(dispute_id=dispute["id"]) + _render_dispute_list(oob=True)
     response = make_response(html, 201)
     response.headers["HX-Trigger"] = json.dumps({"toast": "Done — change saved.", "switchTab": "disputes"})
     return response
@@ -475,10 +486,11 @@ def disputes_tab():
 @bp.post("/disputes/<int:dispute_id>/delete")
 def disputes_delete(dispute_id):
     disputes_service.delete_dispute(dispute_id)
-    # No dispute_id: the panel falls back to the first remaining dispute, or
-    # the empty state once the last one is gone. The list refresh drops the
-    # removed row.
-    html = _render_dispute_panel() + _render_dispute_list(oob=True)
+    # The panel collapses rather than falling back to the first remaining
+    # dispute: under the collapsed-by-default card that fallback read as "I
+    # removed one and an unrelated letter sprang open". The list refresh drops
+    # the removed row.
+    html = _render_dispute_panel(collapsed=True) + _render_dispute_list(oob=True)
     response = make_response(html, 200)
     response.headers.update(_toast_headers("Done — removed."))
     return response
