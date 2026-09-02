@@ -460,8 +460,17 @@ billsRoot.addEventListener("click", function (evt) {
     history.replaceState(null, "", "/");
     return;
   }
-  if (location.hash.indexOf("#bills?confirm=") === 0) {
-    var billId = parseInt(location.hash.split("confirm=")[1], 10);
+  // Canonical form is "?confirm=7#bills" -- parameter in the query, bare page
+  // name in the hash, because the shared shell matches the hash EXACTLY and
+  // falls back to Home on anything else. The legacy "#bills?confirm=7" form is
+  // still read so older links and docs keep working standalone.
+  var params = new URLSearchParams(location.search);
+  var legacyBills = location.hash.indexOf("#bills?confirm=") === 0;
+  if (params.has("confirm") || legacyBills) {
+    var billId = parseInt(
+      legacyBills ? location.hash.split("confirm=")[1] : params.get("confirm"),
+      10
+    );
     if (isNaN(billId)) {
       return;
     }
@@ -479,7 +488,9 @@ billsRoot.addEventListener("click", function (evt) {
     billsRoot.addEventListener("htmx:afterSettle", scrollToBill);
     return;
   }
-  if (location.hash.indexOf("#chat?") === 0) {
+  // Chat intents: "?handoff=<id>#bills" or "?message=<text>#bills". "#chat" is
+  // not a shell page at all, so the legacy hash form is standalone-only.
+  if (params.has("handoff") || params.has("message") || location.hash.indexOf("#chat?") === 0) {
     var chat = document.querySelector(".ask-tally");
     if (chat) {
       chat.scrollIntoView({ block: "start" });
