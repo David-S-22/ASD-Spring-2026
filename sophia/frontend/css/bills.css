@@ -99,11 +99,18 @@
    a sticky header only works against its nearest scrolling ancestor, and two
    nested scroll contexts is how you get a header that sticks to the wrong one.
 
-   620px, not the ~950px ten rows would need. Rows are ~94px because the four
-   action controls wrap to three lines in the shell's 684px column, so ten rows
-   plus the header comes to 991px -- taller than the viewport it has to sit in.
-   620px keeps six rows and the header on screen, which covers Spotify (row 3)
-   and GymCo (row 6): the two rows the demo actually touches. */
+   620px is kept, but the arithmetic behind it has changed completely and the
+   figures here were re-measured on 2 Sep rather than carried over. The previous
+   note said rows were ~94px because four action controls wrapped to three
+   lines; both numbers were stale. Measured in the shell before this change:
+   rows were 135px, uniformly, with the controls on FOUR lines.
+
+   After moving three of them into the row menu, rows are 47px where the name
+   fits on one line, 61-62px where it wraps to two, and 108px for GymCo, which
+   carries the Spending Alerts prompt. Twelve seeded bills plus the header come
+   to 755px, so the cap still engages and the sticky header is still doing
+   something -- about ten rows sit above the fold, which covers Spotify (row 3)
+   and GymCo (row 6), the two the demo actually touches. */
 .table-scroll {
   max-height: 620px;
   overflow: auto;
@@ -124,6 +131,23 @@
   background: var(--raised);
   border-bottom: 2px solid var(--line);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  /* Typography stated here rather than inherited, because inheriting meant two
+     different tables. `.bills-table thead th` (0,1,2) already outranks the
+     shell's `thead th` (0,0,2), but only for properties it actually declares --
+     and it declared none of these, so inside the shell the header rendered
+     12.8px uppercase muted and standalone it rendered 16px sentence-case ink.
+     Measured, 2 Sep. The shell's treatment is the one adopted: it is the house
+     style, it is the context Bills is normally seen in, and it is the more
+     compact of the two.
+
+     No white-space: nowrap -- the headers are deliberately allowed to wrap
+     (see the nth-child rule below), which is what holds the table's intrinsic
+     width down to something the shell's track can fit. */
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mut);
 }
 
 .bills-table .no-match td {
@@ -153,10 +177,18 @@
   border: 0;
 }
 
+/* Padding goes UP here while the row height goes down by roughly two thirds,
+   which only looks contradictory. The rows were never tall because the cells
+   were padded; they were tall because the four action controls wrapped onto
+   four lines. Fix the wrapping (see .row-actions below) and the cells can
+   afford more room, not less. line-height is restated rather than left to
+   inherit from #bills-root so that the table's density is legible in one rule
+   instead of two files. */
 .bills-table th,
 .bills-table td {
   text-align: left;
-  padding: 0.5em 0.6em;
+  padding: var(--sp-3);
+  line-height: var(--lh);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
@@ -170,17 +202,18 @@
   white-space: nowrap;
 }
 
-/* The four actions wrap to a second line when the column is narrow instead of
-   being clipped. This is the change that actually fixes it: at the shell's
-   684px track the buttons need more width than one line can give them, and
-   nowrap turned that into "Dis" and a hidden Record payment rather than a
-   second line. Wide enough and they still sit on one line.
+/* Name is the only column with no nowrap and no fixed content, so the auto
+   table algorithm settles every other column first and gives Name whatever is
+   left -- 99px in the shell, measured. At that width "Share-house utilities
+   kitty" wraps to four lines and the NAME becomes the row-height driver, which
+   is how rows stayed tall even after the action buttons stopped wrapping. The
+   floor is what stops Name being the residual column; it is a min, not a width,
+   so a wider viewport still gives it more. */
+.bills-table th:first-child,
+.bills-table td:first-child {
+  min-width: 9.5rem;
+}
 
-   Deliberately NOT display:flex. A flex <td> stops being a table-cell, drops
-   out of the column-width algorithm and paints on top of its neighbour -- the
-   status and actions cells measured at the identical x and width, with the
-   empty header column collapsed to 15px. Ordinary inline-block flow wraps just
-   as well and keeps the column sizing intact. */
 /* The shell's stylesheet carries `tbody tr:hover { background: #273449 }` so
    that feature tables pulled in over htmx pick up its theme. Bills brings its
    own light table and its own dark ink, so that rule paints #1d222c text onto a
@@ -195,16 +228,102 @@
   border-color: currentColor;
 }
 
+/* The <td> stays a real table-cell. An earlier attempt made this element
+   display:flex, which drops it out of the column-width algorithm: the status
+   and actions cells then measured at identical x and width, painting on top of
+   one another, with the empty header column collapsed to 15px. The fix is not
+   to avoid flex, it is to put the flex on a <div> INSIDE the cell -- the cell
+   keeps its table semantics and .row-actions does the layout. */
 .bills-table .actions {
   white-space: normal;
   text-align: right;
 }
 
-.bills-table .actions button {
-  margin: 0.1em 0 0.1em 0.25em;
-  font-size: 0.8em;
-  padding: 0.24em 0.5em;
+/* Re-scoped to carry an id, and that is the entire point of the change.
+   `#bills-root button.btn-sm` in theme.css is (1,1,1); the old selector here
+   was (0,2,1), so font-size and padding never applied -- measured 2 Sep as
+   13.6px / 3.4px 8.16px in BOTH contexts, which are theme.css's numbers, not
+   these. margin and white-space were uncontested and did apply, which is why
+   this rule could not simply be deleted. At (1,2,1) all four now land. */
+#bills-root .bills-table .actions button {
+  margin: 0;
+  font-size: var(--fs-sm);
+  padding: 0.3em 0.7em;
   white-space: nowrap;
+}
+
+/* flex-start, not center: when the menu opens the <details> grows downward, and
+   centring would drag Edit down to the middle of the expanded block instead of
+   leaving it level with the toggle it sits beside. */
+#bills-root .row-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+#bills-root .row-menu {
+  position: relative;
+}
+
+/* <summary> is not a <button>, so theme.css's `#bills-root button` block does
+   not reach it -- without a full treatment here it renders as bare ink text
+   with a disclosure triangle beside it. Both marker resets are required:
+   list-style handles Firefox and current Chromium, the ::-webkit- pseudo
+   handles Safari and older Chromium. */
+#bills-root .row-menu-toggle {
+  list-style: none;
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  padding: 0.45em 0.7em;
+  cursor: pointer;
+  user-select: none;
+}
+
+#bills-root .row-menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+#bills-root .row-menu-toggle:hover,
+#bills-root .row-menu[open] > .row-menu-toggle {
+  border-color: var(--accent);
+}
+
+/* The toggle is a focus stop and the UA outline is suppressed by the reset
+   above, so it needs its own. */
+#bills-root .row-menu-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Stacked in normal flow rather than floated over the table. An absolutely
+   positioned panel is the obvious implementation and the wrong one here:
+   .table-scroll is overflow:auto, so it would be clipped on precisely the
+   bottom rows where a menu opens downward. Growing the row is the honest
+   trade -- a disclosure that takes up room while it is open.
+
+   Qualified on [open] rather than declaring display unconditionally. Chromium
+   hides a closed <details> through ::details-content with content-visibility,
+   which an id-specificity `display` on the child does not defeat -- but other
+   engines have used a plain `details:not([open]) > *:not(summary)` UA rule,
+   which it would. Scoping to [open] means this never races the UA sheet in
+   either implementation.
+
+   Worth knowing when checking this: under content-visibility the hidden
+   buttons keep non-zero getBoundingClientRect() boxes. Measuring height > 0
+   reports them as visible when they are not. checkVisibility() and
+   elementFromPoint both give the right answer. */
+#bills-root .row-menu[open] > .row-menu-items {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
 }
 
 /* Badge, prompt and Confirm get room to breathe rather than piling up as three
@@ -503,7 +622,19 @@
   margin-left: 0.5em;
 }
 
-button:disabled {
-  opacity: 0.6;
+/* Two problems with the old `button:disabled { opacity: .6; cursor: progress }`.
+   It was unscoped, so it reached the shell's own controls -- and being (0,1,1)
+   it lost to `#bills-root button:disabled` for Bills' buttons while still
+   winning for anything the shell left at a lower specificity. Net effect: the
+   one place it applied was the wrong place.
+
+   And the intent was never "disabled", it was "request in flight" -- hence
+   cursor: progress. htmx says that directly. Both selectors are needed because
+   the two hx-disabled-elt shapes put the class in different places:
+   `find button[type=submit]` (chat_panel, dispute_form) marks the FORM, while
+   `this` (dispute_panel's Send feedback) marks the BUTTON. opacity is dropped;
+   theme.css already owns the disabled look. */
+#bills-root .htmx-request button:disabled,
+#bills-root button.htmx-request:disabled {
   cursor: progress;
 }

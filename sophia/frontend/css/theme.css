@@ -31,32 +31,79 @@
      both --bg and --card without a second set of values. */
   --a100: rgba(56, 189, 248, 0.10);
   --a200: rgba(56, 189, 248, 0.18);
+  /* The edge companion to --a200, matching the -line alphas below. */
+  --a300: rgba(56, 189, 248, 0.38);
 
   /* Status colours: a saturated foreground with a low-alpha wash of itself
      behind. Solid pale backgrounds like the old light set turn to mud on a dark
-     surface, and the foreground has to carry the meaning anyway. */
+     surface, and the foreground has to carry the meaning anyway.
+
+     Each tone carries two alphas, not one. The first version set a chip's
+     border-color to the same value as its background, which is the same as
+     having no border: at 0.14 over --card the edge is invisible and the chip
+     reads as loose coloured text rather than a badge. The -line value is the
+     same hue at an alpha that actually resolves against both --card and the
+     --a100 row-hover wash. */
   --ok: var(--color-success, #4ade80);
-  --ok-bg: rgba(74, 222, 128, 0.14);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.14);
+  --ok-bg: rgba(74, 222, 128, 0.16);
+  --ok-line: rgba(74, 222, 128, 0.38);
+  /* The shell publishes no --color-warning today. Naming the source anyway
+     costs nothing -- the fallback is what resolves -- and means Bills tracks
+     the shell automatically if warning is ever added to the shared palette. */
+  --warn: var(--color-warning, #fbbf24);
+  --warn-bg: rgba(251, 191, 36, 0.16);
+  --warn-line: rgba(251, 191, 36, 0.38);
   --bad: var(--color-danger, #f87171);
-  --bad-bg: rgba(248, 113, 113, 0.14);
+  --bad-bg: rgba(248, 113, 113, 0.16);
+  --bad-line: rgba(248, 113, 113, 0.38);
 
   --scrim: rgba(2, 6, 23, 0.66);
+
+  /* Type and spacing scales. These are Bills-local literals with no --color-*
+     equivalent, so unlike the palette above they have no shell source to track.
+     They must NOT be named after a shell token: `--radius: var(--radius, 10px)`
+     would be a self-reference, which is invalid at computed-value time and
+     silently resolves to unset rather than erroring. That is the reason the
+     colour tokens above are --bg/--ink/--mut and not --color-bg and friends. */
+  --lh: 1.35;
+  --fs-sm: 0.82rem;
+  --fs-base: 0.95rem;
+  --sp-1: 0.25rem;
+  --sp-2: 0.4rem;
+  --sp-3: 0.6rem;
+  --sp-4: 0.9rem;
+  --r-sm: 6px;
 
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font, "Segoe UI", system-ui, -apple-system, sans-serif);
+  /* Claimed deliberately, for both contexts at once. The shell's body rule sets
+     line-height: 1.5 and font-size is left to the UA, so before this Bills
+     rendered at 1.5 inside the shell and at the UA's ~1.2 standalone -- the
+     table was a different height depending on where you looked at it. Declaring
+     both here is what makes the two contexts agree. */
+  line-height: var(--lh);
+  font-size: var(--fs-base);
   /* Standalone, #bills-root is only as tall as its content and nothing else
      paints the page, so without this the area below it falls back to white.
      In the shell the panel is always taller than this anyway. */
   min-height: 100vh;
 }
 
-* {
+/* Scoped, like every other paint rule in this file. A bare `*` selector reaches
+   every element in the shell's document, not only Bills' subtree -- which is
+   the exact class of leak the header comment above says must not exist. It has
+   been harmless so far only because the shell declares the same value; relying
+   on that is a coincidence, not a design. */
+#bills-root,
+#bills-root * {
   box-sizing: border-box;
 }
 
+/* The one deliberate exception to the scoping rule. Standalone there is no
+   other stylesheet, and the UA's 8px body margin would inset the whole app; in
+   the shell this is a no-op because the shell sets the same value. It cannot be
+   scoped to #bills-root, because body is the element that needs it. */
 body {
   margin: 0;
 }
@@ -73,7 +120,13 @@ body {
 
 #bills-root button {
   font-family: inherit;
-  border-radius: 6px;
+  /* Claimed for the same reason as line-height above: the shell sets
+     `button, input, textarea, select { font-size: 0.9rem }`, which Bills did
+     not override, so buttons rendered 14.4px in the shell and at the UA's
+     ~13.3px standalone. .btn-sm was immune (its 0.85em resolves against the
+     cell either way); everything else was not. */
+  font-size: var(--fs-base);
+  border-radius: var(--r-sm);
   border: 1px solid var(--line);
   background: var(--raised);
   color: var(--ink);
@@ -151,16 +204,22 @@ body {
   border: 1px solid transparent;
 }
 
+/* Deliberately left unscoped, unlike the paint rules above. Scoping these to
+   #bills-root would raise them to an id specificity that beats
+   `.bills-table tbody tr:hover .chip`, the rule in bills.css that swaps the
+   border to currentColor so a badge stays legible over the row-hover wash --
+   the tone would win and the hover fix would silently stop working. The class
+   names are Bills-specific enough that the leak is theoretical. */
 .chip-paid {
   background: var(--ok-bg);
   color: var(--ok);
-  border-color: var(--ok-bg);
+  border-color: var(--ok-line);
 }
 
 .chip-due {
   background: var(--warn-bg);
   color: var(--warn);
-  border-color: var(--warn-bg);
+  border-color: var(--warn-line);
 }
 
 /* Paid for the current cycle, but the next charge is within 7 days. Neither
@@ -169,11 +228,35 @@ body {
 .chip-upcoming {
   background: var(--a200);
   color: var(--accent);
-  border-color: var(--a200);
+  border-color: var(--a300);
 }
 
 .chip-overdue {
   background: var(--bad-bg);
   color: var(--bad);
-  border-color: var(--bad-bg);
+  border-color: var(--bad-line);
+}
+
+/* The dispute lifecycle tones. These class names are emitted by
+   disputes_tab.html but had no rule anywhere, so every dispute chip rendered as
+   a bare .chip -- transparent border, inherited ink -- and the three states
+   were indistinguishable from each other and from plain text. Draft is
+   deliberately the muted one: it is the only state that is not yet an action
+   the user has taken. */
+.chip-dispute-draft {
+  background: var(--raised);
+  color: var(--mut);
+  border-color: var(--line);
+}
+
+.chip-dispute-sent {
+  background: var(--a200);
+  color: var(--accent);
+  border-color: var(--a300);
+}
+
+.chip-dispute-resolved {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: var(--ok-line);
 }
