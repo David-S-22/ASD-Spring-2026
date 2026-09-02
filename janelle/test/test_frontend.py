@@ -104,7 +104,7 @@ def test_transaction_pagination_uses_compact_single_row_layout():
     assert "display: none;" in mobile_styles
 
 
-def test_add_transaction_button_loads_jinja_form_with_htmx():
+def test_toolbar_buttons_load_transaction_and_category_forms_with_htmx():
     page = (
         REPOSITORY_ROOT
         / "janelle"
@@ -113,12 +113,43 @@ def test_add_transaction_button_loads_jinja_form_with_htmx():
         / "transactions_page.jinja"
     ).read_text(encoding="utf-8")
 
+    assert 'class="transactions-toolbar-actions"' in page
+    assert 'id="add-category-button"' in page
+    assert 'hx-get="/transactions-backend/ui/categories/new"' in page
+    assert "+ Add category" in page
     assert 'id="add-transaction-button"' in page
     assert 'type="button"' in page
     assert 'hx-get="/transactions-backend/ui/transactions/new"' in page
     assert 'hx-target="#transactions-content"' in page
     assert 'hx-swap="outerHTML"' in page
     assert "+ Add transaction" in page
+
+
+def test_category_form_contains_fields_and_htmx_actions():
+    form = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "category_form.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="add-category-form"' in form
+    assert 'hx-post="/transactions-backend/ui/categories"' in form
+    assert 'hx-target="#transactions-content"' in form
+    assert 'hx-swap="outerHTML"' in form
+    assert 'hx-disabled-elt="#save-category-button"' in form
+    assert "Back to transactions" in form
+    assert 'id="category-name"' in form
+    assert 'name="name"' in form
+    assert 'maxlength="80"' in form
+    assert 'id="category-type"' in form
+    assert 'name="type"' in form
+    assert 'value="need"' in form
+    assert 'value="want"' in form
+    assert 'value="saving"' in form
+    assert 'id="save-category-button"' in form
+    assert form.count("required") == 1
 
 
 def test_transaction_form_contains_required_fields_and_htmx_actions():

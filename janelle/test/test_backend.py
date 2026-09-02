@@ -518,6 +518,92 @@ def test_new_transaction_form_loads_categories_from_database(
     )
 
 
+def test_new_category_form_contains_category_fields(client: FlaskClient):
+    response = client.get("/ui/categories/new")
+
+    assert response.status_code == 200
+    assert "Add a category" in response.text
+    assert 'id="category-name"' in response.text
+    assert 'name="name"' in response.text
+    assert 'id="category-type"' in response.text
+    assert 'name="type"' in response.text
+    assert 'hx-post="/transactions-backend/ui/categories"' in response.text
+
+
+def test_ui_create_category_posts_payload_and_returns_page(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    post = Mock(return_value=response_with_json(
+        {
+            "id": 90,
+            "name": "Education",
+            "type": "saving",
+        },
+        status=201,
+    ))
+    get = Mock(return_value=response_with_json([
+        {"id": 90, "name": "Education", "type": "saving"},
+    ]))
+    monkeypatch.setattr(backend_app.requests, "post", post)
+    monkeypatch.setattr(backend_app.requests, "get", get)
+
+    response = client.post(
+        "/ui/categories",
+        data={
+            "name": "Education",
+            "type": "saving",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Category saved." in response.text
+    assert '<option value="90">Education</option>' in response.text
+    post.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+        json={
+            "name": "Education",
+            "type": "saving",
+        },
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    get.assert_called_once_with(
+        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+
+
+def test_ui_create_category_preserves_database_error(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(
+        backend_app.requests,
+        "post",
+        Mock(return_value=response_with_json(
+            {
+                "error": "category name already exists",
+                "code": "category_name_conflict",
+            },
+            status=409,
+        )),
+    )
+
+    response = client.post(
+        "/ui/categories",
+        data={
+            "name": "Dining",
+            "type": "want",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "category name already exists" in response.text
+    assert 'value="Dining"' in response.text
+    assert '<option value="want"' in response.text
+    assert "selected" in response.text
+
+
 def test_transactions_page_loads_category_filter_options(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,

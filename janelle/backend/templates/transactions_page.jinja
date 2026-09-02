@@ -4,13 +4,23 @@
             <h1>Transactions</h1>
             <p>Review the transactions you have entered.</p>
         </div>
-        <button id="add-transaction-button"
-                type="button"
-                hx-get="/transactions-backend/ui/transactions/new"
-                hx-target="#transactions-content"
-                hx-swap="outerHTML">
-            + Add transaction
-        </button>
+        <div class="transactions-toolbar-actions">
+            <button id="add-category-button"
+                    class="secondary-action-button"
+                    type="button"
+                    hx-get="/transactions-backend/ui/categories/new"
+                    hx-target="#transactions-content"
+                    hx-swap="outerHTML">
+                + Add category
+            </button>
+            <button id="add-transaction-button"
+                    type="button"
+                    hx-get="/transactions-backend/ui/transactions/new"
+                    hx-target="#transactions-content"
+                    hx-swap="outerHTML">
+                + Add transaction
+            </button>
+        </div>
     </div>
 
     {% if notice %}

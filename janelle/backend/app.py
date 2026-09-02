@@ -6,13 +6,15 @@ from flask import Flask, jsonify, make_response, render_template, request
 from . import config
 from .Helpers import (
     align_transactions_with_corresponding_category_names,
+    database_response_error,
     format_currency,
     format_transaction_date,
     json_object,
     json_response,
+    render_category_form,
     render_transaction_form,
-    render_transaction_table,
     render_transaction_page,
+    render_transaction_table,
 )
 from .services.chat_service import ChatError, apply_preview, handle_message
 
@@ -109,6 +111,43 @@ def setup_app(db_url: str) -> Flask:
     def get_new_transaction_form():
         return render_transaction_form(db_url)
 
+    @application.get("/ui/categories/new")
+    def get_new_category_form():
+        return render_category_form()
+
+    @application.post("/ui/categories")
+    def create_ui_category():
+        values = request.form.to_dict()
+        payload = {
+            "name": values.get("name"),
+            "type": values.get("type") or None,
+        }
+        try:
+            response = requests.post(
+                f"{db_url}/categories",
+                json=payload,
+                timeout=config.DATABASE_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException:
+            return render_category_form(
+                "The category could not be saved because the database is unavailable.",
+                values,
+            )
+
+        if response.status_code >= 400:
+            return render_category_form(
+                database_response_error(
+                    response,
+                    "The category could not be saved.",
+                ),
+                values,
+            )
+
+        return render_transaction_page(
+            db_url,
+            notice="Category saved.",
+        )
+
     @application.post("/ui/transactions")
     def create_ui_transaction():
         values = request.form.to_dict()
@@ -141,18 +180,12 @@ def setup_app(db_url: str) -> Flask:
             )
 
         if response.status_code >= 400:
-            try:
-                error_payload = response.json()
-            except (ValueError, RecursionError):
-                error_payload = {}
-            error = (
-                error_payload.get("error")
-                if isinstance(error_payload, dict)
-                else None
-            )
             return render_transaction_form(
                 db_url,
-                error or "The transaction could not be saved.",
+                database_response_error(
+                    response,
+                    "The transaction could not be saved.",
+                ),
                 values,
             )
 

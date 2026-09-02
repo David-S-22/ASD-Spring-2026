@@ -154,6 +154,28 @@ def get_form_categories(db_url):
     return categories
 
 
+def database_response_error(response, fallback):
+    try:
+        payload = response.json()
+    except (ValueError, RecursionError):
+        return fallback
+    if not isinstance(payload, dict):
+        return fallback
+    error = payload.get("error")
+    return error if isinstance(error, str) and error else fallback
+
+
+def render_category_form(error=None, values=None):
+    return render_template(
+        "category_form.jinja",
+        error=error,
+        values=values or {
+            "name": "",
+            "type": "",
+        },
+    )
+
+
 def render_transaction_page(db_url, notice=None):
     filter_error = None
     try:
