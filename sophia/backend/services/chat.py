@@ -161,6 +161,16 @@ def _build_preview(data):
 # excluded: _normalise_chat_fields falls back to the name, honestly.
 CREATE_REQUIRED = ["name", "amount_cents", "cadence", "next_billing_date", "type"]
 
+# Enum fields vetted at proposal time, mirroring the DB API's validation. A
+# value outside these used to become an Approve button that could only fail
+# ("change rent from a bill to none" → type="none" → a doomed suggestion);
+# now it becomes a rephrase request before anything is proposed.
+ENUM_FIELDS = {
+    "cadence": {"weekly", "fortnightly", "monthly"},
+    "type": {"bill", "subscription"},
+    "status": {"draft", "sent", "resolved"},  # dispute status — the only whitelisted "status"
+}
+
 MISSING_FIELD_QUESTIONS = {
     "name": "what the bill is called",
     "amount_cents": "the amount (in dollars)",
@@ -190,6 +200,9 @@ def _vet_proposal(preview):
         for key in ("next_billing_date", "end_date", "date"):
             if fields.get(key):
                 date.fromisoformat(str(fields[key]))
+        for key, allowed_values in ENUM_FIELDS.items():
+            if key in fields and fields[key] not in allowed_values:
+                raise ServiceError(f"{key} must be one of {sorted(allowed_values)}")
     except ServiceError as error:
         return None, f"Tally couldn't turn that into a change ({error.message}) — try rephrasing."
     except ValueError:

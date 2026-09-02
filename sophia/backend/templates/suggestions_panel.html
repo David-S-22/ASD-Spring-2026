@@ -14,11 +14,4 @@
     {% include "suggestion_card.html" %}
   </div>
   {% endfor %}
-  {# Resolution notes for the chat's inline copies of these cards: app.js
-     reads them after every swap of this panel and flips any matching
-     .history card to the resolved state. Rendered state, not events — see
-     the note in fragments._suggestion_action_response. #}
-  {% for note in resolved %}
-  <span class="resolved-note" data-suggestion-id="{{ note.id }}" data-status="{{ note.status }}" hidden></span>
-  {% endfor %}
 </div>

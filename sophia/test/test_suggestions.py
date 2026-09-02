@@ -55,9 +55,6 @@ def test_approve_applies_and_refreshes_the_bills_table(live_client, monkeypatch)
     assert 'id="timeline" hx-swap-oob="true"' in body
     assert 'id="calendar-card" hx-swap-oob="true"' in body
     assert "Disney Plus" in body
-    # the fresh panel carries the resolution note the chat card reconciles from
-    assert f'data-suggestion-id="{suggestion_id}" data-status="applied"' in body
-
     created = [b for b in bills_db_module.list_bills() if b["name"] == "Disney Plus"]
     assert len(created) == 1 and created[0]["source"] == "chat"
     assert bills_db_module.get_suggestion(suggestion_id)["status"] == "applied"
@@ -77,8 +74,6 @@ def test_reject_changes_nothing_and_tells_the_model(live_client, monkeypatch):
     assert response.status_code == 200
     assert bills_db_module.get_bill(target["id"]) is not None
     assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
-    body = _text(response)
-    assert f'data-suggestion-id="{suggestion_id}" data-status="rejected"' in body
     outcome = bills_db_module.list_chat_messages()[-1]
     assert "rejected by the user" in outcome["content"]
     assert "NOT applied" in outcome["content"]
@@ -93,7 +88,6 @@ def test_approving_a_delete_for_a_missing_bill_fails_honestly(live_client, monke
     response = live_client.post(f"/ui/suggestions/{suggestion_id}/approve")
     assert response.status_code == 200
     body = _text(response)
-    assert f'data-suggestion-id="{suggestion_id}" data-status="failed"' in body
     assert "bill not found" in json.loads(response.headers["HX-Trigger"])["toast"]
     row = bills_db_module.get_suggestion(suggestion_id)
     assert row["status"] == "failed" and "bill not found" in row["error"]
@@ -151,3 +145,44 @@ def test_api_suggestion_endpoints_roundtrip(live_client, monkeypatch):
     applied = live_client.post(f"/api/chat/suggestions/{suggestion_id}/approve")
     assert applied.status_code == 200
     assert live_client.post(f"/api/chat/suggestions/{suggestion_id}/reject").status_code == 409
+
+
+def test_invalid_enum_value_becomes_a_question_not_a_proposal(live_client, monkeypatch):
+    """Live-model case from the field: 'change rent from a bill to none' →
+    type="none". That used to become an Approve button that could only fail;
+    it must be a rephrase request, with nothing proposed."""
+    before_pending = len(bills_db_module.list_suggestions(status="pending"))
+    response = _propose(live_client, monkeypatch, {
+        "op": "update", "entity": "bill", "id": 1,
+        "fields": {"type": "none"}, "question": "none",
+        "say": "I've suggested changing the rent from a bill to none."})
+    body = _text(response)
+    assert "couldn't turn that into a change" in body
+    assert "type must be one of" in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == before_pending
+
+
+def test_invalid_cadence_becomes_a_question_not_a_proposal(live_client, monkeypatch):
+    before_pending = len(bills_db_module.list_suggestions(status="pending"))
+    response = _propose(live_client, monkeypatch, {
+        "op": "create", "entity": "bill", "id": None,
+        "fields": {"name": "Daily Juice", "amount": 5, "cadence": "daily",
+                   "next_billing_date": "2026-09-01", "type": "subscription"},
+        "question": "none", "say": "Adding it."})
+    assert "cadence must be one of" in _text(response)
+    assert len(bills_db_module.list_suggestions(status="pending")) == before_pending
+
+
+def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatch):
+    """One surface for one decision: the reply carries a pointer, and the only
+    decidable card in the response is the panel's (arriving out of band)."""
+    response = _propose(live_client, monkeypatch, CREATE_DISNEY, message="add disney plus")
+    body = _text(response)
+    assert "Review it in" in body  # the pointer line
+    # every decidable card in the response belongs to the panel: one per
+    # visible (pending or failed) suggestion, none inline in the chat reply
+    visible = len([s for s in bills_db_module.list_suggestions() if s["status"] in ("pending", "failed")])
+    panel_part = body[body.index('id="suggestions-panel"'):]
+    assert body.count('class="suggestion-card') == visible
+    assert panel_part.count('class="suggestion-card') == visible
+    assert 'id="suggestions-panel" hx-swap-oob="true"' in body
