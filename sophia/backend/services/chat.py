@@ -5,7 +5,7 @@ touches bills, payments, or disputes directly. apply() is the only path
 that writes those, always through the same CRUD calls a manual edit uses.
 """
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 
 from sophia.backend import config
 from sophia.backend.ai import chat_prompt, guard
@@ -150,7 +150,57 @@ def _build_preview(data):
     op, entity = data.get("op"), data.get("entity")
     if not op or not entity:
         return None
+    if op == "read":
+        # A read is a question, not a change; there is nothing to apply and a
+        # Confirm button for it could only end in "unsupported op 'read'".
+        return None
     return {"op": op, "entity": entity, "id": data.get("id"), "fields": data.get("fields")}
+
+
+# What a bill create must carry before it is worth proposing. merchant is
+# excluded: _normalise_chat_fields falls back to the name, honestly.
+CREATE_REQUIRED = ["name", "amount_cents", "cadence", "next_billing_date", "type"]
+
+MISSING_FIELD_QUESTIONS = {
+    "name": "what the bill is called",
+    "amount_cents": "the amount (in dollars)",
+    "cadence": "how often it bills (weekly, fortnightly or monthly)",
+    "next_billing_date": "the next billing date",
+    "type": "whether it's a bill or a subscription",
+}
+
+
+def _vet_proposal(preview):
+    """Vet a bill/payment proposal *before* it reaches the user.
+
+    Returns (preview, None) when the proposal is appliable, or (None, reply)
+    when it is not — the reply asks for what's missing instead of presenting
+    a Confirm button that can only fail. This is the deterministic backstop
+    beneath the prompt's "ask, don't invent" instruction: even if the model
+    ignores it and emits an under-specified create, no appliable proposal
+    exists until the user has supplied the details.
+    """
+    if preview["entity"] not in ("bill", "payment"):
+        return preview, None
+    try:
+        fields = _normalise_chat_fields(preview["entity"], preview["op"], preview["fields"] or {})
+        allowed = BILL_FIELD_WHITELIST[preview["entity"]]
+        for key in fields:
+            if key not in allowed:
+                raise ServiceError(f"field '{key}' cannot be set via chat")
+        for key in ("next_billing_date", "end_date", "date"):
+            if fields.get(key):
+                date.fromisoformat(str(fields[key]))
+    except ServiceError as error:
+        return None, f"Tally couldn't turn that into a change ({error.message}) — try rephrasing."
+    except ValueError:
+        return None, "Tally needs dates as a real calendar date (like 5 September) — try rephrasing."
+    if preview["entity"] == "bill" and preview["op"] == "create":
+        missing = [f for f in CREATE_REQUIRED if not fields.get(f)]
+        if missing:
+            wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
+            return None, f"Happy to add that — I just need {wants}. I won't guess details you haven't given me."
+    return preview, None
 
 
 def send_message(message):
@@ -169,6 +219,10 @@ def send_message(message):
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")
     preview = _build_preview(data)
+    if preview:
+        preview, reply_override = _vet_proposal(preview)
+        if reply_override:
+            reply = reply_override
 
     assistant_row = bills_db.create_chat_message(
         {"role": "assistant", "content": reply, "op_json": json.dumps(preview) if preview else None}
