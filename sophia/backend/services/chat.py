@@ -15,7 +15,9 @@ from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
+from sophia.backend.services import bills as bills_service
 from sophia.backend.services import disputes as disputes_service
+from sophia.backend.services import payments as payments_service
 from sophia.backend.services.errors import NotFound, ServiceError
 
 # The model is asked for the real column names, but a small model drifts, and
@@ -47,6 +49,14 @@ BILL_FIELD_WHITELIST = {
     "payment": {"bill_id", "date", "amount_cents"},
     "dispute": {"bill_id", "reason", "status"},
 }
+
+# Keys the model may not send raw, even though the whitelist accepts them as
+# alias *targets*. The prompt asks for dollars under "amount" and the one
+# conversion lives in _normalise_chat_fields; a model that emits amount_cents
+# itself is emitting a unit nothing verified ("amount_cents": 15 for a $15
+# bill stores 15 cents, silently). Refusing the raw key makes that drift fail
+# loudly instead.
+RAW_KEY_BLOCKLIST = {"amount_cents"}
 
 _COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 
@@ -177,6 +187,8 @@ def _normalise_chat_fields(entity, op, fields):
     aliases = CHAT_FIELD_ALIASES.get(entity, {})
     out = {}
     for key, value in fields.items():
+        if key in RAW_KEY_BLOCKLIST:
+            raise ServiceError(f"field '{key}' cannot be set via chat — state the amount in dollars")
         target = aliases.get(key, key)
         if key in DOLLAR_VALUED_ALIASES:
             try:
@@ -207,18 +219,21 @@ def apply(op, entity, entity_id, fields, message_id=None):
             raise ServiceError(f"field '{key}' cannot be set via chat")
     clean_fields = dict(fields)
 
+    # Bill and payment writes go through the services layer — the same
+    # validation and status-sync a manual edit gets — never the raw DB client.
+    # The DB API checks enums and integer types but not date *format*: a chat
+    # update that stored next_billing_date="early September" used to 500 every
+    # bills read from then on. services/bills._clean_payload is what refuses it.
     if entity == "bill" and op == "update":
-        if bills_db.get_bill(entity_id) is None:
-            raise NotFound("bill not found")
-        result = bills_db.update_bill(entity_id, clean_fields)
+        result = bills_service.update_bill(entity_id, clean_fields)
     elif entity == "bill" and op == "create":
-        result = bills_db.create_bill({**clean_fields, "source": "chat"})
+        result = bills_service.create_bill({**clean_fields, "source": "chat"})
     elif entity == "bill" and op == "delete":
-        result = bills_db.delete_bill(entity_id)
+        result = bills_service.delete_bill(entity_id)
     elif entity == "payment" and op == "create":
-        result = bills_db.create_payment(clean_fields)
+        result = payments_service.create_payment(clean_fields)
     elif entity == "payment" and op == "delete":
-        result = bills_db.delete_payment(entity_id)
+        result = payments_service.delete_payment(entity_id)
     elif entity == "dispute" and op == "update":
         result = bills_db.update_dispute(entity_id, clean_fields)
     elif entity == "dispute" and op == "create":

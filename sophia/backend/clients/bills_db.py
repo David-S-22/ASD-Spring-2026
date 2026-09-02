@@ -18,9 +18,14 @@ def _raise_for_status(response):
     """
     if 400 <= response.status_code < 500:
         try:
-            message = response.json().get("error", response.text)
+            message = response.json().get("error", "")
         except ValueError:
-            message = response.text or f"bills-db returned {response.status_code}"
+            message = ""
+        if not message or "<" in str(message):
+            # A non-JSON body here is Flask's own HTML error page (e.g. a 404
+            # for /bills/None when an id never parsed to an int). Rendering a
+            # whole HTML document into a toast helps nobody.
+            message = f"bills-db returned {response.status_code}"
         raise ServiceError(message, status=response.status_code)
     response.raise_for_status()
     return response

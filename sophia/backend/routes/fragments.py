@@ -496,7 +496,10 @@ def chat_send():
 
 @bp.post("/chat/apply")
 def chat_apply():
-    fields = json.loads(request.form.get("fields") or "{}")
+    try:
+        fields = json.loads(request.form.get("fields") or "{}")
+    except ValueError:
+        raise ServiceError("fields must be JSON")
     message_id = request.form.get("message_id", type=int)
     chat_service.apply(
         request.form.get("op"),
