@@ -58,6 +58,7 @@ services:
       PORT: 5001
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       DATABASE_TIMEOUT_SECONDS: 20
+      ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
     depends_on:
       - transactions-db
   transactions-db:

@@ -9,6 +9,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from backend.app import app
+from backend.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
 from janelle.database.app import setup_app as setup_transactions
@@ -33,7 +34,7 @@ def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
     assert resp.text.count("<tr>") == 3
 
-def test_check_transaction_html(client: FlaskClient, monkeypatch: MonkeyPatch):
+def test_check_transaction_accepts_and_queues(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Mock response from ollama"}')
 
     transaction = dto.Transaction(
@@ -45,11 +46,13 @@ def test_check_transaction_html(client: FlaskClient, monkeypatch: MonkeyPatch):
         category_id=0
     )
 
-    resp = client.post("check-transaction", json=transaction)
-    assert resp.status_code == 200
-    assert "<strong>Possible suspicious transaction detected</strong>" in resp.text
-    assert "<p>Mock response from ollama</p>" in resp.text
-    assert "<small>Head to the Anomalies tab to check it out</small>" in resp.text
+    resp = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    assert resp.status_code == 202
+    assert resp.json is not None
+    assert resp.json["status"] == "queued"
+    assert resp.json["transaction_id"] == 5
 
 def test_check_transaction_creates_anomaly_and_persists_it(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Mock response from ollama"}')
@@ -65,13 +68,15 @@ def test_check_transaction_creates_anomaly_and_persists_it(client: FlaskClient, 
 
     before = client.get("/anomalies").text.count("<tr>")
     resp = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
 
-    assert resp.status_code == 200
-    assert "<strong>Possible suspicious transaction detected</strong>" in resp.text
-    assert client.get("/anomalies").text.count("<tr>") == before + 1
+    assert resp.status_code == 202
+    anomalies = client.get("/anomalies").text
+    assert anomalies.count("<tr>") == before + 1
+    assert "Mock response from ollama" in anomalies
 
 
-def test_check_transaction_no_anomaly_returns_empty_response(client: FlaskClient, monkeypatch: MonkeyPatch):
+def test_check_transaction_no_anomaly_persists_nothing(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": false, "justification": "Looks like a routine purchase."}')
 
     transaction = dto.Transaction(
@@ -85,9 +90,9 @@ def test_check_transaction_no_anomaly_returns_empty_response(client: FlaskClient
 
     before = client.get("/anomalies").text.count("<tr>")
     resp = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
 
-    assert resp.status_code == 204
-    assert resp.data == b""
+    assert resp.status_code == 202
     assert client.get("/anomalies").text.count("<tr>") == before
 
 
@@ -110,18 +115,25 @@ def test_check_transaction_retries_on_invalid_ollama_json(client: FlaskClient, m
         category_id=1,
     )
 
+    before = client.get("/anomalies").text.count("<tr>")
+
     intercept_ollama(monkeypatch, '{not valid json')
     first = client.post("/check-transaction", json=serialise(transaction))
-    assert first.status_code == 500
+    transaction_queue.join()
+    assert first.status_code == 202
+    assert client.get("/anomalies").text.count("<tr>") == before
 
     intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Retry worked"}')
     second = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
 
-    assert second.status_code == 200
-    assert "Retry worked" in second.text
+    assert second.status_code == 202
+    anomalies = client.get("/anomalies").text
+    assert anomalies.count("<tr>") == before + 1
+    assert "Retry worked" in anomalies
 
 
-def test_check_transaction_rejects_invalid_model_json(client: FlaskClient, monkeypatch: MonkeyPatch):
+def test_check_transaction_invalid_model_json_persists_nothing(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": true}')
 
     transaction = dto.Transaction(
@@ -133,13 +145,15 @@ def test_check_transaction_rejects_invalid_model_json(client: FlaskClient, monke
         category_id=0,
     )
 
+    before = client.get("/anomalies").text.count("<tr>")
     resp = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
 
-    assert resp.status_code == 500
-    assert "Could not parse agent response" in resp.text or "Internal Server Error" in resp.text
+    assert resp.status_code == 202
+    assert client.get("/anomalies").text.count("<tr>") == before
 
 
-def test_check_transaction_rejects_non_bool_is_suspicious_value(client: FlaskClient, monkeypatch: MonkeyPatch):
+def test_check_transaction_non_bool_is_suspicious_persists_nothing(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": "yes", "justification": "not valid"}')
 
     transaction = dto.Transaction(
@@ -151,9 +165,12 @@ def test_check_transaction_rejects_non_bool_is_suspicious_value(client: FlaskCli
         category_id=0,
     )
 
+    before = client.get("/anomalies").text.count("<tr>")
     resp = client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
 
-    assert resp.status_code == 500
+    assert resp.status_code == 202
+    assert client.get("/anomalies").text.count("<tr>") == before
 
 
 def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, monkeypatch: MonkeyPatch):
@@ -169,6 +186,7 @@ def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, mo
     )
 
     client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
     resp = client.get("/anomalies")
 
     assert resp.status_code == 200

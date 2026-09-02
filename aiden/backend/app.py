@@ -3,11 +3,14 @@ from random import choice, randint
 from flask import Flask, jsonify, render_template, request
 
 from shared.backend import dto
-from .helpers import deserialise_or_abort, empty, get_env
-from .services import anomalies_api, ollama_api, agent_api, transaction_api
+from .helpers import deserialise_or_abort, get_env
+from .services import anomalies_api, ollama_api
+from . import review_queue
 
 
 app = Flask(__name__)
+
+review_queue.start_worker(app)
 
 @app.get("/")
 def get_index():
@@ -32,23 +35,11 @@ def get_anomaly_rows():
 def check_transaction():
     data = request.get_json() or {}
     transaction = deserialise_or_abort(dto.Transaction, data)
-    all_anomalies = anomalies_api.get_all_anomalies()
-    all_transactions = transaction_api.get_all_transactions()
 
-    app.logger.info("Checking transaction %s (merchant=%r, amount=%s)", transaction.id, transaction.merchant, transaction.amount)
-    anomaly = agent_api.review_new_transaction(transaction, all_anomalies, all_transactions)
+    review_queue.enqueue(transaction)
+    app.logger.info("Queued transaction %s for anomaly review", transaction.id)
 
-    if anomaly is None:
-        app.logger.warning("Transaction %s cleared (no anomaly) -> 204", transaction.id)
-        return empty()
-
-    app.logger.warning("Transaction %s flagged as anomalous: %s",
-                       transaction.id, anomaly.agent_reason_suspected)
-
-    # Save new anomaly to the database
-    anomalies_api.create_anomaly(anomaly)
-
-    return render_template("alert.jinja", anomaly=anomaly)
+    return jsonify(status="queued", transaction_id=transaction.id), 202
 
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():

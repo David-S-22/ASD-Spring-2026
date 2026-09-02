@@ -17,8 +17,8 @@
             hx-post="/anomalies-backend/check-transaction"
             hx-ext="json-enc"
             hx-vals="js:{...window.dummyTransaction()}"
-            hx-target="#alert"
-            hx-swap="innerHTML">
+            hx-swap="none"
+            hx-on::after-request="document.getElementById('alert').innerHTML = '<p>Transaction queued for anomaly review — new anomalies appear below automatically.</p>'">
         Check dummy transaction
     </button>
     <div id="alert"></div>
@@ -31,7 +31,7 @@
                 <th>Status</th>
             </tr>
         </thead>
-        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load" hx-swap="innerHTML">
+        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load, every 5s" hx-swap="innerHTML">
             <tr><td colspan="4" style="text-align: center;">Loading…</td></tr>
         </tbody>
     </table>

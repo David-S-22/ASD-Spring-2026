@@ -25,8 +25,10 @@ The application/logic layer. A **Flask** app exposing the anomaly-detection API
 and orchestrating the AI agent.
 
 - `app.py` — Flask routes: index, `/anomalies` (render list), `/check-transaction`
-  (run a transaction through the agent and persist flagged anomalies),
-  `/dummy-anomaly`, and `/fact`.
+  (enqueue a transaction for asynchronous review; a background worker runs it
+  through the agent and persists flagged anomalies), `/dummy-anomaly`, and `/fact`.
+- `review_queue.py` — in-process queue and background worker that perform the slow
+  LLM review off the request thread and persist any anomaly.
 - `services/` — external integrations:
   - `agent_api.py` — the skeptical anomaly-detection agent; prompts the model,
     parses/validates JSON findings, and builds context from prior user-reviewed
@@ -35,7 +37,7 @@ and orchestrating the AI agent.
     for the Ollama model.
   - `anomalies_api.py` / `transaction_api.py` — HTTP clients for the database and
     transaction services.
-- `templates/` — Jinja fragments (`anomalies.jinja`, `alert.jinja`) returned to HTMX.
+- `templates/` — Jinja fragments (`anomalies.jinja`) returned to HTMX.
 - `helpers.py` — (de)serialisation and env helpers.
 - `Dockerfile` / `requirements.txt` — service image and dependencies.
 

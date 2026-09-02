@@ -280,38 +280,6 @@
         setTransactionScreen(false);
     }
 
-    async function checkTransactionForAnomalies(transaction) {
-        try {
-            const response = await fetch('/anomalies-backend/check-transaction', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(transaction),
-            });
-
-            if (response.status === 204) return;
-            if (!response.ok) {
-                console.warn('Anomaly check failed:', response.status, await response.text());
-                return;
-            }
-
-            const html = await response.text();
-            if (!html) return;
-
-            const alertTarget = document.getElementById('alert');
-            if (alertTarget) {
-                alertTarget.innerHTML = html;
-                const toast = alertTarget.querySelector('.toast');
-                if (toast && window.dismissToast) {
-                    setTimeout(function () {
-                        window.dismissToast(toast);
-                    }, 30000);
-                }
-            }
-        } catch (error) {
-            console.warn('Unable to check transaction for anomalies:', error);
-        }
-    }
-
     async function saveTransaction(event) {
         event.preventDefault();
         const form = event.currentTarget;
@@ -339,12 +307,6 @@
                 throw new Error(result.error || 'Unable to save transaction.');
             }
 
-            const savedTransaction = {
-                ...payload,
-                id: Number.isFinite(result && result.id) ? Number(result.id) : Date.now(),
-                date: result && result.date ? result.date : payload.date,
-            };
-
             form.reset();
             showTransactionList();
             const notice = document.getElementById('transaction-notice');
@@ -354,8 +316,6 @@
                 document.getElementById('transactions'),
                 'transactionsChanged'
             );
-
-            await checkTransactionForAnomalies(savedTransaction);
         } catch (error) {
             showFormMessage(error.message || 'Unable to save transaction.');
         } finally {
