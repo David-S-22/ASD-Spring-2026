@@ -18,9 +18,14 @@ def _raise_for_status(response):
     """
     if 400 <= response.status_code < 500:
         try:
-            message = response.json().get("error", response.text)
+            message = response.json().get("error", "")
         except ValueError:
-            message = response.text or f"bills-db returned {response.status_code}"
+            message = ""
+        if not message or "<" in str(message):
+            # A non-JSON body here is Flask's own HTML error page (e.g. a 404
+            # for /bills/None when an id never parsed to an int). Rendering a
+            # whole HTML document into a toast helps nobody.
+            message = f"bills-db returned {response.status_code}"
         raise ServiceError(message, status=response.status_code)
     response.raise_for_status()
     return response
@@ -164,6 +169,33 @@ def list_dispute_drafts(dispute_id):
 
 def create_dispute_draft(dispute_id, payload):
     response = requests.post(_url(f"/disputes/{dispute_id}/drafts"), json=payload, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
+def list_suggestions(status=None):
+    params = {"status": status} if status else None
+    response = requests.get(_url("/suggestions"), params=params, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
+def create_suggestion(payload):
+    response = requests.post(_url("/suggestions"), json=payload, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
+def get_suggestion(suggestion_id):
+    response = requests.get(_url(f"/suggestions/{suggestion_id}"), timeout=10)
+    if response.status_code == 404:
+        return None
+    _raise_for_status(response)
+    return response.json()
+
+
+def update_suggestion(suggestion_id, payload):
+    response = requests.put(_url(f"/suggestions/{suggestion_id}"), json=payload, timeout=10)
     _raise_for_status(response)
     return response.json()
 

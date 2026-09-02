@@ -57,6 +57,12 @@
     <div class="ask-tally card">
       <h3>Ask Tally</h3>
       <div id="chat-panel" hx-get="/bills-backend/ui/chat" hx-trigger="load"></div>
+      <!-- The approve/reject window. Everything the AI proposes lands here as
+           a pending suggestion (and as the matching card in the chat reply);
+           nothing is written until one of them is approved. Fragment root
+           replaces this div (outerHTML) and carries the same id, so approve/
+           reject responses and the chat's OOB refresh all have one target. -->
+      <div id="suggestions-panel" hx-get="/bills-backend/ui/suggestions" hx-trigger="load" hx-swap="outerHTML"></div>
     </div>
   </div>
   <div id="modal-root"></div>

@@ -599,6 +599,99 @@
   display: inline-block;
 }
 
+/* --- Suggestions: the approve/reject window ------------------------------ */
+
+.suggestions-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+
+.suggestions-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 0.4em;
+}
+
+.suggestions-badge {
+  background: var(--accent);
+  color: var(--card);
+  border-radius: 999px;
+  font-size: 0.75em;
+  min-width: 1.6em;
+  text-align: center;
+  padding: 0.1em 0.4em;
+}
+
+.suggestions-empty {
+  color: var(--mut);
+  font-size: 0.9em;
+  margin: 0.4em 0;
+}
+
+.suggestion-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+  margin: 0.5em 0;
+}
+
+/* The chat's inline copy of a suggestion reuses the same body; unset the old
+   flex row so the table inside it can lay out. */
+.chat-panel .preview-card.suggestion-card {
+  display: block;
+}
+
+.suggestion-title {
+  font-weight: 600;
+  margin: 0 0 0.3em;
+}
+
+.suggestion-detail {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 0.4em;
+}
+
+.suggestion-detail th {
+  color: var(--mut);
+  font-weight: 400;
+  text-align: left;
+  padding-right: 0.8em;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.suggestion-old {
+  color: var(--mut);
+}
+
+.suggestion-warning,
+.suggestion-error {
+  color: var(--bad);
+  font-size: 0.9em;
+  margin: 0.3em 0;
+}
+
+.suggestion-card.status-failed {
+  border-color: var(--bad);
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 0.4em;
+}
+
+.preview-card.resolved {
+  color: var(--mut);
+  font-size: 0.9em;
+}
+
+.preview-card.resolved.status-applied {
+  color: var(--ok);
+}
+
 #modal-root:has(.modal-form) {
   position: fixed;
   inset: 0;

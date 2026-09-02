@@ -190,9 +190,15 @@ def test_ui_chat_never_writes_bills_and_apply_does(live_client, monkeypatch):
     body = chat_response.get_data(as_text=True)
     # The emitted markup carries the /bills-backend/ prefix so one set of URLs
     # works both standalone and inside the shared shell; nginx strips it before
-    # the request reaches Flask, which is why the request path two lines below
-    # is still the unprefixed route.
-    assert 'hx-post="/bills-backend/ui/chat/apply"' in body
+    # the request reaches Flask, which is why the request paths below are
+    # still the unprefixed routes. The reply's card posts to the suggestion
+    # endpoints — the proposal is a pending suggestion, approvable from the
+    # chat card or the Suggestions panel alike.
+    suggestion = bills_db_module.list_suggestions(status="pending")[-1]
+    assert f'hx-post="/bills-backend/ui/suggestions/{suggestion["id"]}/approve"' in body
+    assert f'hx-post="/bills-backend/ui/suggestions/{suggestion["id"]}/reject"' in body
+    # ...and refreshes the panel out of band so the badge appears immediately.
+    assert 'id="suggestions-panel" hx-swap-oob="true"' in body
 
     messages = bills_db_module.list_chat_messages()
     latest_assistant = [m for m in messages if m["role"] == "assistant"][-1]

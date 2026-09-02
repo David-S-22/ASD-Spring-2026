@@ -458,6 +458,157 @@ def disputes_tab():
     return _render_disputes_tab()
 
 
+# --- suggestions: the approve/reject window ---------------------------------
+
+SUGGESTION_FIELD_LABELS = {
+    "name": "Name", "merchant": "Merchant", "amount_cents": "Amount", "cadence": "Every",
+    "next_billing_date": "Next billing", "type": "Type", "payment_method": "Paid by",
+    "end_date": "Ends", "exclude_from_plan": "Excluded from plan", "bill_id": "Bill",
+    "date": "Date", "reason": "Reason", "status": "Status",
+}
+
+
+def _suggestion_display_value(field, value):
+    if value is None or value == "":
+        return "—"
+    if field == "amount_cents":
+        return money.format_actual(int(value))
+    if field == "cadence":
+        return CADENCE_LABELS.get(value, value)
+    if field == "payment_method":
+        return PAYMENT_METHOD_LABELS.get(value, value)
+    if field == "exclude_from_plan":
+        return "yes" if value in (1, "1", True) else "no"
+    return str(value)
+
+
+def _detail_row(field, new_value, old_value=None):
+    return {
+        "label": SUGGESTION_FIELD_LABELS.get(field, field),
+        "new": _suggestion_display_value(field, new_value),
+        "old": _suggestion_display_value(field, old_value) if old_value is not None else None,
+    }
+
+
+BILL_SNAPSHOT_FIELDS = ("amount_cents", "cadence", "next_billing_date", "type", "payment_method")
+
+
+def _suggestion_view(row):
+    """Build the render model for one suggestion: a title naming the change, and
+    field-level rows — a before/after diff for updates, the doomed row for
+    deletes, the full proposal for creates. The user approves what they can
+    read, never a bare Confirm button."""
+    fields = json.loads(row["payload_json"]) if row["payload_json"] else {}
+    op, entity, entity_id = row["op"], row["entity"], row["entity_id"]
+    bill = None
+    warning = None
+    if entity == "bill" and entity_id:
+        bill = bills_db.get_bill(entity_id)
+    elif entity in ("payment", "dispute") and fields.get("bill_id"):
+        bill = bills_db.get_bill(fields["bill_id"])
+    bill_label = bill["name"] if bill else (f"bill {entity_id}" if entity_id else "a bill")
+
+    rows = []
+    if entity == "bill" and op == "create":
+        title = f"Add bill: {fields.get('name', '?')}"
+        rows = [_detail_row(f, fields[f]) for f in
+                ("name", "merchant", "amount_cents", "cadence", "next_billing_date", "type", "payment_method", "end_date")
+                if f in fields]
+    elif entity == "bill" and op == "update":
+        title = f"Update {bill_label}"
+        if bill is None:
+            warning = "This bill no longer exists — approving will fail."
+        rows = [_detail_row(f, value, bill.get(f) if bill else None) for f, value in fields.items()]
+    elif entity == "bill" and op == "delete":
+        title = f"Delete {bill_label}"
+        if bill is None:
+            warning = "This bill no longer exists — approving will fail."
+        else:
+            rows = [_detail_row(f, bill.get(f)) for f in BILL_SNAPSHOT_FIELDS]
+    elif entity == "payment":
+        title = f"Record payment for {bill_label}" if op == "create" else f"Delete payment {entity_id}"
+        rows = [_detail_row(f, fields[f]) for f in ("date", "amount_cents") if f in fields]
+    else:
+        title = f"Open dispute for {bill_label}" if op == "create" else f"Update dispute {entity_id}"
+        rows = [_detail_row(f, fields[f]) for f in ("reason", "status") if f in fields]
+
+    return {
+        "id": row["id"], "status": row["status"], "error": row.get("error"),
+        "title": title, "rows": rows, "warning": warning,
+    }
+
+
+def _render_suggestions_panel(oob=False):
+    all_rows = bills_db.list_suggestions()
+    visible = [r for r in all_rows if r["status"] in ("pending", "failed")]
+    pending_count = sum(1 for r in visible if r["status"] == "pending")
+    # Hidden notes for everything no longer pending, so the chat's inline
+    # copies of these cards can flip to the same resolved state. app.js
+    # reconciles them after every swap of this panel — driven by rendered
+    # state, not by response events, so it works no matter which surface's
+    # button was clicked or what htmx did to that button meanwhile.
+    resolved = [
+        {"id": r["id"], "status": r["status"]}
+        for r in all_rows if r["status"] in ("applied", "rejected", "failed")
+    ][-20:]
+    return render_template(
+        "suggestions_panel.html",
+        suggestions=[_suggestion_view(r) for r in visible],
+        pending_count=pending_count,
+        resolved=resolved,
+        oob=oob,
+    )
+
+
+@bp.get("/suggestions")
+def suggestions_panel():
+    return _render_suggestions_panel()
+
+
+def _suggestion_action_response(action, suggestion_id):
+    """Approve or reject, then tell every surface the truth: the refreshed
+    panel is the primary swap, the bills views ride along OOB when something
+    was applied, and a suggestionResolved trigger lets the chat's inline card
+    flip to the same resolved state."""
+    toast = None
+    try:
+        if action == "approve":
+            chat_service.approve_suggestion(suggestion_id)
+            toast = "Done — change saved."
+        else:
+            chat_service.reject_suggestion(suggestion_id)
+            toast = "Dismissed — nothing was changed."
+    except ServiceError as error:
+        toast = f"Couldn't apply: {error.message}" if action == "approve" else error.message
+
+    row = bills_db.get_suggestion(suggestion_id)
+    status = row["status"] if row else "failed"
+    html = _render_suggestions_panel()
+    if status == "applied":
+        html += _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
+    response = make_response(html, 200)
+    # Deliberately no suggestionResolved trigger event here. An event fired
+    # from the response header runs while htmx is still processing that same
+    # response, and flipping the chat's copy of the card detaches the very
+    # button whose request is in flight — at which point htmx quietly drops
+    # the rest of the response, out-of-band table refresh included (observed:
+    # approve from the chat card applied the change but the table never
+    # moved). The chat cards flip instead via the resolved-notes the panel
+    # fragment carries, reconciled in app.js after the swap completes.
+    response.headers["HX-Trigger"] = json.dumps({"toast": toast})
+    return response
+
+
+@bp.post("/suggestions/<int:suggestion_id>/approve")
+def suggestion_approve(suggestion_id):
+    return _suggestion_action_response("approve", suggestion_id)
+
+
+@bp.post("/suggestions/<int:suggestion_id>/reject")
+def suggestion_reject(suggestion_id):
+    return _suggestion_action_response("reject", suggestion_id)
+
+
 @bp.get("/chat")
 def chat_panel():
     return _render_chat_panel()
@@ -483,9 +634,18 @@ def _render_chat_panel():
 @bp.post("/chat")
 def chat_send():
     result = chat_service.send_message(request.form.get("message", ""))
+    suggestion_view = None
+    if result["preview"] and result["preview"].get("suggestion_id"):
+        suggestion_row = bills_db.get_suggestion(result["preview"]["suggestion_id"])
+        if suggestion_row:
+            suggestion_view = _suggestion_view(suggestion_row)
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], preview=result["preview"], fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], suggestion=suggestion_view, fallback=result["fallback"]
     )
+    if suggestion_view:
+        # The panel is the other surface showing this proposal; refresh it so
+        # the badge and card appear the moment the reply does.
+        reply_html += _render_suggestions_panel(oob=True)
     # No toast. Asking Tally something writes nothing the user cares about --
     # the reply appearing in the panel is the feedback, and "Done - change
     # saved." on a question told them their data had changed when it had not.
@@ -496,7 +656,10 @@ def chat_send():
 
 @bp.post("/chat/apply")
 def chat_apply():
-    fields = json.loads(request.form.get("fields") or "{}")
+    try:
+        fields = json.loads(request.form.get("fields") or "{}")
+    except ValueError:
+        raise ServiceError("fields must be JSON")
     message_id = request.form.get("message_id", type=int)
     chat_service.apply(
         request.form.get("op"),
