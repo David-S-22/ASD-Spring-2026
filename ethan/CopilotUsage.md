@@ -1655,3 +1655,7 @@ restrict it
 Restricted planned events to the selected budget month in both the frontend and the Budgets database API.
 
 The planned-event date input is now constrained to the current budget month in the popup, and saves are blocked with a clear validation error if a cross-month date is attempted. The database service now enforces the same rule on create and update, so an event cannot be attached to a budget for one month while carrying a date from another.
+## Prompt
+increase this spacing [image: copilot-image-2648c4.png]
+## Response
+Increased the spacing in the `Can I afford?` panel around the budget-line selector, amount input, and the live result box so that section breathes a bit more.
