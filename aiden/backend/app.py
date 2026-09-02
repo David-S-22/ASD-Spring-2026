@@ -4,13 +4,12 @@ from flask import Flask, jsonify, render_template, request
 
 from shared.backend import dto
 from .helpers import deserialise_or_abort, get_env
-from .services import anomalies_api, ollama_api
-from . import review_queue
+from .services import anomalies_api, ollama_api, review_queue
 
 
 app = Flask(__name__)
-
 review_queue.start_worker(app)
+
 
 @app.get("/")
 def get_index():

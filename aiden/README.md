@@ -27,14 +27,14 @@ and orchestrating the AI agent.
 - `app.py` — Flask routes: index, `/anomalies` (render list), `/check-transaction`
   (enqueue a transaction for asynchronous review; a background worker runs it
   through the agent and persists flagged anomalies), `/dummy-anomaly`, and `/fact`.
-- `review_queue.py` — in-process queue and background worker that perform the slow
-  LLM review off the request thread and persist any anomaly.
 - `services/` — external integrations:
   - `agent_api.py` — the skeptical anomaly-detection agent; prompts the model,
     parses/validates JSON findings, and builds context from prior user-reviewed
     anomalies.
   - `ollama_api.py` — thin OpenAI-compatible client wrapper (cached singleton)
     for the Ollama model.
+  - `review_queue.py` — in-process queue and background worker that perform the
+    slow LLM review off the request thread and persist any anomaly.
   - `anomalies_api.py` / `transaction_api.py` — HTTP clients for the database and
     transaction services.
 - `templates/` — Jinja fragments (`anomalies.jinja`) returned to HTMX.

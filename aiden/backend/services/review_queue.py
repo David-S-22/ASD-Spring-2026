@@ -11,7 +11,7 @@ from typing import Optional
 from flask import Flask, current_app
 
 from shared.backend import dto
-from .services import anomalies_api, agent_api, transaction_api
+from . import anomalies_api, agent_api, transaction_api
 
 
 transaction_queue: "queue.Queue[dto.Transaction]" = queue.Queue()
@@ -22,7 +22,7 @@ def enqueue(transaction: dto.Transaction) -> None:
     transaction_queue.put(transaction)
 
 
-def _process_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
+def process_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
     """Review a single transaction and persist any anomaly it produces.
 
     Must be called within an application context.
@@ -51,7 +51,7 @@ def _worker(app: Flask) -> None:
         transaction = transaction_queue.get()
         try:
             with app.app_context():
-                _process_transaction(transaction)
+                process_transaction(transaction)
         except Exception:
             app.logger.exception(
                 "Failed to review queued transaction %s",

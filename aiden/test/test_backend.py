@@ -9,7 +9,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from backend.app import app
-from backend.review_queue import transaction_queue
+from backend.services.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
 from janelle.database.app import setup_app as setup_transactions
