@@ -5,6 +5,7 @@ touches bills, payments, or disputes directly. apply() is the only path
 that writes those, always through the same CRUD calls a manual edit uses.
 """
 import json
+import re
 from datetime import date, timedelta
 
 from sophia.backend import config
@@ -180,7 +181,30 @@ MISSING_FIELD_QUESTIONS = {
 }
 
 
-def _vet_proposal(preview):
+_ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
+
+
+def _contradicts_an_update(preview, say):
+    """True when the sentence promises a NEW bill but the op edits an existing one.
+
+    Observed on the 3b model, 3 Sep: say "I've suggested adding Disney Plus at
+    $15 a month from 5 Sep", op {"op": "update", "id": 6} -- id 6 being GymCo,
+    with no name field. The user reads a new subscription; Approve rewrites an
+    old one's amount, date and payment method.
+
+    Both halves are required so the cancel beat is untouched: "I've suggested
+    ending Spotify after 1 Oct" names its target, so it passes even though a
+    reply like "added an end date" would trip the verb alone.
+    """
+    if preview["op"] != "update" or preview["entity"] != "bill":
+        return False
+    if not _ADD_VERB.search(say or ""):
+        return False
+    target = _bill_name(preview.get("id"))
+    return bool(target) and target.lower() not in (say or "").lower()
+
+
+def _vet_proposal(preview, say=""):
     """Vet a proposal *before* it reaches the user.
 
     Returns (canonical_fields, None) when the proposal is appliable — fields
@@ -191,6 +215,11 @@ def _vet_proposal(preview):
     ignores it and emits an under-specified create, no appliable proposal
     exists until the user has supplied the details.
     """
+    if _contradicts_an_update(preview, say):
+        return None, (
+            "I need to be clearer about that one — I can add a new bill, or change an "
+            "existing one, and that came out as both. Which did you mean?"
+        )
     try:
         fields = _normalise_chat_fields(preview["entity"], preview["op"], preview["fields"] or {})
         allowed = BILL_FIELD_WHITELIST[preview["entity"]]
@@ -260,7 +289,7 @@ def _model_turn(model_message, history, fallback=None):
     preview = _build_preview(data)
     canonical_fields = None
     if preview:
-        canonical_fields, reply_override = _vet_proposal(preview)
+        canonical_fields, reply_override = _vet_proposal(preview, reply)
         if reply_override:
             reply = reply_override
             preview = None

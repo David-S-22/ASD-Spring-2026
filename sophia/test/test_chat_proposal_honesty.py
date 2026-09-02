@@ -110,6 +110,37 @@ def test_underspecified_create_from_the_model_yields_a_question_and_no_confirm(l
     assert len(bills_db_module.list_bills()) == before
 
 
+def test_say_that_claims_a_new_bill_must_not_ship_an_update_to_an_existing_one(live_client, monkeypatch):
+    """Observed on the 3b model, 3 Sep: the reply read "I've suggested adding
+    Disney Plus at $15 a month from 5 Sep" while the op was
+    {"op": "update", "id": 6, fields: {amount: 15.0, ...}} -- bill 6 being
+    GymCo, and no name field anywhere. The sentence describes a bill that does
+    not exist; the card silently rewrites one that does. Approving would have
+    changed GymCo's amount, next billing date and payment method.
+
+    The op is what gets applied, so a reply that promises a NEW bill may never
+    carry an update to an existing one.
+    """
+    gymco = next(b for b in bills_db_module.list_bills() if b["name"] == "GymCo")
+
+    def fake_chat(model, messages, timeout=None):
+        return {"message": {"content": json.dumps({
+            "op": "update", "entity": "bill", "id": gymco["id"],
+            "fields": {"amount": 15.0, "cadence": "monthly", "next_billing_date": "2026-09-05"},
+            "question": "none",
+            "say": "I've suggested adding Disney Plus at $15 a month from 5 Sep — approve it to save.",
+        })}}
+
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
+    pending_before = {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
+    body = _text(live_client.post("/ui/chat", data={"message": "add disney plus"}))
+
+    pending_after = {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
+    assert pending_after == pending_before, "no approvable card may be built from a contradictory turn"
+    assert "Disney Plus at $15" not in body, "the contradictory sentence must not stand"
+    assert bills_db_module.get_bill(gymco["id"])["amount_cents"] == gymco["amount_cents"]
+
+
 def test_incoherent_op_from_the_model_falls_back_honestly(live_client, monkeypatch):
     """op without entity now fails validation on both attempts; the reply must
     be the fallback, not the model's 'Added it for you.'"""

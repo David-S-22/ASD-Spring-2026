@@ -611,11 +611,16 @@ def _render_adapt_reply():
 
 
 def _suggestion_action_response(action, suggestion_id):
-    """Approve or reject, then tell every surface the truth: the refreshed
-    panel is the primary swap, and the bills views ride along OOB when
-    something was applied. Rejecting a pending suggestion also closes the
-    loop — Tally observes the rejection and adapts in the chat, sometimes
-    with a corrected proposal, so the panel is rendered after that turn."""
+    """Approve, reject or suggest, then tell every surface the truth: the
+    refreshed panel is the primary swap, and the bills views ride along OOB
+    when something was applied.
+
+    Only "suggest" spends a model turn. Reject used to run the adapt turn
+    itself, and because a proposal from that turn becomes a fresh PENDING row,
+    rejecting a card reliably produced another card to reject -- an
+    unbreakable loop from the user's side. Reject is now terminal and silent;
+    asking Tally for a different option is a separate, deliberate click.
+    """
     pre_row = bills_db.get_suggestion(suggestion_id)
     was_pending = bool(pre_row and pre_row["status"] == "pending")
     toast = None
@@ -625,12 +630,12 @@ def _suggestion_action_response(action, suggestion_id):
             toast = "Done — change saved."
         else:
             chat_service.reject_suggestion(suggestion_id)
-            toast = "Dismissed — nothing was changed."
+            toast = "Asked Tally for another option." if action == "suggest" else "Dismissed — nothing was changed."
     except ServiceError as error:
         toast = f"Couldn't apply: {error.message}" if action == "approve" else error.message
 
     adapt_html = ""
-    if action == "reject" and was_pending:
+    if action == "suggest" and was_pending:
         adapt_html = _render_adapt_reply()
 
     row = bills_db.get_suggestion(suggestion_id)
@@ -657,6 +662,14 @@ def suggestion_approve(suggestion_id):
 @bp.post("/suggestions/<int:suggestion_id>/reject")
 def suggestion_reject(suggestion_id):
     return _suggestion_action_response("reject", suggestion_id)
+
+
+@bp.post("/suggestions/<int:suggestion_id>/suggest")
+def suggestion_suggest(suggestion_id):
+    """"No, try again": clear this proposal and spend one model turn asking for
+    a different one. The rejection note is recorded either way, so the model
+    sees what it must not repeat."""
+    return _suggestion_action_response("suggest", suggestion_id)
 
 
 @bp.get("/chat")

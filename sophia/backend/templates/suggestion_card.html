@@ -19,8 +19,16 @@
 <div class="suggestion-actions">
   <button class="confirm btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/approve"
           hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this">Approve</button>
+  {# Reject is terminal and silent; Suggest is the "no, try again" action that
+     spends a model turn. They were one button until Reject's adapt turn kept
+     proposing a replacement, which made rejecting a proposal produce another
+     proposal to reject. #}
   <button class="keep-it btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/reject"
           hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this">Reject</button>
+  <button class="ask-again btn-sm" hx-post="/bills-backend/ui/suggestions/{{ suggestion.id }}/suggest"
+          hx-target="#suggestions-panel" hx-swap="outerHTML" hx-disabled-elt="this"
+          hx-indicator="next .working">Suggest</button>
+  <span class="working" aria-live="polite">Tally is thinking…</span>
 </div>
 {% elif suggestion.status == "failed" %}
 <p class="suggestion-error">Couldn't apply: {{ suggestion.error }} — nothing was changed.</p>
