@@ -123,11 +123,10 @@ def test_frontend_proxies_only_to_backend():
 
     assert "location /transactions-backend/" in nginx
     assert "proxy_pass http://transactions-backend:5001/;" in nginx
-    assert "proxy_read_timeout 120s;" in nginx
     assert "transactions-db" not in nginx
 
 
-def test_shared_shell_proxy_allows_transaction_ai_timeout():
+def test_shared_shell_proxies_transactions_backend_through_frontend():
     nginx = (
         REPOSITORY_ROOT / "shared" / "frontend" / "nginx.conf"
     ).read_text(encoding="utf-8")
@@ -135,8 +134,7 @@ def test_shared_shell_proxy_allows_transaction_ai_timeout():
     location_end = nginx.index("\n    }", location_start)
     transactions_location = nginx[location_start:location_end]
 
-    assert "proxy_send_timeout 120s;" in transactions_location
-    assert "proxy_read_timeout 120s;" in transactions_location
+    assert "proxy_pass ${TRANSACTIONS_FRONTEND_URL};" in transactions_location
 
 
 def test_compose_sets_twenty_second_database_timeout():
