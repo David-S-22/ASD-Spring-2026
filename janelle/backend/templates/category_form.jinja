@@ -1,0 +1,65 @@
+<section id="transactions-content"
+         class="panel transaction-form-screen">
+    <button type="button"
+            class="back-button"
+            hx-get="/transactions-backend/ui/transactions/page"
+            hx-target="#transactions-content"
+            hx-swap="outerHTML">
+        &larr; Back to transactions
+    </button>
+
+    <h1>Add a category</h1>
+    <p>Create a category that can be assigned to transactions.</p>
+
+    <form id="add-category-form"
+          class="transaction-form"
+          hx-post="/transactions-backend/ui/categories"
+          hx-target="#transactions-content"
+          hx-swap="outerHTML"
+          hx-disabled-elt="#save-category-button">
+        <div class="transaction-form-grid">
+            <div class="transaction-form-field">
+                <label for="category-name">Name</label>
+                <input id="category-name"
+                       name="name"
+                       type="text"
+                       maxlength="80"
+                       value="{{ values.name }}"
+                       placeholder="Education"
+                       required>
+            </div>
+
+            <div class="transaction-form-field">
+                <label for="category-type">Type</label>
+                <select id="category-type" name="type">
+                    <option value=""
+                            {% if not values.type %}selected{% endif %}>
+                        No type
+                    </option>
+                    <option value="need"
+                            {% if values.type == "need" %}selected{% endif %}>
+                        Need
+                    </option>
+                    <option value="want"
+                            {% if values.type == "want" %}selected{% endif %}>
+                        Want
+                    </option>
+                    <option value="saving"
+                            {% if values.type == "saving" %}selected{% endif %}>
+                        Saving
+                    </option>
+                </select>
+            </div>
+        </div>
+
+        {% if error %}
+        <p class="form-message" role="alert">{{ error }}</p>
+        {% endif %}
+
+        <div class="transaction-form-actions">
+            <button id="save-category-button" type="submit">
+                Save category
+            </button>
+        </div>
+    </form>
+</section>

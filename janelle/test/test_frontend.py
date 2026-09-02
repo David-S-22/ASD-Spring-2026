@@ -18,15 +18,45 @@ def test_frontend_loads_transaction_rows_with_htmx():
 
     assert "htmx.org@2.0.10" in index
     assert 'hx-get="/transactions-backend/ui/transactions/page"' in index
+    assert 'id="transactions-table"' in page
     assert 'id="transactions"' in page
-    assert 'hx-get="/transactions-backend/ui/transactions"' in page
+    assert (
+        'hx-get="/transactions-backend/ui/transactions?page=1"'
+        in page
+    )
     assert 'hx-trigger="load, transactionsChanged from:body"' in page
-    assert 'hx-swap="innerHTML"' in page
+    assert 'hx-include="#transaction-filters, #transactions-page-size"' in page
+    assert 'hx-swap="outerHTML"' in page
     assert "<th>ID</th>" not in page
     assert 'colspan="5"' in page
 
 
-def test_add_transaction_button_loads_jinja_form_with_htmx():
+def test_transaction_table_has_page_size_and_navigation_controls():
+    table = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_table.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="transactions-page-size"' in table
+    assert 'name="page_size"' in table
+    assert "{% for size in page_sizes %}" in table
+    assert '<option value="{{ size }}"' in table
+    assert 'id="previous-transactions-page"' in table
+    assert 'aria-label="Previous page"' in table
+    assert "&larr;" in table
+    assert 'id="next-transactions-page"' in table
+    assert 'aria-label="Next page"' in table
+    assert "&rarr;" in table
+    assert "Page {{ page }} of {{ total_pages }}" in table
+    assert table.count(
+        'hx-include="#transaction-filters, #transactions-page-size"'
+    ) == 3
+
+
+def test_transaction_page_has_search_category_and_date_filters():
     page = (
         REPOSITORY_ROOT
         / "janelle"
@@ -35,12 +65,91 @@ def test_add_transaction_button_loads_jinja_form_with_htmx():
         / "transactions_page.jinja"
     ).read_text(encoding="utf-8")
 
+    assert 'id="transaction-filters"' in page
+    assert 'id="transaction-search"' in page
+    assert 'type="search"' in page
+    assert 'name="search"' in page
+    assert 'placeholder="Search transactions"' in page
+    assert 'id="transaction-category-filter"' in page
+    assert 'name="category_id"' in page
+    assert "All categories" in page
+    assert "{% for category in categories %}" in page
+    assert 'id="transaction-date-filter"' in page
+    assert 'name="date_range"' in page
+    assert "All dates" in page
+    assert "Last 7 days" in page
+    assert "Last 30 days" in page
+    assert "Last 90 days" in page
+    assert "This month" in page
+    assert "This year" in page
+    assert 'hx-target="#transactions-table"' in page
+    assert 'hx-include="#transactions-page-size"' in page
+
+
+def test_transaction_pagination_uses_compact_single_row_layout():
+    index = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+    ).read_text(encoding="utf-8")
+    pagination_styles = index.split(
+        ".transactions-pagination {",
+        1,
+    )[1].split(".transaction-form-screen", 1)[0]
+    mobile_styles = index.split("@media (max-width: 700px)", 1)[1]
+
+    assert "flex-wrap: nowrap;" in pagination_styles
+    assert "width: 4.5rem !important;" in pagination_styles
+    assert ".transactions-pagination," not in mobile_styles
+    assert ".transactions-page-details," not in mobile_styles
+    assert ".transactions-page-count {" in mobile_styles
+    assert "display: none;" in mobile_styles
+
+
+def test_toolbar_buttons_load_transaction_and_category_forms_with_htmx():
+    page = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_page.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'class="transactions-toolbar-actions"' in page
+    assert 'id="add-category-button"' in page
+    assert 'hx-get="/transactions-backend/ui/categories/new"' in page
+    assert "+ Add category" in page
     assert 'id="add-transaction-button"' in page
     assert 'type="button"' in page
     assert 'hx-get="/transactions-backend/ui/transactions/new"' in page
     assert 'hx-target="#transactions-content"' in page
     assert 'hx-swap="outerHTML"' in page
     assert "+ Add transaction" in page
+
+
+def test_category_form_contains_fields_and_htmx_actions():
+    form = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "category_form.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="add-category-form"' in form
+    assert 'hx-post="/transactions-backend/ui/categories"' in form
+    assert 'hx-target="#transactions-content"' in form
+    assert 'hx-swap="outerHTML"' in form
+    assert 'hx-disabled-elt="#save-category-button"' in form
+    assert "Back to transactions" in form
+    assert 'id="category-name"' in form
+    assert 'name="name"' in form
+    assert 'maxlength="80"' in form
+    assert 'id="category-type"' in form
+    assert 'name="type"' in form
+    assert 'value="need"' in form
+    assert 'value="want"' in form
+    assert 'value="saving"' in form
+    assert 'id="save-category-button"' in form
+    assert form.count("required") == 1
 
 
 def test_transaction_form_contains_required_fields_and_htmx_actions():
