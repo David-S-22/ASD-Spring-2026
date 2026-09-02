@@ -92,6 +92,12 @@ def _clean_payload(payload, partial):
 
 def create_bill(payload):
     cleaned = _clean_payload(payload, partial=False)
+    # Stamp created_at on the demo clock, not the DB's real UTC now. The app
+    # reasons entirely in DEMO_TODAY, and projection drops occurrences before
+    # created_at — a bill added with a next charge "before" the real date was
+    # in the table but missing from the timeline and calendar. (The DB default
+    # is also UTC, which in Australia/Sydney is yesterday until ~10am.)
+    cleaned.setdefault("created_at", config.DEMO_TODAY.isoformat())
     created = bills_db.create_bill(cleaned)
     return _persist_status_if_drifted(created, payments=[])
 

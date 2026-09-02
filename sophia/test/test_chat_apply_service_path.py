@@ -98,3 +98,21 @@ def test_chat_apply_create_syncs_the_status_cache(live_client):
     assert created["amount_cents"] == 1250
     assert created["source"] == "chat"
     assert created["status"] == "due"
+
+
+def test_created_bills_are_stamped_on_the_demo_clock(live_client):
+    """The DB stamps created_at with real UTC now; the app reasons in
+    DEMO_TODAY. projection drops occurrences before created_at, so a bill
+    created 'after' its own next charge was in the table but missing from the
+    timeline. Creation must stamp the demo clock."""
+    fields = {"name": "ClockCheck", "amount": 9.0, "cadence": "weekly",
+              "next_billing_date": "2026-08-21", "type": "bill"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 200
+    created = next(b for b in bills_db_module.list_bills() if b["name"] == "ClockCheck")
+    assert created["created_at"] == "2026-08-20"
+    timeline = live_client.get("/api/timeline").get_json()
+    assert any(i["name"] == "ClockCheck" and i["date"] == "2026-08-21" for i in timeline["items"])
