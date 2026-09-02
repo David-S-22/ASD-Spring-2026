@@ -112,6 +112,58 @@ def test_patch_budget_line_requires_category_id_when_setting_category(monkeypatc
     }
 
 
+def test_create_planned_event(monkeypatch):
+    monkeypatch.setattr(
+        db_api,
+        "create_planned_event",
+        lambda budget_id, payload: (
+            {
+                "id": 7,
+                "budget_id": budget_id,
+                "category": payload["category"],
+                "est_low": payload["est_low"],
+                "est_high": payload["est_high"],
+                "status": payload["status"],
+            },
+            201,
+        ),
+    )
+
+    resp = _client().post(
+        "/api/budgets/1/planned-events",
+        json={"category": "Dining", "est_low": 3000, "est_high": 5000, "status": "planned"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.get_json() == {
+        "id": 7,
+        "budget_id": "1",
+        "category": "Dining",
+        "est_low": 3000,
+        "est_high": 5000,
+        "status": "planned",
+    }
+
+
+def test_patch_planned_event(monkeypatch):
+    monkeypatch.setattr(
+        db_api,
+        "update_planned_event",
+        lambda event_id, payload: {
+            "id": int(event_id),
+            "status": payload["status"],
+        },
+    )
+
+    resp = _client().patch("/api/planned-events/7", json={"status": "cancelled"})
+
+    assert resp.status_code == 200
+    assert resp.get_json() == {
+        "id": 7,
+        "status": "cancelled",
+    }
+
+
 def test_budget_snapshot_aggregates_child_collections(monkeypatch):
     monkeypatch.setattr(db_api, "get_budget", lambda budget_id: {"id": budget_id, "month": "2026-09"})
     monkeypatch.setattr(db_api, "list_budget_lines", lambda budget_id: [{"id": 1, "budget_id": budget_id}])
