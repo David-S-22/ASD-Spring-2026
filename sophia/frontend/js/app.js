@@ -181,7 +181,38 @@ billsRoot.addEventListener("htmx:beforeRequest", function (evt) {
   if (evt.detail.target === modalRoot) {
     focusBeforeModal = document.activeElement;
   }
+  // Every item in a row menu opens a modal form. Left open, the menu is still
+  // sitting there when the form closes, over a row the user stopped thinking
+  // about two clicks ago.
+  if (evt.detail.elt && evt.detail.elt.closest(".row-menu")) {
+    closeRowMenus();
+  }
 });
+
+// The row action menus are <details>, which means their open state belongs to
+// the browser and, more usefully, to the server: no fragment ever ships the
+// `open` attribute, so every one of the eight paths that replaces #bills-table
+// resets all twelve menus on its own. There is deliberately no state saved here
+// and no htmx:afterSwap hook restoring it. That is the entire reason a
+// disclosure was chosen over a scripted popup -- there is nothing to go stale.
+function closeRowMenus(except) {
+  billsRoot.querySelectorAll(".row-menu[open]").forEach(function (menu) {
+    if (menu !== except) {
+      menu.open = false;
+    }
+  });
+}
+
+// Only one menu open at a time. `toggle` does not bubble, but it does still
+// traverse the capture phase -- which is what makes a single delegated listener
+// on billsRoot possible here instead of binding twelve rows and rebinding them
+// after every swap.
+billsRoot.addEventListener("toggle", function (evt) {
+  var opened = evt.target;
+  if (opened && opened.matches && opened.matches(".row-menu[open]")) {
+    closeRowMenus(opened);
+  }
+}, true);
 
 new MutationObserver(function () {
   var form = modalRoot.querySelector(".modal-form");
@@ -216,9 +247,37 @@ modalRoot.addEventListener("click", function (evt) {
   }
 });
 
+// Escape has an order of precedence, top layer first: the confirm dialog, then
+// an open row menu, then the modal form underneath them both. Each returns
+// early, so one press closes exactly one thing.
+//
+// Still bound to document rather than billsRoot, unlike everything else in this
+// file. Moving it means Escape only fires when focus is inside #bills-root,
+// which is true on the paths that matter but not provably true on all of them,
+// and a demo is a bad place to find the exception. The cost is that a shell tab
+// revisit stacks another listener; each stale one closes over a detached
+// modalRoot whose children.length is 0, so they are inert rather than wrong.
+// Moves with the inline-confirm work, where this function is rewritten anyway.
 document.addEventListener("keydown", function (evt) {
-  if (evt.key === "Escape" && modalRoot.children.length && !document.querySelector(".modal-backdrop")) {
-    // The confirm dialog owns Escape while it is open; it sits above the form.
+  if (evt.key !== "Escape") {
+    return;
+  }
+  // The confirm dialog sits above everything and owns Escape while it is open.
+  if (document.querySelector(".modal-backdrop")) {
+    return;
+  }
+  var openMenu = billsRoot.querySelector(".row-menu[open]");
+  if (openMenu) {
+    evt.preventDefault();
+    openMenu.open = false;
+    // Focus goes back to the control that opened it, not to nowhere.
+    var toggle = openMenu.querySelector(".row-menu-toggle");
+    if (toggle && toggle.focus) {
+      toggle.focus();
+    }
+    return;
+  }
+  if (modalRoot.children.length) {
     evt.preventDefault();
     closeModalForm();
   }
@@ -229,13 +288,23 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
   if (verb === "get") {
     return;
   }
-  // Asking Tally a question is a POST, but it only ever appends to
-  // chat_messages -- no bill, payment or dispute is touched until the user
-  // confirms the preview card, which is a separate request and still gated.
-  // Gating the question itself made the app announce a change it was not
-  // making. The exemption is the ask form specifically, not the chat panel:
-  // the preview card's Confirm lives in the same panel and must stay gated.
-  if (evt.detail.elt && evt.detail.elt.closest(".chat-panel form")) {
+  // Two exemptions, for two different reasons. Everything else that writes is
+  // still gated.
+  //
+  // The ask form: asking Tally a question is a POST, but it only ever appends
+  // to chat_messages -- no bill, payment or dispute is touched until the change
+  // is confirmed. Gating the question made the app announce a change it was not
+  // making.
+  //
+  // The preview card: the card IS the confirmation step. It names the change in
+  // prose and the user has to click Confirm on it deliberately. A dialog on top
+  // of that asks twice for one decision, and the second ask is strictly the
+  // worse of the two -- it has no more information than the card just showed,
+  // so it renders the generic "Confirm this change". An earlier version of this
+  // comment argued the card had to stay gated because it sits in the same panel
+  // as the ask form; that reasoning was about where the control lives, not what
+  // it does, and the card was already a review step by the time it was written.
+  if (evt.detail.elt && (evt.detail.elt.closest(".chat-panel form") || evt.detail.elt.closest(".preview-card"))) {
     return;
   }
   evt.preventDefault();
@@ -326,6 +395,14 @@ billsRoot.addEventListener("htmx:afterSwap", function () {
 });
 
 billsRoot.addEventListener("click", function (evt) {
+  // Any click landing outside a menu closes whichever one is open. The <summary>
+  // is itself inside .row-menu, so this never fights the browser's own toggle.
+  // Deliberately not an early return -- it runs alongside whatever the click was
+  // actually for.
+  if (!evt.target.closest(".row-menu")) {
+    closeRowMenus();
+  }
+
   var tab = evt.target.closest(".tabs button");
   if (tab) {
     activateTab(tab.getAttribute("data-tab"));

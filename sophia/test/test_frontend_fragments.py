@@ -5,6 +5,7 @@ Flask app in a background thread against a temp seeded SQLite file, with
 the backend pointed at it, so the rendered HTML is checked against real
 seed data end to end.
 """
+import re
 from datetime import date
 
 import pytest
@@ -18,14 +19,102 @@ def test_bills_fragment_verbatim_header_and_columns(live_client):
     assert response.status_code == 200
     text = _text(response)
     assert "Bills & subscriptions ·" in text
+    # Matched on the closing tag rather than "<th>Name</th>": the cells now carry
+    # scope="col", so the opening tag is no longer bare.
     for column in ("Name", "Amount", "Every", "Next billing", "Paid by", "Status"):
-        assert f"<th>{column}</th>" in text
+        assert f">{column}</th>" in text
     assert "Add a bill" in text
     # The prompt names where the bill came from. It only appears for a
     # source=f4_handoff bill that has not been confirmed -- GymCo in the seed.
     assert "Added from Spending Alerts — keep it?" in text
     assert "Direct debit" in text
     assert "Fortnight" in text
+
+
+def test_bills_table_column_order_is_pinned(live_client):
+    """app.js filters rows with SEARCHABLE_CELLS = [0, 2, 4, 5], which indexes
+    cells by POSITION. Reordering or inserting a column makes the filter search
+    the wrong ones -- and it fails silently: no error, the search simply stops
+    matching. Nothing else in the suite holds that contract.
+    """
+    text = _text(live_client.get("/ui/bills"))
+    headers = re.findall(r"<th[^>]*>(.*?)</th>", text, re.S)
+    labels = [re.sub(r"<[^>]+>", "", header).strip() for header in headers]
+    assert labels == ["Name", "Amount", "Every", "Next billing", "Paid by", "Status", "Actions"]
+
+
+def test_actions_column_is_named_for_screen_readers(live_client):
+    """The header was <th></th> -- an unnamed column, announced as nothing."""
+    text = _text(live_client.get("/ui/bills"))
+    assert "<th></th>" not in text
+    assert '<span class="visually-hidden">Actions</span>' in text
+
+
+def test_row_menus_render_closed_on_every_bills_table_path(live_client):
+    """The row menus hold no state of their own: the server never emits `open`,
+    which is exactly what makes all eight #bills-table swap paths reset them for
+    free. app.js relies on that and deliberately has no restore hook, so a
+    fragment that ever shipped `open` would leave menus standing after a write
+    with nothing to close them. This is the assertion that protects the whole
+    swap-survival argument.
+    """
+    bill_id = bills_db_module.list_bills()[0]["id"]
+    bodies = {
+        "GET /ui/bills": _text(live_client.get("/ui/bills")),
+        "POST confirm": _text(live_client.post(f"/ui/bills/{bill_id}/confirm")),
+    }
+    for label, body in bodies.items():
+        tags = re.findall(r"<details[^>]*>", body)
+        assert tags, f"{label} rendered no row menus at all"
+        assert not any("open" in tag for tag in tags), f"{label} shipped an open menu"
+
+
+def test_each_row_has_one_inline_action_and_three_behind_the_menu(live_client):
+    """Rows were 135px in the shell because four action buttons wrapped onto four
+    lines. One inline plus three in the disclosure is what makes a row one line.
+    """
+    text = _text(live_client.get("/ui/bills"))
+    cells = re.findall(r'<td class="actions">(.*?)</td>', text, re.S)
+    assert cells, "no actions cells rendered"
+    for cell in cells:
+        inline, menu = cell.split("<details", 1)
+        assert inline.count("<button") == 1, "expected exactly one inline action"
+        assert menu.count("<button") == 3, "expected three actions behind the menu"
+
+
+def test_every_gated_write_trigger_names_its_change(live_client):
+    """confirmPromptFor() falls back to "Confirm this change" when nothing on or
+    above the trigger carries data-confirm. Two of roughly ten triggers had one,
+    so most confirmations named neither the bill nor the direction of the change.
+    """
+    bill_id = bills_db_module.list_bills()[0]["id"]
+    cases = {
+        "/ui/bills/new-form": ['data-confirm="Add this bill?"'],
+        f"/ui/bills/{bill_id}/edit": ['data-confirm="Save changes to', 'data-confirm="Delete '],
+        f"/ui/bills/{bill_id}/payment-form": ['data-confirm="Record this payment for'],
+        f"/ui/bills/{bill_id}/dispute-form": ['data-confirm="Draft a dispute for'],
+    }
+    for path, needles in cases.items():
+        text = _text(live_client.get(path))
+        for needle in needles:
+            assert needle in text, f"{path} is missing {needle}"
+
+
+def test_dispute_panel_status_buttons_are_gated_and_named(live_client):
+    text = _text(live_client.get("/ui/disputes"))
+    assert 'data-confirm="Mark this dispute as sent?"' in text
+    assert 'data-confirm="Mark this dispute as resolved?"' in text
+    assert 'data-confirm="Send this feedback and redraft the letter?"' in text
+
+
+def test_bills_table_oob_wrapper_still_matches_the_template(live_client):
+    """_render_bills_table_oob does a raw string replace on `id="bills-table"`.
+    It no-ops silently if that attribute is ever reformatted or reordered, and
+    the chat-apply path would stop refreshing the table with no error anywhere.
+    Nothing tested it, and this change edits that template.
+    """
+    text = _text(live_client.get("/ui/bills"))
+    assert 'id="bills-table"' in text
 
 
 def test_calendar_fragment_verbatim_copy(live_client):

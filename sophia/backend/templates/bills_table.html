@@ -8,7 +8,10 @@
   <table class="bills-table">
     <thead>
       <tr>
-        <th>Name</th><th>Amount</th><th>Every</th><th>Next billing</th><th>Paid by</th><th>Status</th><th></th>
+        {# The last column was <th></th> -- an unnamed column, which a screen
+           reader announces as nothing at all. The label is visually hidden
+           rather than shown so the header row's widths are unchanged. #}
+        <th scope="col">Name</th><th scope="col">Amount</th><th scope="col">Every</th><th scope="col">Next billing</th><th scope="col">Paid by</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
@@ -26,11 +29,34 @@
           <button class="confirm btn-sm" data-confirm="Keep {{ bill.name }} in your bills?" hx-post="/bills-backend/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
           {% endif %}
         </td>
+        {# Edit stays inline; the other three move behind a disclosure. The four
+           of them together are ~35 characters of button text, which wrapped onto
+           FOUR lines in the shell's ~684px table track and made every row 135px
+           tall (measured 2 Sep, both figures worse than the 3-lines/94px this
+           file's older comments claimed; the track reads 684-696px depending on
+           whether the panel is showing a scrollbar).
+
+           <details> rather than a scripted dropdown, for two reasons that both
+           matter here. It stays in normal flow, so .table-scroll's overflow:auto
+           cannot clip it -- an absolutely-positioned panel would be cut off on
+           exactly the bottom rows where a menu is most likely to open downward.
+           And the server never emits `open`, so all eight paths that replace
+           #bills-table reset every menu for free: no state to persist across a
+           swap, and no listener that can go stale against a detached row. #}
         <td class="actions">
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
-          <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
+          <div class="row-actions">
+            <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+            <details class="row-menu">
+              {# Without the per-bill label these are twelve identical "⋯"
+                 controls to a screen reader. aria-expanded comes free. #}
+              <summary class="row-menu-toggle" aria-label="More actions for {{ bill.name }}">⋯</summary>
+              <div class="row-menu-items">
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
+              </div>
+            </details>
+          </div>
         </td>
       </tr>
       {% endfor %}

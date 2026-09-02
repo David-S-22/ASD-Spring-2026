@@ -30,11 +30,11 @@
   <button type="button" data-action="rewrite" data-dispute-id="{{ dispute.id }}">Rewrite it</button>
   <div class="rewrite-feedback" hidden>
     <textarea class="feedback" name="feedback" placeholder="What should change?"></textarea>
-    <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next .working">Send feedback</button>
+    <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/regenerate" hx-include=".feedback" hx-target="#dispute-panel" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next .working" data-confirm="Send this feedback and redraft the letter?">Send feedback</button>
     <span class="htmx-indicator working">Rewriting — this can take up to a minute…</span>
   </div>
-  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as sent</button>
-  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as resolved</button>
+  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML" data-confirm="Mark this dispute as sent?">Mark as sent</button>
+  <button hx-post="/bills-backend/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML" data-confirm="Mark this dispute as resolved?">Mark as resolved</button>
   {% else %}
   <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
   {% endif %}
