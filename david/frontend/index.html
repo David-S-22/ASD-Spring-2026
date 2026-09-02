@@ -104,7 +104,6 @@
         const resp = evt.detail.xhr.responseText;
         showError('Request failed (' + status + '): ' + (resp || 'Invalid request or server error'));
       });
-
       document.addEventListener('htmx:sendError', function() {
         showError('Network error: Unable to communicate with the server.');
       });

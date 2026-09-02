@@ -3,7 +3,7 @@
         <h2>AI Suggestion</h2>
     </div>
     <div class="ai-suggestion-body" id="ai-suggestion">
-        <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
+        <textarea class="ai-suggestion-textbox" name="suggestion" rows="3" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
         {% if has_transactions and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and suggestion != "No current AI suggestion available." %}
         <div class="ai-suggestion-actions">
             <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/action?accepted=true" hx-include="closest #ai-suggestion-container" hx-target="#suggestions" hx-swap="innerHTML">Accept</button>
