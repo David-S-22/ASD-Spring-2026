@@ -7,7 +7,8 @@
         display: none !important;
     }
 
-    .transactions-toolbar {
+    .transactions-toolbar,
+    .transaction-chat-heading {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
@@ -15,14 +16,16 @@
     }
 
     .transactions-toolbar h1,
-    .transaction-form-screen h1 {
-        margin-bottom: 0.25rem;
+    .transaction-form-screen h1,
+    .transaction-chat-heading h2 {
+        margin: 0;
     }
 
     .transactions-toolbar p,
-    .transaction-form-screen > p {
-        margin-top: 0;
-        color: var(--color-text-muted, #94a3b8);
+    .transaction-form-screen > p,
+    .transaction-chat-heading p {
+        margin: 0.25rem 0 0;
+        color: var(--color-text-muted, #64748b);
     }
 
     .transactions-table-wrapper {
@@ -35,9 +38,10 @@
     }
 
     .back-button {
-        background: transparent !important;
-        color: var(--color-primary, #38bdf8) !important;
+        margin-bottom: 1rem;
         padding-left: 0 !important;
+        background: transparent !important;
+        color: var(--color-primary, #0f766e) !important;
     }
 
     .transaction-form {
@@ -76,9 +80,7 @@
 
     .transaction-form-actions {
         display: flex;
-        align-items: center;
         gap: 1rem;
-        flex-wrap: wrap;
     }
 
     .transaction-form-actions button {
@@ -87,239 +89,217 @@
 
     .form-message {
         margin: 0;
-        color: var(--color-danger, #f87171);
+        color: var(--color-danger, #dc2626);
     }
 
     .transaction-notice {
-        color: var(--color-success, #4ade80);
         margin: 1rem 0 0;
+        color: var(--color-success, #16a34a);
+    }
+
+    .transaction-chat-panel {
+        margin-top: 1.5rem;
+        padding: 1.4rem;
+        border: 1px solid var(--color-border, #cbd5e1);
+        border-radius: var(--radius, 10px);
+        background: var(--color-surface-alt, #f8fafc);
+    }
+
+    .transaction-chat-heading {
+        align-items: baseline;
+        margin-bottom: 1rem;
+    }
+
+    .transaction-chat-heading h2 {
+        font-size: 1.05rem;
+    }
+
+    .transaction-chat-heading p {
+        font-size: 0.85rem;
+    }
+
+    .transaction-chat-prompts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+    }
+
+    .transaction-chat-prompts form,
+    .transaction-chat-actions form {
+        margin: 0;
+    }
+
+    .transaction-chat-prompt {
+        padding: 0.55rem 0.8rem !important;
+        border: 1px solid var(--color-border, #cbd5e1) !important;
+        background: transparent !important;
+        color: var(--color-text-muted, #475569) !important;
+        font-weight: 500 !important;
+        text-align: left;
+    }
+
+    .transaction-chat-prompt:hover {
+        border-color: var(--color-primary, #0f766e) !important;
+        background: var(--color-surface, #ffffff) !important;
+        color: var(--color-text, #0f172a) !important;
+    }
+
+    .transaction-chat-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.75rem;
+    }
+
+    .transaction-chat-form input {
+        min-height: 3rem;
+    }
+
+    .transaction-chat-form button {
+        min-width: 5rem;
+    }
+
+    .transaction-chat-status {
+        margin: 0.85rem 0 0;
+        color: var(--color-text-muted, #64748b);
+    }
+
+    .transaction-chat-response {
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-response:empty {
+        display: none;
+    }
+
+    .transaction-chat-response-card,
+    .transaction-chat-preview {
+        padding: 1rem;
+        border: 1px solid var(--color-border, #cbd5e1);
+        border-radius: var(--radius, 10px);
+        background: var(--color-surface, #ffffff);
+    }
+
+    .transaction-chat-response-card > :first-child,
+    .transaction-chat-preview h3 {
+        margin-top: 0;
+    }
+
+    .transaction-chat-response-card > :last-child {
+        margin-bottom: 0;
+    }
+
+    .transaction-chat-summary,
+    .transaction-chat-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-metric,
+    .transaction-chat-operation {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 0.3rem 0.65rem;
+        background: var(--color-surface-alt, #e2e8f0);
+        color: var(--color-text, #0f172a);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-preview-grid.single {
+        grid-template-columns: 1fr;
+    }
+
+    .transaction-chat-preview {
+        background: var(--color-surface-alt, #f8fafc);
+    }
+
+    .transaction-chat-preview h3 {
+        margin-bottom: 0.7rem;
+        font-size: 0.9rem;
+    }
+
+    .transaction-chat-preview dl {
+        display: grid;
+        grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+        gap: 0.35rem 0.8rem;
+        margin: 0;
+    }
+
+    .transaction-chat-preview dt {
+        color: var(--color-text-muted, #64748b);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-preview dd {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .transaction-chat-cancel {
+        border: 1px solid var(--color-border, #cbd5e1) !important;
+        background: transparent !important;
+        color: var(--color-text, #0f172a) !important;
+    }
+
+    .transaction-chat-matches {
+        margin-bottom: 0;
+        padding-left: 1.25rem;
+    }
+
+    .screen-reader-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .htmx-indicator {
+        display: none;
+    }
+
+    .htmx-request.htmx-indicator,
+    .htmx-request .htmx-indicator {
+        display: block;
     }
 
     @media (max-width: 700px) {
         .transactions-toolbar,
-        .transaction-form-grid {
+        .transaction-form-grid,
+        .transaction-chat-heading,
+        .transaction-chat-form,
+        .transaction-chat-preview-grid {
             display: grid;
             grid-template-columns: 1fr;
         }
 
-        .transactions-toolbar button {
+        .transactions-toolbar button,
+        .transaction-chat-form button {
             width: 100%;
         }
     }
 </style>
 
-<section id="transaction-list-screen" class="panel">
-    <div class="transactions-toolbar">
-        <div>
-            <h1>Transactions</h1>
-            <p>Review the transactions you have entered.</p>
-        </div>
-        <button id="add-transaction-button"
-                type="button"
-                onclick="showAddTransactionScreen()">
-            + Add transaction
-        </button>
-    </div>
-
-    <p id="transaction-notice"
-       class="transaction-notice"
-       role="status"
-       hidden></p>
-
-    <div class="transactions-table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Merchant</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Category</th>
-                </tr>
-            </thead>
-            <tbody id="transactions"
-                   hx-get="/transactions-backend/ui/transactions"
-                   hx-trigger="load, transactionsChanged"
-                   hx-swap="innerHTML">
-                <tr><td colspan="5">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
+<section id="transactions-content"
+         class="panel"
+         hx-get="/transactions-backend/ui/transactions/page"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+    <p class="loading-state">Loading transactions...</p>
 </section>
-
-<section id="transaction-form-screen"
-         class="panel transaction-form-screen"
-         hidden>
-    <button type="button"
-            class="back-button"
-            onclick="showTransactionList()">
-        &larr; Back to transactions
-    </button>
-
-    <h1>Add a transaction</h1>
-    <p>Fill in the transaction details and choose a category before saving.</p>
-
-    <form id="add-transaction-form"
-          class="transaction-form"
-          onsubmit="saveTransaction(event)">
-        <div class="transaction-form-grid">
-            <div class="transaction-form-field">
-                <label for="transaction-date">Date</label>
-                <input id="transaction-date"
-                       name="date"
-                       type="date"
-                       required>
-            </div>
-
-            <div class="transaction-form-field">
-                <label for="transaction-amount">Amount</label>
-                <input id="transaction-amount"
-                       name="amount"
-                       type="number"
-                       min="0"
-                       step="0.01"
-                       placeholder="0.00"
-                       required>
-            </div>
-        </div>
-
-        <div class="transaction-form-field">
-            <label for="transaction-merchant">Merchant</label>
-            <input id="transaction-merchant"
-                   name="merchant"
-                   type="text"
-                   maxlength="200"
-                   placeholder="Woolworths Town Hall"
-                   required>
-        </div>
-
-        <div class="transaction-form-field">
-            <label for="transaction-description">Description</label>
-            <textarea id="transaction-description"
-                      name="description"
-                      maxlength="500"
-                      placeholder="What was the transaction for?"
-                      required></textarea>
-        </div>
-
-        <div class="transaction-form-field">
-            <label for="transaction-category">Category</label>
-            <select id="transaction-category"
-                    name="category_id"
-                    required>
-                <option value="">Loading categories...</option>
-            </select>
-        </div>
-
-        <p id="transaction-form-message"
-           class="form-message"
-           role="alert"
-           hidden></p>
-
-        <div class="transaction-form-actions">
-            <button id="save-transaction-button" type="submit">
-                Save transaction
-            </button>
-        </div>
-    </form>
-</section>
-
-<script>
-    function setTransactionScreen(showForm) {
-        document.getElementById('transaction-list-screen').hidden = showForm;
-        document.getElementById('transaction-form-screen').hidden = !showForm;
-    }
-
-    function showFormMessage(message) {
-        const messageElement = document.getElementById('transaction-form-message');
-        messageElement.textContent = message;
-        messageElement.hidden = !message;
-    }
-
-    async function loadTransactionCategories() {
-        const categorySelect = document.getElementById('transaction-category');
-        categorySelect.disabled = true;
-        categorySelect.replaceChildren(new Option('Loading categories...', ''));
-
-        try {
-            const response = await fetch('/transactions-backend/categories');
-            const categories = await response.json();
-            if (!response.ok || !Array.isArray(categories)) {
-                throw new Error('Unable to load categories.');
-            }
-
-            categorySelect.replaceChildren(
-                new Option('Select a category', '')
-            );
-            for (const category of categories) {
-                categorySelect.add(
-                    new Option(category.name, String(category.id))
-                );
-            }
-            categorySelect.disabled = false;
-        } catch (error) {
-            categorySelect.replaceChildren(
-                new Option('Categories unavailable', '')
-            );
-            showFormMessage('Unable to load categories. Please go back and try again.');
-        }
-    }
-
-    async function showAddTransactionScreen() {
-        const dateInput = document.getElementById('transaction-date');
-        if (!dateInput.value) {
-            dateInput.value = new Date().toISOString().slice(0, 10);
-        }
-        showFormMessage('');
-        setTransactionScreen(true);
-        await loadTransactionCategories();
-    }
-
-    function showTransactionList() {
-        showFormMessage('');
-        setTransactionScreen(false);
-    }
-
-    async function saveTransaction(event) {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const saveButton = document.getElementById('save-transaction-button');
-        const formData = new FormData(form);
-        const payload = {
-            date: formData.get('date'),
-            amount: Number(formData.get('amount')),
-            merchant: formData.get('merchant'),
-            description: formData.get('description'),
-            category_id: Number(formData.get('category_id')),
-        };
-
-        saveButton.disabled = true;
-        showFormMessage('');
-
-        try {
-            const response = await fetch('/transactions-backend/transactions', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || 'Unable to save transaction.');
-            }
-
-            form.reset();
-            showTransactionList();
-            const notice = document.getElementById('transaction-notice');
-            notice.textContent = 'Transaction saved.';
-            notice.hidden = false;
-            htmx.trigger(
-                document.getElementById('transactions'),
-                'transactionsChanged'
-            );
-        } catch (error) {
-            showFormMessage(error.message || 'Unable to save transaction.');
-        } finally {
-            saveButton.disabled = false;
-        }
-    }
-</script>

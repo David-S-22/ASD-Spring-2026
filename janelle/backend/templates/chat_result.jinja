@@ -1,0 +1,132 @@
+{% macro transaction_preview(title, transaction) -%}
+<section class="transaction-chat-preview">
+    <h3>{{ title }}</h3>
+    <dl>
+        <dt>Date</dt>
+        <dd>{{ transaction.date|transaction_date }}</dd>
+        <dt>Merchant</dt>
+        <dd>{{ transaction.merchant }}</dd>
+        <dt>Description</dt>
+        <dd>{{ transaction.description }}</dd>
+        <dt>Amount</dt>
+        <dd>{{ transaction.amount|currency }}</dd>
+        <dt>Category</dt>
+        <dd>{{ transaction.category_name or transaction.category_id }}</dd>
+    </dl>
+</section>
+{%- endmacro %}
+
+<div class="transaction-chat-response-card"
+     {% if error %}role="alert"{% endif %}>
+{% if error %}
+    <p>{{ error }}</p>
+{% elif success %}
+    <p>{{ success }}</p>
+{% elif result %}
+    <p>{{ result.reply }}</p>
+
+    {% if result.analytics and (
+        "count" in result.analytics.calculations
+        or "sum" in result.analytics.calculations
+        or "average" in result.analytics.calculations
+    ) %}
+    <div class="transaction-chat-summary">
+        {% if "count" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            {{ result.analytics.count }}
+            transaction{% if result.analytics.count != 1 %}s{% endif %}
+        </span>
+        {% endif %}
+        {% if "sum" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            Total {{ result.analytics.sum|currency }}
+        </span>
+        {% endif %}
+        {% if "average" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            Average {{ result.analytics.average|currency }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if result.requires_clarification and result.matches %}
+    <ul class="transaction-chat-matches">
+        {% for transaction in result.matches %}
+        <li>
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if result.analytics and not result.analytics.calculations and result.transactions %}
+    <h3>Matching transactions</h3>
+    <ul class="transaction-chat-matches">
+        {% for transaction in result.transactions %}
+        <li>
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.description }} ·
+            {{ transaction.category_name }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if result.analytics and "largest" in result.analytics.calculations and result.transactions %}
+    <h3>Biggest purchases</h3>
+    <ol class="transaction-chat-matches">
+        {% for transaction in result.transactions %}
+        <li>
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.description }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+
+    {% if result.preview %}
+    {% set preview = result.preview %}
+    <span class="transaction-chat-operation">
+        {{ preview.operation|capitalize }} preview
+    </span>
+
+    <div class="transaction-chat-preview-grid{% if preview.operation != "update" %} single{% endif %}">
+        {% if preview.operation == "create" %}
+            {{ transaction_preview("Transaction to create", preview.after) }}
+        {% elif preview.operation == "delete" %}
+            {{ transaction_preview("Transaction to delete", preview.before) }}
+        {% else %}
+            {{ transaction_preview("Before", preview.before) }}
+            {{ transaction_preview("After", preview.after) }}
+        {% endif %}
+    </div>
+
+    <div class="transaction-chat-actions">
+        <form hx-post="/transactions-backend/ui/chat/apply"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-disabled-elt="button"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="preview"
+                   value='{{ preview|tojson }}'>
+            <button type="submit">Confirm</button>
+        </form>
+        <button type="button"
+                class="transaction-chat-cancel"
+                hx-get="/transactions-backend/ui/chat/clear"
+                hx-target="#transaction-chat-response"
+                hx-swap="innerHTML">
+            Cancel
+        </button>
+    </div>
+    {% endif %}
+{% endif %}
+</div>

@@ -8,49 +8,112 @@ def test_frontend_loads_transaction_rows_with_htmx():
     index = (
         REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
     ).read_text(encoding="utf-8")
+    page = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_page.jinja"
+    ).read_text(encoding="utf-8")
 
     assert "htmx.org@2.0.10" in index
-    assert 'id="transactions"' in index
-    assert 'hx-get="/transactions-backend/ui/transactions"' in index
-    assert 'hx-trigger="load, transactionsChanged"' in index
-    assert 'hx-swap="innerHTML"' in index
-    assert "<th>ID</th>" not in index
-    assert 'colspan="5"' in index
+    assert 'hx-get="/transactions-backend/ui/transactions/page"' in index
+    assert 'id="transactions"' in page
+    assert 'hx-get="/transactions-backend/ui/transactions"' in page
+    assert 'hx-trigger="load, transactionsChanged from:body"' in page
+    assert 'hx-swap="innerHTML"' in page
+    assert "<th>ID</th>" not in page
+    assert 'colspan="5"' in page
 
 
-def test_frontend_has_add_transaction_screen_and_back_button():
-    index = (
-        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+def test_add_transaction_button_loads_jinja_form_with_htmx():
+    page = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_page.jinja"
     ).read_text(encoding="utf-8")
 
-    assert 'id="add-transaction-button"' in index
-    assert 'onclick="showAddTransactionScreen()"' in index
-    assert 'id="transaction-form-screen"' in index
-    assert 'onclick="showTransactionList()"' in index
-    assert "Back to transactions" in index
-    assert 'id="transaction-date"' in index
-    assert 'id="transaction-amount"' in index
-    assert 'id="transaction-merchant"' in index
-    assert 'id="transaction-description"' in index
-    assert 'id="transaction-category"' in index
-    assert 'id="save-transaction-button"' in index
+    assert 'id="add-transaction-button"' in page
+    assert 'type="button"' in page
+    assert 'hx-get="/transactions-backend/ui/transactions/new"' in page
+    assert 'hx-target="#transactions-content"' in page
+    assert 'hx-swap="outerHTML"' in page
+    assert "+ Add transaction" in page
 
 
-def test_frontend_loads_categories_and_posts_transaction_to_backend():
-    index = (
-        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+def test_transaction_form_contains_required_fields_and_htmx_actions():
+    form = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transaction_form.jinja"
     ).read_text(encoding="utf-8")
 
-    assert "fetch('/transactions-backend/categories')" in index
-    assert "fetch('/transactions-backend/transactions'" in index
-    assert "method: 'POST'" in index
-    assert "headers: {'Content-Type': 'application/json'}" in index
-    assert "body: JSON.stringify(payload)" in index
-    assert "amount: Number(formData.get('amount'))" in index
-    assert "category_id: Number(formData.get('category_id'))" in index
-    assert "document.getElementById('transactions')" in index
-    assert "'transactionsChanged'" in index
-    assert "transactions-db" not in index
+    assert 'id="add-transaction-form"' in form
+    assert 'hx-post="/transactions-backend/ui/transactions"' in form
+    assert 'hx-target="#transactions-content"' in form
+    assert 'hx-swap="outerHTML"' in form
+    assert 'hx-disabled-elt="#save-transaction-button"' in form
+    assert "Back to transactions" in form
+    assert 'hx-get="/transactions-backend/ui/transactions/page"' in form
+    assert 'id="transaction-date"' in form
+    assert 'name="date"' in form
+    assert 'type="date"' in form
+    assert 'id="transaction-amount"' in form
+    assert 'name="amount"' in form
+    assert 'type="number"' in form
+    assert 'step="0.01"' in form
+    assert 'id="transaction-merchant"' in form
+    assert 'name="merchant"' in form
+    assert 'id="transaction-description"' in form
+    assert 'name="description"' in form
+    assert 'id="transaction-category"' in form
+    assert 'name="category_id"' in form
+    assert 'id="save-transaction-button"' in form
+    assert form.count("required") == 5
+
+
+def test_frontend_places_ask_tally_below_the_transaction_table():
+    page = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_page.jinja"
+    ).read_text(encoding="utf-8")
+    panel = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "chat_panel.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="transaction-chat-panel"' in page
+    assert 'hx-get="/transactions-backend/ui/chat"' in page
+    assert page.index('id="transactions"') < page.index(
+        'id="transaction-chat-panel"'
+    )
+    assert ">Ask Tally</h2>" in panel
+    assert "What did I spend at Woolworths in August?" in panel
+    assert "Show my biggest purchases in August" in panel
+    assert "How much did eating out cost me last week?" in panel
+    assert 'placeholder="Ask about your transactions..."' in panel
+    assert panel.count("hx-on::before-request") == 3
+    assert (
+        "document.getElementById('transaction-chat-input').value = ''"
+        in panel
+    )
+    assert "Biggest purchases" in (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "chat_result.jinja"
+    ).read_text(encoding="utf-8")
 
 
 def test_frontend_proxies_only_to_backend():
@@ -63,7 +126,32 @@ def test_frontend_proxies_only_to_backend():
     assert "transactions-db" not in nginx
 
 
+def test_shared_shell_proxies_transactions_backend_through_frontend():
+    nginx = (
+        REPOSITORY_ROOT / "shared" / "frontend" / "nginx.conf"
+    ).read_text(encoding="utf-8")
+    location_start = nginx.index("location /transactions-backend/")
+    location_end = nginx.index("\n    }", location_start)
+    transactions_location = nginx[location_start:location_end]
+
+    assert "proxy_pass ${TRANSACTIONS_FRONTEND_URL};" in transactions_location
+
+
 def test_compose_sets_twenty_second_database_timeout():
     compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
     assert "DATABASE_TIMEOUT_SECONDS: 20" in compose
+
+
+def test_compose_configures_pr4_chat_services():
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    transactions_backend = compose.split("\n  transactions-backend:", 1)[1].split(
+        "\n  transactions-db:",
+        1,
+    )[0]
+    assert "OLLAMA_URL: http://ollama:11434" in transactions_backend
+    assert "CHAT_MODEL: qwen2.5:3b" in transactions_backend
+    assert "AI_TIMEOUT_SECONDS: 90" in transactions_backend
+    assert "ollama:" in transactions_backend
+    assert "condition: service_healthy" in transactions_backend
