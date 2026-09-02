@@ -93,6 +93,7 @@ def seed_database_if_empty():
             month, declared_income, budget_status = budget_row
             timestamp = f"{month}-01T09:00:00+00:00"
             budget = Budget(
+                id=index,
                 month=month,
                 declared_income=declared_income,
                 status=budget_status,
@@ -106,6 +107,7 @@ def seed_database_if_empty():
             warn_at = 10000 + index * 1000
             hard_cap = warn_at + 5000
             budget_line = BudgetLine(
+                id=index,
                 budget_id=budget.id,
                 category_id=category_id,
                 category=category,
@@ -117,6 +119,7 @@ def seed_database_if_empty():
             db.session.add(budget_line)
 
             planned_event = PlannedEvent(
+                id=index,
                 budget_id=budget.id,
                 date=f"{month}-0{index if index < 10 else 9}",
                 label=SEED_EVENT_LABELS[index - 1],
@@ -138,6 +141,7 @@ def seed_database_if_empty():
                 else None
             )
             coach_proposal = CoachProposal(
+                id=index,
                 budget_id=budget.id,
                 proposal_json={
                     "proposal_type": "coach_seed",

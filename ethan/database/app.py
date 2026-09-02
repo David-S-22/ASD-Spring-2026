@@ -4,7 +4,6 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
 
 from flask import Flask, jsonify, request
 from sqlalchemy import func, select
@@ -130,11 +129,14 @@ def _validate_date(value: str | None, field: str):
         raise ApiError(f"{field} must use YYYY-MM-DD format", 422, "invalid_field") from error
 
 
-def _validate_guid(identifier: str, field: str = "id") -> str:
+def _validate_id(identifier: str, field: str = "id") -> int:
     try:
-        return str(UUID(identifier))
+        value = int(identifier)
     except (ValueError, TypeError) as error:
-        raise ApiError(f"{field} must be a valid GUID", 422, "invalid_field") from error
+        raise ApiError(f"{field} must be an integer", 422, "invalid_field") from error
+    if value < 1:
+        raise ApiError(f"{field} must be an integer", 422, "invalid_field")
+    return value
 
 
 def _require_fields(data: dict, fields: list[str]):
@@ -211,34 +213,34 @@ def _validate_coach_proposal_payload(data: dict, partial: bool = False) -> dict:
 
 
 def _get_budget_or_404(budget_id: str) -> Budget:
-    budget = db.session.get(Budget, _validate_guid(budget_id, "budget_id"))
+    budget = db.session.get(Budget, _validate_id(budget_id, "budget_id"))
     if budget is None:
         raise ApiError("budget not found", 404, "budget_not_found")
     return budget
 
 
 def _get_budget_line_or_404(line_id: str) -> BudgetLine:
-    line = db.session.get(BudgetLine, _validate_guid(line_id, "budget_line_id"))
+    line = db.session.get(BudgetLine, _validate_id(line_id, "budget_line_id"))
     if line is None:
         raise ApiError("budget line not found", 404, "budget_line_not_found")
     return line
 
 
 def _get_planned_event_or_404(event_id: str) -> PlannedEvent:
-    planned_event = db.session.get(PlannedEvent, _validate_guid(event_id, "planned_event_id"))
+    planned_event = db.session.get(PlannedEvent, _validate_id(event_id, "planned_event_id"))
     if planned_event is None:
         raise ApiError("planned event not found", 404, "planned_event_not_found")
     return planned_event
 
 
 def _get_coach_proposal_or_404(proposal_id: str) -> CoachProposal:
-    proposal = db.session.get(CoachProposal, _validate_guid(proposal_id, "coach_proposal_id"))
+    proposal = db.session.get(CoachProposal, _validate_id(proposal_id, "coach_proposal_id"))
     if proposal is None:
         raise ApiError("coach proposal not found", 404, "coach_proposal_not_found")
     return proposal
 
 
-def _budget_has_category_id(budget_id: str, category_id: int | None, excluded_line_id: str | None = None) -> bool:
+def _budget_has_category_id(budget_id: int, category_id: int | None, excluded_line_id: int | None = None) -> bool:
     if category_id is None:
         return False
     statement = select(func.count()).select_from(BudgetLine).where(
@@ -250,7 +252,7 @@ def _budget_has_category_id(budget_id: str, category_id: int | None, excluded_li
     return db.session.scalar(statement) > 0
 
 
-def _budget_has_category_name(budget_id: str, category: str | None, excluded_line_id: str | None = None) -> bool:
+def _budget_has_category_name(budget_id: int, category: str | None, excluded_line_id: int | None = None) -> bool:
     if category is None:
         return False
     statement = select(func.count()).select_from(BudgetLine).where(
@@ -262,7 +264,7 @@ def _budget_has_category_name(budget_id: str, category: str | None, excluded_lin
     return db.session.scalar(statement) > 0
 
 
-def _require_existing_budget_line_category(budget_id: str, category: str | None):
+def _require_existing_budget_line_category(budget_id: int, category: str | None):
     if category is None:
         return
     if not _budget_has_category_name(budget_id, category):

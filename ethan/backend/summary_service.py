@@ -33,6 +33,11 @@ def build_budget_summary(budget_id: str) -> dict:
     categories = transactions_api.list_categories()
     category_names = _category_name_map(categories)
     transactions = transactions_api.list_transactions_for_month(budget.get("month") or "")
+    budgeted_category_ids = {
+        category_id
+        for category_id in (line.get("category_id") for line in budget_lines)
+        if isinstance(category_id, int)
+    }
 
     actual_spend_by_category_id: dict[int, int] = {}
     actual_spend_by_category_name: dict[str, int] = {}
@@ -96,12 +101,23 @@ def build_budget_summary(budget_id: str) -> dict:
                 "planned_est_high_total": planned_totals["high"],
                 "projected_low_total": projected_low,
                 "projected_high_total": projected_high,
-                "warning_state": bool(warn_at is not None and projected_high >= warn_at),
-                "cap_state": bool(hard_cap is not None and projected_high >= hard_cap),
-                "remaining_to_warn": None if warn_at is None else warn_at - projected_high,
-                "remaining_to_cap": None if hard_cap is None else hard_cap - projected_high,
+                "warning_state": bool(warn_at is not None and actual_spend >= warn_at),
+                "cap_state": bool(hard_cap is not None and actual_spend >= hard_cap),
+                "remaining_to_warn": None if warn_at is None else warn_at - actual_spend,
+                "remaining_to_cap": None if hard_cap is None else hard_cap - actual_spend,
             }
         )
+
+    other_expenses = [
+        {
+            "category_id": category_id,
+            "category": category_names[category_id],
+            "actual_spend": actual_spend,
+        }
+        for category_id, actual_spend in actual_spend_by_category_id.items()
+        if category_id not in budgeted_category_ids and category_id in category_names
+    ]
+    other_expenses.sort(key=lambda expense: str(expense.get("category") or ""))
 
     totals = {
         "declared_income": budget.get("declared_income"),
@@ -126,6 +142,7 @@ def build_budget_summary(budget_id: str) -> dict:
         "transactions": {
             "count": len(transactions),
             "uncategorised_total": uncategorised_total,
+            "other_expenses": other_expenses,
         },
         "totals": totals,
     }

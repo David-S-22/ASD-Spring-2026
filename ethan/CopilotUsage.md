@@ -1395,3 +1395,178 @@ The main changes are:
 The stack is currently stopped, `docker compose ps` shows no running services, `docker compose config` is valid, and `pytest ethan/test` passes.
 ## Prompt
 why can the volumes still not be removed (in use)
+## Prompt
+lets begin work on the first feature, the budget and budget-line display - feel free to completely remove the existing budget list in our frontend as that was just a temp thing to be there
+## Response
+Implemented the first real Budgets frontend slice by replacing the temporary budget list with an active-budget overview screen. The page now loads the available budgets, chooses the active month by default, lets the user switch months, loads the selected budget summary from the backend, and renders each budget line with spent-vs-cap amounts, warning markers, projected totals, and overall summary cards.
+
+I also added a small frontend regression test so this slice is covered by `pytest ethan/test`. The current Ethan test suite now passes with 23 tests.
+## Prompt
+Add a button to add more budget lines
+## Response
+Added an `Add budget line` button to the Budgets overview and wired it to a simple inline creation form. The form loads transaction categories from the backend, collects `warn_at` and `hard_cap`, posts to the existing budget-line create endpoint for the active budget, and refreshes the overview after a successful save.
+
+I also updated the frontend regression test so this flow is covered by `pytest ethan/test`.
+## Prompt
+add ability to edit or cancel existing budget lines
+## Response
+Added inline edit and remove controls for existing budget lines in the Budgets overview. Each line now has `Edit` and `Remove` actions; edit reuses the existing budget-line form with the current line values preloaded, and remove calls the existing delete endpoint after confirmation.
+
+I also updated the frontend regression test so these controls are covered by `pytest ethan/test`.
+## Prompt
+When the user inputs money values, it should be interprated as exactly that much e.g. user puts in warn at 50, should be warn at $50. also for some reason sometimes the warning is present on budget lines that are not up to warn threshold yet
+## Response
+Fixed both issues in the Budgets overview flow.
+
+Money inputs for `warn_at` and `hard_cap` are now treated as dollar amounts in the UI, so entering `50` stores and behaves as `$50.00` rather than `50` cents. The form now converts dollars to cents before sending POST/PATCH requests, and edit mode converts stored cents back into dollar inputs when preloading an existing line.
+
+I also corrected the budget-line warning logic so `warning_state` and `cap_state` are based on current `actual_spend`, not projected totals. Projected totals are still calculated and displayed separately, but they no longer cause a line to look over threshold before the real spend has actually reached it.
+
+The related backend/frontend tests were updated and `pytest ethan/test` passes with 23 tests.
+## Prompt
+Add a dropdown below all of the existing budget lines, "Show other expenses", that shows how much has been spent for categories not given specifc lines. it should list the categories individually, and have a button next to each to quick add a new line for it.
+## Response
+Added a collapsible `Show other expenses` section below the existing budget lines in the Budgets overview.
+
+The backend summary now returns individual spend totals for transaction categories that do not yet have their own budget lines, and the frontend renders each one separately inside that dropdown. Each row includes an `Add line` button that quick-creates a new budget line for that category on the active budget and then refreshes the overview so it moves out of the other-expenses list and into the main budget-line list.
+
+I kept the existing uncategorised total for transactions that still do not have a usable transaction category, and the Budgets test suite now passes with 24 tests.
+## Prompt
+when trying to open the budgets page a second time, e.g. clicking on budgets, then clicking on budgets again, or clicking on budgets -> home -> budgets, the page breaks or is stuck on 'loading budget overview' until the whole site is reloaded through the brower e.g. ctrl + r
+## Response
+Fixed the Budgets page re-entry bug in the shared HTMX shell flow.
+
+The issue was that the Budgets page script was being loaded again on later visits, which caused the page lifecycle to break when the user navigated back into Budgets. I wrapped the page logic so it can be safely mounted more than once, and added guards for async UI updates so old in-flight requests do not try to write back into a page that has already been swapped out.
+
+That means opening Budgets again through `Budgets -> Budgets` or `Budgets -> Home -> Budgets` no longer depends on a full browser refresh. The Budgets test suite still passes with 24 tests.
+## Prompt
+ive been considering how the user should interact with the overall budgets, and if they should have direct control over creating/deleting them or if there should just always exist 1 for every month, and just edit them, selecting which month they are currently controlling.
+## Response
+The better model for this feature is **one budget per month**, with the user mainly **editing** the selected month rather than freely creating and deleting whole budgets.
+
+That fits the current schema and the budgeting use case much better. A monthly budget is a recurring planning object, not a one-off record, so the cleanest rule is: each month can have at most one budget, the user switches between months, and that month’s budget is what they manage. In practice I would make the UI behave as though a budget always exists for a chosen month, either because it was already created earlier or because the system creates a draft one the first time the user opens that month.
+
+For Release 0, I would avoid exposing full create/delete controls for top-level budgets. Editing is useful; deleting is risky and adds edge cases around budget lines, planned events, and history. A safer approach is:
+- month selector at the top
+- if that month already exists, load it
+- if it does not exist yet, auto-create a draft budget for that month
+- allow editing its values and lines
+- optionally allow `closed`/archived status later instead of delete
+
+That gives the user strong control without making the product messy. It also supports the rubric better because it is easier to demonstrate a coherent end-to-end monthly workflow than a generic CRUD list of budgets.
+## Prompt
+under this new mentality how should we define the state of each budget - should it be user defined, or should all future months be automatically drafts, that become active on monthly turn over, with all past being closed
+## Response
+The better model is mostly **automatic state**, not user-defined state.
+
+I would make the status rule:
+- future months = `draft`
+- current month = `active`
+- past months = `closed`
+
+That fits the monthly-budget model much better and prevents messy states like multiple active budgets or a user accidentally closing the current month. In this design, status is mainly derived from the budget month rather than treated as a normal free-edit field.
+
+For Release 0, I would keep `status` in the database, but make the backend responsible for enforcing it. That means:
+1. only one budget can be active at a time
+2. month rollover automatically moves the previous active month to closed
+3. the new current month becomes active
+4. future months stay draft until their month arrives
+
+If you want a small override later, it is better to add a controlled action like “reopen this month” than to let users freely set any status manually.
+## Prompt
+when could this update
+## Response
+It should update whenever the system evaluates “what month is it now?” against the budget’s `month`.
+
+The cleanest rule is that status does not need a manual scheduled job for Release 0. Instead, it can update opportunistically whenever one of the Budgets backend endpoints is called, especially on:
+- loading the budgets page
+- requesting the active/current month budget
+- listing budgets
+- opening a specific month
+
+In practice that means:
+1. backend checks today’s year-month
+2. if last month is still marked `active`, change it to `closed`
+3. if this month exists, ensure it is `active`
+4. if this month does not exist yet, create it as the current month budget and mark it `active`
+5. leave later months as `draft`
+
+So the visible update would usually happen the first time the user opens Budgets after month rollover, not necessarily exactly at midnight. That is usually the best tradeoff for Interim 0 because it is simpler and still behaves correctly from the user’s point of view.
+## Prompt
+update the page to reflect our new mentality, and have the user navigate budgets through selecting months. Add arrows for the user to move forward and back 1 month respectively.
+## Response
+Updated the Budgets page so month selection is now the main way the user navigates budgets.
+
+The top control now uses a month picker instead of choosing from budget records directly, and it includes previous/next arrow buttons to move backward or forward by exactly one month. The page now loads the selected month, shows that month’s budget if it exists, and shows a clear empty-month state if it does not.
+
+I also removed the old “active budget record” feel from the header copy so the UI now matches the one-budget-per-month approach more closely. The Budgets test suite still passes with 24 tests.
+## Prompt
+have it so pressing anywhere on the month button opens the selection menu
+## Response
+Updated the Budgets month control so the whole month field acts like a clickable picker surface.
+
+The month input is now wrapped in a full clickable control, and clicking anywhere on that area opens the browser’s month picker rather than relying on the small native trigger area alone. Keyboard activation was also wired in for the wrapper so the control still behaves cleanly when focused.
+
+The Budgets test suite still passes with 24 tests.
+## Prompt
+the button is worse now, clicking the button isnt opening the dropdown
+## Response
+Fixed the month picker again by removing the wrapper-trigger approach and making the real native month input cover the full control area.
+
+The previous change depended on wrapper click handling, which was less reliable than letting the browser handle the picker directly. The month control now uses a visible display layer with the actual `type="month"` input stretched invisibly across the full button area, so clicking anywhere on the month field goes straight to the native picker interaction.
+
+The Budgets test suite still passes with 24 tests.
+## Prompt
+I want to be able to select the 'september 2026' part of the button which isnt working
+## Response
+Adjusted the month control so the visible month text itself is now the actual picker trigger.
+
+Instead of relying on overlay hit-testing, the displayed month label is now a real button that calls the native month picker for the hidden `type="month"` input. That means clicking directly on the visible text such as `September 2026` now uses the proper month-selection flow rather than only working around the edges of the control.
+
+The Budgets test suite still passes with 24 tests.
+## Prompt
+remove the arrow on the button as it is now overlapping. also change all ids in my own tables to be ints instead of guid/uuids. update the seed data to reflect this change, just using simple values, as well as anywhere new rows are added. make no mistakes
+## Response
+Removed the overlapping month-picker arrow and converted the Budgets-owned table IDs from UUIDs to integers across the database service, seed data, and tests.
+
+The Budgets schema now uses integer primary keys for `budgets`, `budget_lines`, `planned_events`, and `coach_proposals`, with integer foreign keys linking child rows back to `budgets`. The database API now validates route IDs as integers instead of GUIDs, and new rows created through the normal POST flows now use the database’s integer auto-increment behavior.
+
+I also updated the seed data to use simple sequential integer IDs, adjusted the frontend’s budget-line lookup so edit/remove still work with numeric IDs, and updated the Budgets design docs to reflect the new ID strategy. The overlapping arrow on the month button was removed at the same time. The Budgets test suite now passes with 25 tests.
+## Prompt
+give me cmds to use to reset the dbs stuff
+## Response
+Use these commands depending on how you are running Budgets.
+
+For the local SQLite file:
+
+```powershell
+Remove-Item 'C:\git\GitHub\Uni\ASD Bank\ethan\database\budgets.db' -Force
+```
+
+If you are not sure where the local DB file is, search first:
+
+```powershell
+Get-ChildItem 'C:\git\GitHub\Uni\ASD Bank' -Recurse -Filter 'budgets.db'
+```
+
+For the Docker volume-backed Budgets DB:
+
+```powershell
+docker compose stop budgets-db budgets-backend budgets-frontend shared-frontend
+docker compose rm --stop --force budgets-db budgets-backend budgets-frontend shared-frontend
+docker volume rm asdbank_budgets_data
+```
+
+Then start it again:
+
+```powershell
+docker compose up --build budgets-db budgets-backend budgets-frontend shared-frontend
+```
+
+If Docker still says the volume is in use, find the container that still holds it:
+
+```powershell
+docker ps -a --filter volume=asdbank_budgets_data
+```
+
+Then remove the specific container(s) shown and retry the volume removal.

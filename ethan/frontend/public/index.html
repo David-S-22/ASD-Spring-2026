@@ -10,56 +10,410 @@
 </head>
 <body>
     <style>
-        .budgets-toolbar {
+        .budgets-page {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .budget-overview-panel {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .budget-overview-header {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
             gap: 1rem;
-            margin-bottom: 1rem;
+            flex-wrap: wrap;
         }
 
-        .budgets-toolbar h1 {
+        .budget-overview-header h1 {
             margin-bottom: 0.25rem;
         }
 
-        .budgets-toolbar p {
-            margin-top: 0;
+        .budget-overview-header p {
+            margin: 0;
             color: var(--color-text-muted, #94a3b8);
         }
 
-        .budgets-table-wrapper {
-            overflow-x: auto;
+        .budget-month-picker {
+            min-width: 13rem;
+        }
+
+        .budget-month-picker label {
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+
+        .budget-month-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .budget-month-controls button {
+            min-width: 2.5rem;
+            padding-inline: 0.75rem;
+        }
+
+        .budget-month-input {
+            position: relative;
+            flex: 1 1 auto;
+        }
+
+        .budget-month-input input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .budget-month-display {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--color-text, #e2e8f0);
+            line-height: 1.4;
+            text-align: left;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .budget-summary-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.9rem;
+        }
+
+        .budget-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .budget-line-form {
+            display: grid;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .budget-line-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .budget-line-form-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .budget-line-form-error {
+            color: var(--color-danger, #f87171);
+            margin: 0;
+        }
+
+        .summary-card {
+            background: var(--color-surface-alt, #273449);
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            padding: 0.9rem 1rem;
+        }
+
+        .summary-card .summary-label {
+            display: block;
+            margin-bottom: 0.25rem;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .summary-card .summary-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .summary-card .summary-hint {
+            margin-top: 0.3rem;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.85rem;
+        }
+
+        .budget-lines {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .other-expenses {
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            overflow: hidden;
+        }
+
+        .other-expenses summary {
+            cursor: pointer;
+            padding: 1rem;
+            font-weight: 700;
+            list-style: none;
+        }
+
+        .other-expenses summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .other-expenses-summary-note {
+            color: var(--color-text-muted, #94a3b8);
+            font-weight: 400;
+        }
+
+        .other-expenses-content {
+            display: grid;
+            gap: 0.75rem;
+            padding: 0 1rem 1rem;
+        }
+
+        .other-expense-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .other-expense-name {
+            font-weight: 600;
+        }
+
+        .other-expense-amount {
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .other-expense-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .budget-line {
+            display: grid;
+            gap: 0.6rem;
+            padding: 1rem;
+            border: 1px solid var(--color-border, #334155);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .budget-line-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: baseline;
+        }
+
+        .budget-line-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .budget-line-amounts {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .budget-progress {
+            position: relative;
+            height: 12px;
+            border-radius: 999px;
+            background: #d7deeb;
+            overflow: hidden;
+        }
+
+        .budget-progress-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            border-radius: 999px;
+            background: #9fd5d9;
+        }
+
+        .budget-progress-fill.warning {
+            background: #dfc449;
+        }
+
+        .budget-progress-fill.cap {
+            background: #ef7d7d;
+        }
+
+        .budget-progress-marker {
+            position: absolute;
+            top: -2px;
+            bottom: -2px;
+            width: 2px;
+            background: rgba(15, 23, 42, 0.35);
+            border-radius: 999px;
+        }
+
+        .budget-line-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            color: var(--color-text-muted, #94a3b8);
+            font-size: 0.9rem;
+        }
+
+        .budget-line-meta strong {
+            color: var(--color-text, #e2e8f0);
+        }
+
+        .budget-line-state {
+            font-weight: 700;
+        }
+
+        .budget-line-state.ok {
+            color: var(--color-success, #4ade80);
+        }
+
+        .budget-line-state.warning {
+            color: #dfc449;
+        }
+
+        .budget-line-state.cap {
+            color: var(--color-danger, #f87171);
+        }
+
+        .budget-empty,
+        .budget-error {
+            padding: 1rem;
+            border-radius: 10px;
+        }
+
+        .budget-empty {
+            color: var(--color-text-muted, #94a3b8);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .budget-error {
+            color: #fecaca;
+            background: rgba(239, 125, 125, 0.12);
+            border: 1px solid rgba(239, 125, 125, 0.35);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 700px) {
+            .budget-line-head {
+                display: grid;
+            }
+
+            .budget-line-amounts {
+                text-align: left;
+            }
         }
     </style>
 
-    <section class="panel">
-        <div class="budgets-toolbar">
-            <div>
-                <h1>Budgets</h1>
-                <p>View the budget records currently available in Tally.</p>
+    <section class="panel budgets-page">
+        <div class="budget-overview-panel">
+            <div class="budget-overview-header">
+                <div>
+                    <h1 id="budget-title">Budget overview</h1>
+                    <p>Move between months to review and manage that month's budget lines.</p>
+                </div>
+                <div class="budget-month-picker">
+                    <label for="budget-month-select">Budget month</label>
+                    <div class="budget-month-controls">
+                        <button id="previous-budget-month-button" type="button" aria-label="Previous month">&larr;</button>
+                        <div id="budget-month-input" class="budget-month-input">
+                            <button id="budget-month-display" class="budget-month-display" type="button" aria-label="Open budget month picker">Select month</button>
+                            <input id="budget-month-select" type="month" aria-label="Budget month">
+                        </div>
+                        <button id="next-budget-month-button" type="button" aria-label="Next month">&rarr;</button>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <div class="budgets-table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Month</th>
-                        <th>Status</th>
-                        <th>Declared income</th>
-                        <th>ID</th>
-                    </tr>
-                </thead>
-                <tbody id="budgets">
-                    <tr>
-                        <td colspan="4">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div id="budget-error" class="budget-error hidden" role="alert"></div>
+
+            <div id="budget-summary-strip" class="budget-summary-strip hidden"></div>
+
+            <div class="budget-actions">
+                <button id="show-add-budget-line-button" type="button">
+                    Add budget line
+                </button>
+            </div>
+
+            <form id="budget-line-form" class="budget-line-form hidden">
+                <div class="budget-line-form-grid">
+                    <div>
+                        <label for="budget-line-category">Category</label>
+                        <select id="budget-line-category" name="category_id" required>
+                            <option value="">Loading categories...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="budget-line-warn-at">Warn at</label>
+                        <input id="budget-line-warn-at" name="warn_at" type="number" min="0" step="0.01" placeholder="50.00">
+                    </div>
+                    <div>
+                        <label for="budget-line-hard-cap">Hard cap</label>
+                        <input id="budget-line-hard-cap" name="hard_cap" type="number" min="0" step="0.01" placeholder="75.00">
+                    </div>
+                </div>
+                <p id="budget-line-form-error" class="budget-line-form-error hidden" role="alert"></p>
+                <div class="budget-line-form-actions">
+                    <button type="button" id="cancel-add-budget-line-button">Cancel</button>
+                    <button type="submit" id="save-budget-line-button">Save budget line</button>
+                </div>
+            </form>
+
+            <div id="budget-lines" class="budget-lines">
+                <p class="loading-state">Loading budget overview...</p>
+            </div>
+
+            <details id="other-expenses-panel" class="other-expenses hidden">
+                <summary id="other-expenses-summary">Show other expenses</summary>
+                <div id="other-expenses-content" class="other-expenses-content"></div>
+            </details>
         </div>
     </section>
 
     <script>
+        (function () {
+        const pageRoot = document.querySelector('.budgets-page');
+        if (!pageRoot) {
+            return;
+        }
+
+        function isPageActive() {
+            return pageRoot.isConnected;
+        }
+
+        const budgetState = {
+            budgets: [],
+            activeBudgetId: null,
+            selectedMonth: null,
+            editingLineId: null,
+            summary: null,
+        };
+
         function escapeHtml(value) {
             return String(value)
                 .replaceAll('&', '&amp;')
@@ -69,38 +423,630 @@
                 .replaceAll("'", '&#39;');
         }
 
-        async function loadBudgets() {
-            const tbody = document.getElementById('budgets');
+        function formatCurrencyFromCents(value) {
+            if (!Number.isFinite(value)) {
+                return '-';
+            }
+            return new Intl.NumberFormat('en-AU', {
+                style: 'currency',
+                currency: 'AUD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(value / 100);
+        }
+
+        function formatMoneyInputFromCents(value) {
+            if (!Number.isFinite(value)) {
+                return '';
+            }
+            return (value / 100).toFixed(2);
+        }
+
+        function parseMoneyInputToCents(value) {
+            if (value === '') {
+                return null;
+            }
+            const parsedValue = Number(value);
+            if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+                throw new Error('Money values must be valid positive amounts.');
+            }
+            return Math.round(parsedValue * 100);
+        }
+
+        function formatMonthLabel(value) {
+            if (typeof value !== 'string' || value.length !== 7) {
+                return 'Unknown month';
+            }
+            const [yearText, monthText] = value.split('-');
+            const year = Number(yearText);
+            const month = Number(monthText);
+            const date = new Date(year, month - 1, 1);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+            return date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+        }
+
+        function currentMonthValue() {
+            const now = new Date();
+            const year = String(now.getFullYear());
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return year + '-' + month;
+        }
+
+        function shiftMonthValue(value, delta) {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}$/.test(value)) {
+                return currentMonthValue();
+            }
+            const [yearText, monthText] = value.split('-');
+            const baseDate = new Date(Number(yearText), Number(monthText) - 1 + delta, 1);
+            return String(baseDate.getFullYear()) + '-' + String(baseDate.getMonth() + 1).padStart(2, '0');
+        }
+
+        function progressPercent(value, cap) {
+            if (!Number.isFinite(cap) || cap <= 0 || !Number.isFinite(value)) {
+                return 0;
+            }
+            return Math.max(0, Math.min(100, (value / cap) * 100));
+        }
+
+        function stateForLine(line) {
+            if (line.cap_state) {
+                return { label: 'Over cap', className: 'cap' };
+            }
+            if (line.warning_state) {
+                return { label: 'Warning', className: 'warning' };
+            }
+            return { label: 'On track', className: 'ok' };
+        }
+
+        function setError(message) {
+            const errorElement = document.getElementById('budget-error');
+            errorElement.textContent = message;
+            errorElement.classList.toggle('hidden', !message);
+        }
+
+        function setBudgetLineFormError(message) {
+            const errorElement = document.getElementById('budget-line-form-error');
+            errorElement.textContent = message;
+            errorElement.classList.toggle('hidden', !message);
+        }
+
+        function setBudgetLineFormVisible(isVisible) {
+            document.getElementById('budget-line-form').classList.toggle('hidden', !isVisible);
+            document.getElementById('show-add-budget-line-button').classList.toggle('hidden', isVisible);
+            document.getElementById('save-budget-line-button').textContent = budgetState.editingLineId ? 'Save changes' : 'Save budget line';
+            if (!isVisible) {
+                budgetState.editingLineId = null;
+                document.getElementById('budget-line-form').reset();
+                setBudgetLineFormError('');
+            }
+        }
+
+        function setBudgetLineActionsEnabled(isEnabled) {
+            const addButton = document.getElementById('show-add-budget-line-button');
+            addButton.disabled = !isEnabled;
+            addButton.title = isEnabled ? '' : 'No budget exists for the selected month yet.';
+            if (!isEnabled) {
+                setBudgetLineFormVisible(false);
+            }
+        }
+
+        function findBudgetLine(lineId) {
+            const lines = budgetState.summary && Array.isArray(budgetState.summary.budget_lines)
+                ? budgetState.summary.budget_lines
+                : [];
+            return lines.find(function (line) {
+                return String(line.id) === String(lineId);
+            }) || null;
+        }
+
+        function findBudgetByMonth(month) {
+            return budgetState.budgets.find(function (budget) {
+                return budget.month === month;
+            }) || null;
+        }
+
+        function syncMonthInput() {
+            const monthInput = document.getElementById('budget-month-select');
+            monthInput.value = budgetState.selectedMonth || currentMonthValue();
+            document.getElementById('budget-month-display').textContent = formatMonthLabel(monthInput.value || currentMonthValue());
+        }
+
+        function openBudgetMonthPicker() {
+            const monthInput = document.getElementById('budget-month-select');
+            monthInput.focus();
+            if (typeof monthInput.showPicker === 'function') {
+                monthInput.showPicker();
+                return;
+            }
+            monthInput.click();
+        }
+
+        async function loadTransactionCategories() {
+            const categorySelect = document.getElementById('budget-line-category');
+            categorySelect.disabled = true;
+            categorySelect.innerHTML = '<option value="">Loading categories...</option>';
+
+            try {
+                const response = await fetch('/budgets-backend/api/transaction-categories');
+                const categories = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok || !Array.isArray(categories)) {
+                    throw new Error('Unable to load categories.');
+                }
+
+                categorySelect.innerHTML = '<option value="">Select a category</option>';
+                for (const category of categories) {
+                    if (!Number.isInteger(category.id) || typeof category.name !== 'string') {
+                        continue;
+                    }
+                    const option = document.createElement('option');
+                    option.value = String(category.id);
+                    option.textContent = category.name;
+                    categorySelect.appendChild(option);
+                }
+                categorySelect.disabled = false;
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                categorySelect.innerHTML = '<option value="">Categories unavailable</option>';
+                setBudgetLineFormError(error.message || 'Unable to load categories.');
+            }
+        }
+
+        function renderSummaryCards(summary) {
+            const strip = document.getElementById('budget-summary-strip');
+            const totals = summary.totals || {};
+            const budget = summary.budget || {};
+            const cards = [
+                {
+                    label: 'Income',
+                    value: formatCurrencyFromCents(totals.declared_income),
+                    hint: budget.status ? 'Status: ' + budget.status : '',
+                },
+                {
+                    label: 'Spent',
+                    value: formatCurrencyFromCents(totals.actual_spend_total),
+                    hint: 'Across all budget lines',
+                },
+                {
+                    label: 'Planned',
+                    value: formatCurrencyFromCents(totals.planned_est_high_total),
+                    hint: 'Upper estimate this month',
+                },
+                {
+                    label: 'Remaining',
+                    value: formatCurrencyFromCents(totals.remaining_income_high),
+                    hint: 'After planned upper estimate',
+                },
+            ];
+
+            strip.innerHTML = cards.map(function (card) {
+                return '<div class="summary-card">'
+                    + '<span class="summary-label">' + escapeHtml(card.label) + '</span>'
+                    + '<div class="summary-value">' + escapeHtml(card.value) + '</div>'
+                    + '<div class="summary-hint">' + escapeHtml(card.hint || '') + '</div>'
+                    + '</div>';
+            }).join('');
+            strip.classList.remove('hidden');
+        }
+
+        function renderBudgetLines(summary) {
+            const linesElement = document.getElementById('budget-lines');
+            const titleElement = document.getElementById('budget-title');
+            const budget = summary.budget || {};
+            const lines = Array.isArray(summary.budget_lines) ? summary.budget_lines : [];
+
+            titleElement.textContent = formatMonthLabel(budget.month) + ' budget';
+
+            if (lines.length === 0) {
+                linesElement.innerHTML = '<div class="budget-empty">No budget lines have been created for this month yet.</div>';
+                return;
+            }
+
+            linesElement.innerHTML = lines.map(function (line) {
+                const actual = Number.isFinite(line.actual_spend) ? line.actual_spend : 0;
+                const hardCap = Number.isFinite(line.hard_cap) ? line.hard_cap : null;
+                const warnAt = Number.isFinite(line.warn_at) ? line.warn_at : null;
+                const fillPercent = progressPercent(actual, hardCap);
+                const warnPercent = progressPercent(warnAt, hardCap);
+                const lineState = stateForLine(line);
+                const projected = Number.isFinite(line.projected_high_total) ? line.projected_high_total : actual;
+
+                return '<article class="budget-line">'
+                    + '<div class="budget-line-head">'
+                    + '<div class="budget-line-title">' + escapeHtml(line.category || 'Uncategorised') + '</div>'
+                    + '<div class="budget-line-amounts">' + escapeHtml(formatCurrencyFromCents(actual)) + ' of ' + escapeHtml(formatCurrencyFromCents(hardCap)) + '</div>'
+                    + '</div>'
+                    + '<div class="budget-progress">'
+                    + '<div class="budget-progress-fill ' + lineState.className + '" style="width:' + fillPercent + '%"></div>'
+                    + (warnAt !== null && hardCap !== null ? '<div class="budget-progress-marker" style="left:' + warnPercent + '%"></div>' : '')
+                    + '</div>'
+                    + '<div class="budget-line-meta">'
+                    + '<span>Warns at <strong>' + escapeHtml(formatCurrencyFromCents(warnAt)) + '</strong></span>'
+                    + '<span>Projected <strong>' + escapeHtml(formatCurrencyFromCents(projected)) + '</strong></span>'
+                    + '<span class="budget-line-state ' + lineState.className + '">' + escapeHtml(lineState.label) + '</span>'
+                    + '</div>'
+                    + '<div class="budget-line-form-actions">'
+                    + '<button type="button" data-edit-budget-line="' + escapeHtml(line.id || '') + '">Edit</button>'
+                    + '<button type="button" data-delete-budget-line="' + escapeHtml(line.id || '') + '">Remove</button>'
+                    + '</div>'
+                    + '</article>';
+            }).join('');
+        }
+
+        function renderOtherExpenses(summary) {
+            const panel = document.getElementById('other-expenses-panel');
+            const summaryElement = document.getElementById('other-expenses-summary');
+            const contentElement = document.getElementById('other-expenses-content');
+            const transactions = summary.transactions || {};
+            const otherExpenses = Array.isArray(transactions.other_expenses) ? transactions.other_expenses : [];
+            const uncategorisedTotal = Number.isFinite(transactions.uncategorised_total) ? transactions.uncategorised_total : 0;
+            const otherExpenseTotal = otherExpenses.reduce(function (total, expense) {
+                return total + (Number.isFinite(expense.actual_spend) ? expense.actual_spend : 0);
+            }, 0);
+
+            summaryElement.innerHTML = 'Show other expenses'
+                + '<span class="other-expenses-summary-note"> - '
+                + escapeHtml(formatCurrencyFromCents(otherExpenseTotal))
+                + '</span>';
+
+            if (otherExpenses.length === 0 && uncategorisedTotal <= 0) {
+                contentElement.innerHTML = '<div class="budget-empty">No spending categories without budget lines right now.</div>';
+                panel.classList.remove('hidden');
+                return;
+            }
+
+            const rows = otherExpenses.map(function (expense) {
+                return '<div class="other-expense-row">'
+                    + '<div>'
+                    + '<div class="other-expense-name">' + escapeHtml(expense.category || 'Unknown category') + '</div>'
+                    + '<div class="other-expense-amount">' + escapeHtml(formatCurrencyFromCents(expense.actual_spend)) + ' spent</div>'
+                    + '</div>'
+                    + '<div class="other-expense-actions">'
+                    + '<button type="button" data-quick-add-budget-line="' + escapeHtml(String(expense.category_id || '')) + '" data-quick-add-category-name="' + escapeHtml(expense.category || '') + '">Add line</button>'
+                    + '</div>'
+                    + '</div>';
+            });
+
+            if (uncategorisedTotal > 0) {
+                rows.push(
+                    '<div class="other-expense-row">'
+                    + '<div>'
+                    + '<div class="other-expense-name">Still uncategorised</div>'
+                    + '<div class="other-expense-amount">' + escapeHtml(formatCurrencyFromCents(uncategorisedTotal)) + ' spent without a transaction category</div>'
+                    + '</div>'
+                    + '</div>'
+                );
+            }
+
+            contentElement.innerHTML = rows.join('');
+            panel.classList.remove('hidden');
+        }
+
+        function showEmptyMonthState(month) {
+            budgetState.activeBudgetId = null;
+            budgetState.summary = null;
+            document.getElementById('budget-title').textContent = formatMonthLabel(month) + ' budget';
+            document.getElementById('budget-summary-strip').classList.add('hidden');
+            document.getElementById('budget-lines').innerHTML = '<div class="budget-empty">No budget has been created for this month yet.</div>';
+            document.getElementById('other-expenses-panel').classList.add('hidden');
+            setBudgetLineActionsEnabled(false);
+        }
+
+        async function quickAddBudgetLine(categoryId, categoryName, button) {
+            if (!budgetState.activeBudgetId) {
+                setError('Select a budget before adding a budget line.');
+                return;
+            }
+
+            const parsedCategoryId = Number(categoryId);
+            if (!Number.isInteger(parsedCategoryId) || !categoryName) {
+                setError('Unable to add that budget line.');
+                return;
+            }
+
+            setError('');
+            button.disabled = true;
+
+            try {
+                const response = await fetch(
+                    '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/budget-lines',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            category_id: parsedCategoryId,
+                            category: categoryName,
+                        }),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to add budget line.');
+                }
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setError(error.message || 'Unable to add budget line.');
+            } finally {
+                if (isPageActive()) {
+                    button.disabled = false;
+                }
+            }
+        }
+
+        async function loadBudgetSummary(budgetId) {
+            const linesElement = document.getElementById('budget-lines');
+            linesElement.innerHTML = '<p class="loading-state">Loading budget overview...</p>';
+            document.getElementById('other-expenses-panel').classList.add('hidden');
+            setError('');
+
+            try {
+                const response = await fetch('/budgets-backend/api/budgets/' + encodeURIComponent(budgetId) + '/summary');
+                const summary = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok || typeof summary !== 'object' || summary === null) {
+                    throw new Error(summary && summary.error ? summary.error : 'Unable to load the budget summary.');
+                }
+                budgetState.summary = summary;
+                setBudgetLineActionsEnabled(true);
+                renderSummaryCards(summary);
+                renderBudgetLines(summary);
+                renderOtherExpenses(summary);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                budgetState.summary = null;
+                document.getElementById('budget-summary-strip').classList.add('hidden');
+                linesElement.innerHTML = '';
+                document.getElementById('other-expenses-panel').classList.add('hidden');
+                setBudgetLineActionsEnabled(false);
+                setError(error.message || 'Unable to load the budget summary.');
+            }
+        }
+
+        async function loadSelectedMonth() {
+            setError('');
+            syncMonthInput();
+            const selectedBudget = findBudgetByMonth(budgetState.selectedMonth);
+            if (!selectedBudget) {
+                showEmptyMonthState(budgetState.selectedMonth);
+                return;
+            }
+            budgetState.activeBudgetId = selectedBudget.id;
+            await loadBudgetSummary(selectedBudget.id);
+        }
+
+        async function loadBudgetsOverview() {
             try {
                 const response = await fetch('/budgets-backend/api/budgets');
                 const budgets = await response.json();
-
+                if (!isPageActive()) {
+                    return;
+                }
                 if (!response.ok || !Array.isArray(budgets)) {
                     throw new Error('Unable to load budgets.');
                 }
 
-                if (budgets.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4">No budgets found.</td></tr>';
+                budgetState.budgets = budgets.slice().sort(function (left, right) {
+                    return String(right.month || '').localeCompare(String(left.month || ''));
+                });
+                const activeBudget = budgetState.budgets.find(function (budget) {
+                    return budget.status === 'active';
+                });
+                const currentMonth = currentMonthValue();
+                budgetState.selectedMonth = budgetState.selectedMonth
+                    || (activeBudget ? activeBudget.month : null)
+                    || (findBudgetByMonth(currentMonth) ? currentMonth : null)
+                    || currentMonth;
+                syncMonthInput();
+                await loadSelectedMonth();
+            } catch (error) {
+                if (!isPageActive()) {
                     return;
                 }
-
-                tbody.innerHTML = budgets.map(function (budget) {
-                    const declaredIncome = Number.isInteger(budget.declared_income)
-                        ? '$' + (budget.declared_income / 100).toFixed(2)
-                        : '-';
-                    return '<tr>'
-                        + '<td>' + escapeHtml(budget.month || '-') + '</td>'
-                        + '<td>' + escapeHtml(budget.status || '-') + '</td>'
-                        + '<td>' + declaredIncome + '</td>'
-                        + '<td><code>' + escapeHtml(budget.id || '-') + '</code></td>'
-                        + '</tr>';
-                }).join('');
-            } catch (_error) {
-                tbody.innerHTML = '<tr><td colspan="4">Budgets are unavailable right now.</td></tr>';
+                document.getElementById('budget-lines').innerHTML = '';
+                document.getElementById('budget-summary-strip').classList.add('hidden');
+                document.getElementById('other-expenses-panel').classList.add('hidden');
+                budgetState.summary = null;
+                setBudgetLineActionsEnabled(false);
+                setError(error.message || 'Unable to load budgets.');
             }
         }
 
-        loadBudgets();
+        async function startEditingBudgetLine(lineId) {
+            const line = findBudgetLine(lineId);
+            if (!line) {
+                setError('Unable to load that budget line for editing.');
+                return;
+            }
+            budgetState.editingLineId = line.id;
+            setBudgetLineFormVisible(true);
+            await loadTransactionCategories();
+            document.getElementById('budget-line-category').value = String(line.category_id || '');
+            document.getElementById('budget-line-warn-at').value = formatMoneyInputFromCents(line.warn_at);
+            document.getElementById('budget-line-hard-cap').value = formatMoneyInputFromCents(line.hard_cap);
+        }
+
+        async function deleteBudgetLine(lineId) {
+            const line = findBudgetLine(lineId);
+            if (!line) {
+                setError('Unable to find that budget line.');
+                return;
+            }
+            const confirmed = window.confirm('Remove the ' + (line.category || 'selected') + ' budget line?');
+            if (!confirmed) {
+                return;
+            }
+            setError('');
+            try {
+                const response = await fetch(
+                    '/budgets-backend/api/budget-lines/' + encodeURIComponent(lineId),
+                    {
+                        method: 'DELETE',
+                    }
+                );
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    let message = 'Unable to remove budget line.';
+                    try {
+                        const result = await response.json();
+                        if (!isPageActive()) {
+                            return;
+                        }
+                        if (result && result.error) {
+                            message = result.error;
+                        }
+                    } catch (_error) {
+                    }
+                    throw new Error(message);
+                }
+                if (budgetState.editingLineId === lineId) {
+                    setBudgetLineFormVisible(false);
+                }
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setError(error.message || 'Unable to remove budget line.');
+            }
+        }
+
+        async function saveBudgetLine(event) {
+            event.preventDefault();
+            setBudgetLineFormError('');
+
+            if (!budgetState.activeBudgetId) {
+                setBudgetLineFormError('Select a budget before adding a budget line.');
+                return;
+            }
+
+            const saveButton = document.getElementById('save-budget-line-button');
+            const formData = new FormData(event.currentTarget);
+            const selectedOption = document.getElementById('budget-line-category').selectedOptions[0];
+            const categoryIdText = formData.get('category_id');
+            const warnAtText = formData.get('warn_at');
+            const hardCapText = formData.get('hard_cap');
+            const payload = {
+                category_id: Number(categoryIdText),
+                category: selectedOption ? selectedOption.textContent : '',
+            };
+
+            try {
+                const warnAtCents = parseMoneyInputToCents(warnAtText);
+                const hardCapCents = parseMoneyInputToCents(hardCapText);
+                if (warnAtCents !== null) {
+                    payload.warn_at = warnAtCents;
+                }
+                if (hardCapCents !== null) {
+                    payload.hard_cap = hardCapCents;
+                }
+            } catch (error) {
+                setBudgetLineFormError(error.message || 'Unable to save budget line.');
+                return;
+            }
+
+            saveButton.disabled = true;
+
+            try {
+                const isEditing = Boolean(budgetState.editingLineId);
+                const response = await fetch(
+                    isEditing
+                        ? '/budgets-backend/api/budget-lines/' + encodeURIComponent(budgetState.editingLineId)
+                        : '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/budget-lines',
+                    {
+                        method: isEditing ? 'PATCH' : 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    }
+                );
+                const result = await response.json();
+                if (!isPageActive()) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to save budget line.');
+                }
+                setBudgetLineFormVisible(false);
+                await loadBudgetSummary(budgetState.activeBudgetId);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                setBudgetLineFormError(error.message || 'Unable to save budget line.');
+            } finally {
+                if (isPageActive()) {
+                    saveButton.disabled = false;
+                }
+            }
+        }
+
+        document.getElementById('budget-month-select').addEventListener('change', function (event) {
+            budgetState.selectedMonth = event.target.value || currentMonthValue();
+            syncMonthInput();
+            loadSelectedMonth();
+        });
+        document.getElementById('budget-month-display').addEventListener('click', function () {
+            openBudgetMonthPicker();
+        });
+        document.getElementById('previous-budget-month-button').addEventListener('click', function () {
+            budgetState.selectedMonth = shiftMonthValue(budgetState.selectedMonth || currentMonthValue(), -1);
+            loadSelectedMonth();
+        });
+        document.getElementById('next-budget-month-button').addEventListener('click', function () {
+            budgetState.selectedMonth = shiftMonthValue(budgetState.selectedMonth || currentMonthValue(), 1);
+            loadSelectedMonth();
+        });
+        document.getElementById('show-add-budget-line-button').addEventListener('click', async function () {
+            budgetState.editingLineId = null;
+            setBudgetLineFormVisible(true);
+            await loadTransactionCategories();
+        });
+        document.getElementById('cancel-add-budget-line-button').addEventListener('click', function () {
+            setBudgetLineFormVisible(false);
+        });
+        document.getElementById('budget-line-form').addEventListener('submit', saveBudgetLine);
+        document.getElementById('budget-lines').addEventListener('click', function (event) {
+            const editButton = event.target.closest('[data-edit-budget-line]');
+            if (editButton) {
+                startEditingBudgetLine(editButton.getAttribute('data-edit-budget-line'));
+                return;
+            }
+            const deleteButton = event.target.closest('[data-delete-budget-line]');
+            if (deleteButton) {
+                deleteBudgetLine(deleteButton.getAttribute('data-delete-budget-line'));
+            }
+        });
+        document.getElementById('other-expenses-panel').addEventListener('click', function (event) {
+            const quickAddButton = event.target.closest('[data-quick-add-budget-line]');
+            if (!quickAddButton) {
+                return;
+            }
+            quickAddBudgetLine(
+                quickAddButton.getAttribute('data-quick-add-budget-line'),
+                quickAddButton.getAttribute('data-quick-add-category-name'),
+                quickAddButton
+            );
+        });
+
+        loadBudgetsOverview();
+        })();
     </script>
 </body>
 </html>

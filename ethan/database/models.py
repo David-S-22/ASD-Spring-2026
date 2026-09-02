@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -14,14 +12,10 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 
-def _new_guid() -> str:
-    return str(uuid4())
-
-
 class Budget(db.Model):
     __tablename__ = "budgets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     month: Mapped[str | None] = mapped_column(String(7), nullable=True)
     declared_income: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -66,8 +60,8 @@ class Budget(db.Model):
 class BudgetLine(db.Model):
     __tablename__ = "budget_lines"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -104,8 +98,8 @@ class BudgetLine(db.Model):
 class PlannedEvent(db.Model):
     __tablename__ = "planned_events"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -155,8 +149,8 @@ class PlannedEvent(db.Model):
 class CoachProposal(db.Model):
     __tablename__ = "coach_proposals"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
