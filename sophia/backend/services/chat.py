@@ -220,13 +220,40 @@ def send_message(message):
         raise ServiceError("message is required")
     history = _recent_history()
     bills_db.create_chat_message({"role": "user", "content": message})
+    return _model_turn(message, history)
 
+
+# The Observe→Adapt half of the loop. Sent to the model as the current turn
+# (never stored as a user message): the transcript it reads already ends with
+# the "[suggestion #N rejected …]" outcome note, so this just tells it what a
+# good next move looks like.
+ADAPT_NUDGE = (
+    "The user rejected your last suggestion — it was NOT applied. Adapt: ask briefly what "
+    "they'd like instead, or propose a corrected change if their earlier messages make the "
+    "fix obvious. Never repeat the rejected proposal unchanged."
+)
+
+ADAPT_FALLBACK = {
+    "op": None, "entity": None, "id": None, "fields": None, "question": "none",
+    "say": "Noted — I won't make that change. Tell me what you'd like instead.",
+}
+
+
+def adapt_after_rejection():
+    """One extra model turn straight after a rejection, so the loop closes
+    without waiting for the user to speak: the model sees the rejection note
+    in its history and either asks what to change or proposes a corrected
+    suggestion (which lands as a fresh pending row via the same vetting)."""
+    return _model_turn(ADAPT_NUDGE, _recent_history(), fallback=ADAPT_FALLBACK)
+
+
+def _model_turn(model_message, history, fallback=None):
     bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
-        lambda error: chat_prompt.build(message, history, bills=bills, error=error),
+        lambda error: chat_prompt.build(model_message, history, bills=bills, error=error),
         validate_chat_response,
-        chat_prompt.FALLBACK,
+        fallback or chat_prompt.FALLBACK,
     )
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")

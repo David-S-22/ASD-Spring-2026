@@ -74,9 +74,12 @@ def test_reject_changes_nothing_and_tells_the_model(live_client, monkeypatch):
     assert response.status_code == 200
     assert bills_db_module.get_bill(target["id"]) is not None
     assert bills_db_module.get_suggestion(suggestion_id)["status"] == "rejected"
-    outcome = bills_db_module.list_chat_messages()[-1]
-    assert "rejected by the user" in outcome["content"]
-    assert "NOT applied" in outcome["content"]
+    # The rejection note is on the record, and the loop closed: an adapt
+    # turn followed it (here the stubbed model just re-proposes, which is
+    # fine — the note itself is what the real model adapts from).
+    recent = [m["content"] for m in bills_db_module.list_chat_messages()[-3:]]
+    assert any("rejected by the user" in c and "NOT applied" in c for c in recent)
+    assert 'hx-swap-oob="beforeend:#chat-history"' in _text(response)
 
 
 def test_approving_a_delete_for_a_missing_bill_fails_honestly(live_client, monkeypatch):
@@ -178,7 +181,7 @@ def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatc
     decidable card in the response is the panel's (arriving out of band)."""
     response = _propose(live_client, monkeypatch, CREATE_DISNEY, message="add disney plus")
     body = _text(response)
-    assert "Review it in" in body  # the pointer line
+    assert "review it in Suggestions below" in body  # the pointer line
     # every decidable card in the response belongs to the panel: one per
     # visible (pending or failed) suggestion, none inline in the chat reply
     visible = len([s for s in bills_db_module.list_suggestions() if s["status"] in ("pending", "failed")])
@@ -186,3 +189,72 @@ def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatc
     assert body.count('class="suggestion-card') == visible
     assert panel_part.count('class="suggestion-card') == visible
     assert 'id="suggestions-panel" hx-swap-oob="true"' in body
+
+
+def test_reply_pointer_names_the_actual_target_not_the_models_claim(live_client, monkeypatch):
+    """Field case: asked about Netflix, the model emitted Prime Video's id.
+    The pointer must name the real target from the suggestion row, so the
+    mismatch is visible right in the conversation."""
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    response = _propose(live_client, monkeypatch, {
+        "op": "update", "entity": "bill", "id": prime["id"],
+        "fields": {"end_date": "2026-09-02"}, "question": "none",
+        "say": "I've suggested ending Netflix after 2 Sep — approve it to save."})
+    body = _text(response)
+    assert "Proposed: <strong>Update Prime Video</strong>" in body
+    assert "nothing is saved until you approve" in body
+
+
+def test_reject_triggers_an_adapt_turn_in_the_chat(live_client, monkeypatch):
+    """The Observe→Adapt half of the loop: rejecting a pending suggestion gets
+    an immediate follow-up from Tally, appended to the chat out of band."""
+    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+    calls = []
+
+    def fake_chat(model, messages, timeout=None):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {"message": {"content": json.dumps({
+                "op": "update", "entity": "bill", "id": spotify["id"],
+                "fields": {"end_date": "2026-09-16"}, "question": "none",
+                "say": "I've suggested ending Spotify — approve to save."})}}
+        return {"message": {"content": json.dumps({
+            "op": None, "entity": None, "id": None, "fields": None,
+            "question": "none", "say": "No problem — what would you like instead?"})}}
+
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
+    live_client.post("/ui/chat", data={"message": "end spotify"})
+    suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+
+    response = live_client.post(f"/ui/suggestions/{suggestion_id}/reject")
+    body = _text(response)
+    # the adapt reply rides the reject response, targeted at the chat history
+    assert 'hx-swap-oob="beforeend:#chat-history"' in body
+    assert "what would you like instead" in body
+    # the adapt turn's model call saw the rejection note in its history
+    adapt_messages = calls[-1]
+    history_text = " ".join(m["content"] for m in adapt_messages)
+    assert "rejected by the user" in history_text
+
+
+def test_dismissing_a_failed_suggestion_does_not_adapt(live_client, monkeypatch):
+    """Adaptation is for rejections of live proposals; dismissing a failed
+    card is just tidying up."""
+    calls = []
+
+    def fake_chat(model, messages, timeout=None):
+        calls.append(messages)
+        return {"message": {"content": json.dumps({
+            "op": "delete", "entity": "bill", "id": 99999, "fields": None,
+            "question": "none", "say": "I've suggested deleting it."})}}
+
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
+    live_client.post("/ui/chat", data={"message": "delete the ghost"})
+    suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+    live_client.post(f"/ui/suggestions/{suggestion_id}/approve")  # fails -> failed card
+    calls_before = len(calls)
+
+    response = live_client.post(f"/ui/suggestions/{suggestion_id}/reject")  # Dismiss
+    assert response.status_code == 200
+    assert len(calls) == calls_before  # no model turn
+    assert 'hx-swap-oob="beforeend:#chat-history"' not in _text(response)

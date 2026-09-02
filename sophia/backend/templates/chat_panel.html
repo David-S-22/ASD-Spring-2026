@@ -6,7 +6,9 @@
     <button type="button" data-chip="I cancelled Spotify from September — remove the future payments">I cancelled Spotify from September — remove the future payments</button>
     <button type="button" data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
   </div>
-  <div class="history">
+  {# id is a fragment contract: the reject flow's adapt reply appends here
+     out of band (hx-swap-oob="beforeend:#chat-history"). #}
+  <div class="history" id="chat-history">
     {% if not messages %}
     <p class="chat-welcome">Ask about your bills, or pick one of the suggestions above.</p>
     {% endif %}
