@@ -171,17 +171,16 @@ MISSING_FIELD_QUESTIONS = {
 
 
 def _vet_proposal(preview):
-    """Vet a bill/payment proposal *before* it reaches the user.
+    """Vet a proposal *before* it reaches the user.
 
-    Returns (preview, None) when the proposal is appliable, or (None, reply)
-    when it is not — the reply asks for what's missing instead of presenting
-    a Confirm button that can only fail. This is the deterministic backstop
+    Returns (canonical_fields, None) when the proposal is appliable — fields
+    normalised onto real columns, dollars already in cents — or (None, reply)
+    when it is not: the reply asks for what's missing instead of presenting
+    an approve button that can only fail. This is the deterministic backstop
     beneath the prompt's "ask, don't invent" instruction: even if the model
     ignores it and emits an under-specified create, no appliable proposal
     exists until the user has supplied the details.
     """
-    if preview["entity"] not in ("bill", "payment"):
-        return preview, None
     try:
         fields = _normalise_chat_fields(preview["entity"], preview["op"], preview["fields"] or {})
         allowed = BILL_FIELD_WHITELIST[preview["entity"]]
@@ -200,7 +199,7 @@ def _vet_proposal(preview):
         if missing:
             wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
             return None, f"Happy to add that — I just need {wants}. I won't guess details you haven't given me."
-    return preview, None
+    return fields, None
 
 
 def send_message(message):
@@ -219,16 +218,31 @@ def send_message(message):
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")
     preview = _build_preview(data)
+    canonical_fields = None
     if preview:
-        preview, reply_override = _vet_proposal(preview)
+        canonical_fields, reply_override = _vet_proposal(preview)
         if reply_override:
             reply = reply_override
+            preview = None
 
     assistant_row = bills_db.create_chat_message(
         {"role": "assistant", "content": reply, "op_json": json.dumps(preview) if preview else None}
     )
     if preview:
         preview["message_id"] = assistant_row["id"]
+        # The proposal becomes a pending suggestion the moment it exists, so
+        # the same row backs the chat card and the Suggestions panel, and
+        # approving in either place resolves both.
+        suggestion = bills_db.create_suggestion(
+            {
+                "op": preview["op"],
+                "entity": preview["entity"],
+                "entity_id": preview.get("id"),
+                "payload_json": json.dumps(canonical_fields or {}),
+                "message_id": assistant_row["id"],
+            }
+        )
+        preview["suggestion_id"] = suggestion["id"]
     return {"reply": reply, "op": preview["op"] if preview else None, "preview": preview, "fallback": data.get("fallback", False)}
 
 
@@ -262,35 +276,28 @@ def _normalise_chat_fields(entity, op, fields):
     return out
 
 
-def apply(op, entity, entity_id, fields, message_id=None):
-    fields = fields or {}
-    if entity not in BILL_FIELD_WHITELIST:
-        raise ServiceError("unknown entity")
-    fields = _normalise_chat_fields(entity, op, fields)
-    allowed = BILL_FIELD_WHITELIST[entity]
-    for key in fields:
-        if key not in allowed:
-            raise ServiceError(f"field '{key}' cannot be set via chat")
-    clean_fields = dict(fields)
+def _execute(op, entity, entity_id, clean_fields):
+    """Perform an already-normalised, whitelisted change.
 
-    # Bill and payment writes go through the services layer — the same
-    # validation and status-sync a manual edit gets — never the raw DB client.
-    # The DB API checks enums and integer types but not date *format*: a chat
-    # update that stored next_billing_date="early September" used to 500 every
-    # bills read from then on. services/bills._clean_payload is what refuses it.
+    Bill and payment writes go through the services layer — the same
+    validation and status-sync a manual edit gets — never the raw DB client.
+    The DB API checks enums and integer types but not date *format*: a chat
+    update that stored next_billing_date="early September" used to 500 every
+    bills read from then on. services/bills._clean_payload is what refuses it.
+    """
     if entity == "bill" and op == "update":
-        result = bills_service.update_bill(entity_id, clean_fields)
-    elif entity == "bill" and op == "create":
-        result = bills_service.create_bill({**clean_fields, "source": "chat"})
-    elif entity == "bill" and op == "delete":
-        result = bills_service.delete_bill(entity_id)
-    elif entity == "payment" and op == "create":
-        result = payments_service.create_payment(clean_fields)
-    elif entity == "payment" and op == "delete":
-        result = payments_service.delete_payment(entity_id)
-    elif entity == "dispute" and op == "update":
-        result = bills_db.update_dispute(entity_id, clean_fields)
-    elif entity == "dispute" and op == "create":
+        return bills_service.update_bill(entity_id, clean_fields)
+    if entity == "bill" and op == "create":
+        return bills_service.create_bill({**clean_fields, "source": "chat"})
+    if entity == "bill" and op == "delete":
+        return bills_service.delete_bill(entity_id)
+    if entity == "payment" and op == "create":
+        return payments_service.create_payment(clean_fields)
+    if entity == "payment" and op == "delete":
+        return payments_service.delete_payment(entity_id)
+    if entity == "dispute" and op == "update":
+        return bills_db.update_dispute(entity_id, clean_fields)
+    if entity == "dispute" and op == "create":
         bill_row = bills_db.get_bill(clean_fields.get("bill_id"))
         if bill_row is None:
             raise NotFound("bill not found")
@@ -302,10 +309,103 @@ def apply(op, entity, entity_id, fields, message_id=None):
             {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
         )
         result["draft"] = draft
-    else:
-        raise ServiceError(f"unsupported op '{op}' for entity '{entity}'")
+        return result
+    raise ServiceError(f"unsupported op '{op}' for entity '{entity}'")
+
+
+def _bill_name(entity_id):
+    row = bills_db.get_bill(entity_id) if entity_id else None
+    return row["name"] if row else None
+
+
+def _change_summary(op, entity, entity_id, fields, bill_name=None):
+    """One honest sentence describing a change, for the chat transcript the
+    model reads back. Names beat ids: 'deleted bill 4' tells the model less
+    than 'deleted Netflix'."""
+    label = f"{entity} {entity_id}" if entity_id else entity
+    if entity == "bill" and bill_name:
+        label = f"bill '{bill_name}'"
+    elif entity == "bill" and fields.get("name"):
+        label = f"bill '{fields['name']}'"
+    if op == "create":
+        detail = ", ".join(f"{k}={v}" for k, v in fields.items() if k != "name")
+        return f"added {label}" + (f" ({detail})" if detail else "")
+    if op == "update":
+        detail = ", ".join(f"{k} → {v}" for k, v in fields.items())
+        return f"updated {label}" + (f" ({detail})" if detail else "")
+    return f"deleted {label}"
+
+
+def _record_outcome(content, applied=False):
+    bills_db.create_chat_message({"role": "assistant", "content": content, "applied": applied})
+
+
+def apply(op, entity, entity_id, fields, message_id=None):
+    """Direct apply for /api/chat/apply and /ui/chat/apply (raw model-shaped
+    fields, dollars under 'amount'). The suggestions flow uses approve_suggestion
+    below; both record an honest outcome the model sees on its next turn."""
+    fields = fields or {}
+    if entity not in BILL_FIELD_WHITELIST:
+        raise ServiceError("unknown entity")
+    fields = _normalise_chat_fields(entity, op, fields)
+    allowed = BILL_FIELD_WHITELIST[entity]
+    for key in fields:
+        if key not in allowed:
+            raise ServiceError(f"field '{key}' cannot be set via chat")
+    clean_fields = dict(fields)
+
+    bill_name = _bill_name(entity_id) if entity == "bill" and op in ("update", "delete") else None
+    try:
+        result = _execute(op, entity, entity_id, clean_fields)
+    except ServiceError as error:
+        # A failed change used to vanish from the transcript: the user saw an
+        # error fragment, the model saw nothing, and its next turn happily
+        # repeated that the change was made. The failure is now on the record.
+        _record_outcome(f"[change failed: {error.message} — nothing was changed]")
+        raise
 
     if message_id:
         bills_db.update_chat_message(message_id, {"applied": 1})
-    bills_db.create_chat_message({"role": "assistant", "content": "Done — change saved.", "applied": True})
+    summary = _change_summary(op, entity, entity_id, clean_fields, bill_name)
+    _record_outcome(f"[change applied: {summary}]", applied=True)
     return result
+
+
+def approve_suggestion(suggestion_id):
+    """Apply a pending suggestion. Claims the row first (an atomic
+    pending→applied transition in the DB), so two racing approves — or a
+    double-clicked button — cannot both execute the change."""
+    row = bills_db.get_suggestion(suggestion_id)
+    if row is None:
+        raise NotFound("suggestion not found")
+    bills_db.update_suggestion(suggestion_id, {"status": "applied"})
+
+    fields = json.loads(row["payload_json"]) if row["payload_json"] else {}
+    bill_name = _bill_name(row["entity_id"]) if row["entity"] == "bill" and row["op"] in ("update", "delete") else None
+    try:
+        result = _execute(row["op"], row["entity"], row["entity_id"], fields)
+    except ServiceError as error:
+        bills_db.update_suggestion(suggestion_id, {"status": "failed", "error": error.message})
+        _record_outcome(
+            f"[suggestion #{suggestion_id} FAILED to apply: {error.message} — nothing was changed]"
+        )
+        raise
+    if row["message_id"]:
+        bills_db.update_chat_message(row["message_id"], {"applied": 1})
+    summary = _change_summary(row["op"], row["entity"], row["entity_id"], fields, bill_name)
+    _record_outcome(f"[suggestion #{suggestion_id} approved and applied: {summary}]", applied=True)
+    return result
+
+
+def reject_suggestion(suggestion_id):
+    """Reject a pending suggestion (or dismiss a failed one). Recorded in the
+    transcript so the model's next turn knows the change was NOT made."""
+    row = bills_db.get_suggestion(suggestion_id)
+    if row is None:
+        raise NotFound("suggestion not found")
+    updated = bills_db.update_suggestion(suggestion_id, {"status": "rejected"})
+    fields = json.loads(row["payload_json"]) if row["payload_json"] else {}
+    bill_name = _bill_name(row["entity_id"]) if row["entity"] == "bill" else None
+    summary = _change_summary(row["op"], row["entity"], row["entity_id"], fields, bill_name)
+    _record_outcome(f"[suggestion #{suggestion_id} rejected by the user — NOT applied: {summary}]")
+    return updated

@@ -173,6 +173,33 @@ def create_dispute_draft(dispute_id, payload):
     return response.json()
 
 
+def list_suggestions(status=None):
+    params = {"status": status} if status else None
+    response = requests.get(_url("/suggestions"), params=params, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
+def create_suggestion(payload):
+    response = requests.post(_url("/suggestions"), json=payload, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
+def get_suggestion(suggestion_id):
+    response = requests.get(_url(f"/suggestions/{suggestion_id}"), timeout=10)
+    if response.status_code == 404:
+        return None
+    _raise_for_status(response)
+    return response.json()
+
+
+def update_suggestion(suggestion_id, payload):
+    response = requests.put(_url(f"/suggestions/{suggestion_id}"), json=payload, timeout=10)
+    _raise_for_status(response)
+    return response.json()
+
+
 def list_chat_messages():
     response = requests.get(_url("/chat_messages"), timeout=10)
     _raise_for_status(response)

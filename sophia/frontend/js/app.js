@@ -329,6 +329,33 @@ billsRoot.addEventListener("toast", function (evt) {
   showToast(typeof text === "string" ? text : "Done.");
 });
 
+// A proposal renders in two places — the chat's inline card and the
+// Suggestions panel — backed by one suggestion row. Approve/reject responses
+// re-render the panel directly (it is their hx-target) and announce the
+// outcome with this trigger so the chat's copy flips to the same resolved
+// state instead of keeping live buttons for a change that is already decided.
+var SUGGESTION_RESOLVED_LABELS = {
+  applied: "Applied ✓",
+  rejected: "Rejected — nothing was changed",
+  failed: "Couldn't apply — see Suggestions",
+};
+
+billsRoot.addEventListener("suggestionResolved", function (evt) {
+  var detail = evt.detail || {};
+  var label = SUGGESTION_RESOLVED_LABELS[detail.status];
+  if (!detail.id || !label) {
+    return;
+  }
+  billsRoot
+    .querySelectorAll('.history .suggestion-card[data-suggestion-id="' + detail.id + '"]')
+    .forEach(function (card) {
+      card.className = "preview-card suggestion-card resolved status-" + detail.status;
+      // textContent, not markup: the label is fixed but the pattern stays
+      // injection-proof if it ever carries data.
+      card.textContent = label;
+    });
+});
+
 billsRoot.addEventListener("switchTab", function (evt) {
   var detail = evt.detail || {};
   var name = typeof detail.value === "string" ? detail.value : detail;
@@ -446,15 +473,6 @@ billsRoot.addEventListener("click", function (evt) {
   var setAside = evt.target.closest('[data-action="set-aside"]');
   if (setAside) {
     showToast(setAside.getAttribute("data-toast") || "Done — change saved.");
-    return;
-  }
-
-  var dismissPreview = evt.target.closest('[data-action="dismiss-preview"]');
-  if (dismissPreview) {
-    var card = dismissPreview.closest(".preview-card");
-    if (card) {
-      card.remove();
-    }
     return;
   }
 

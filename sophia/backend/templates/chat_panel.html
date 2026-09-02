@@ -13,16 +13,6 @@
     {% for message in messages %}
     {% if message.heading %}<h4 class="history-heading">{{ message.heading }}</h4>{% endif %}
     <div class="message message-{{ message.role }}">{{ message.content }}</div>
-    {% if message.preview %}
-    {% if message.applied %}
-    <div class="preview-card applied">Applied</div>
-    {% else %}
-    <div class="preview-card">
-      <button class="confirm" hx-post="/bills-backend/ui/chat/apply" hx-vals='{{ message.preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
-      <button class="keep-it" type="button" data-action="dismiss-preview">Keep it</button>
-    </div>
-    {% endif %}
-    {% endif %}
     {% endfor %}
   </div>
   <form hx-post="/bills-backend/ui/chat" hx-target=".history" hx-swap="beforeend" hx-on:htmx:after-request="this.reset()" hx-disabled-elt="find button[type=submit]">

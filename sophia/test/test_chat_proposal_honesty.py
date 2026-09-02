@@ -85,10 +85,10 @@ def test_invented_field_in_proposal_becomes_a_question():
     assert "colour" in reply
 
 
-def test_dispute_proposals_are_not_vetted_here():
+def test_valid_dispute_proposal_survives_vetting():
     preview = {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": 6, "reason": "x"}}
     vetted, reply = _vet_proposal(preview)
-    assert vetted is preview and reply is None
+    assert vetted == {"bill_id": 6, "reason": "x"} and reply is None
 
 
 # --- end to end through /ui/chat with a stubbed model ------------------------
