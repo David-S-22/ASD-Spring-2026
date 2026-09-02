@@ -129,6 +129,50 @@ def test_planned_event_requires_matching_budget_line_category(client):
     assert updated.get_json()["status"] == "confirmed"
 
 
+def test_planned_event_date_must_stay_inside_budget_month(client):
+    budget = client.post("/budgets", json={"month": "2026-11"}).get_json()
+    client.post(
+        f"/budgets/{budget['id']}/budget-lines",
+        json={"category_id": 80, "category": "Dining", "warn_at": 8000, "hard_cap": 12000},
+    )
+
+    invalid_create = client.post(
+        f"/budgets/{budget['id']}/planned-events",
+        json={
+            "date": "2026-12-04",
+            "label": "Dinner out",
+            "category": "Dining",
+            "est_low": 4000,
+            "est_high": 6000,
+            "source": "user",
+            "status": "planned",
+        },
+    )
+    assert invalid_create.status_code == 422
+    assert invalid_create.get_json()["code"] == "planned_event_month_mismatch"
+
+    created = client.post(
+        f"/budgets/{budget['id']}/planned-events",
+        json={
+            "date": "2026-11-04",
+            "label": "Dinner out",
+            "category": "Dining",
+            "est_low": 4000,
+            "est_high": 6000,
+            "source": "user",
+            "status": "planned",
+        },
+    )
+    planned_event = created.get_json()
+
+    invalid_update = client.patch(
+        f"/planned-events/{planned_event['id']}",
+        json={"date": "2026-10-30"},
+    )
+    assert invalid_update.status_code == 422
+    assert invalid_update.get_json()["code"] == "planned_event_month_mismatch"
+
+
 def test_coach_proposal_round_trip(client):
     budget = client.post("/budgets", json={"month": "2026-12"}).get_json()
 

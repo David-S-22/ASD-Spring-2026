@@ -129,6 +129,12 @@ def _validate_date(value: str | None, field: str):
         raise ApiError(f"{field} must use YYYY-MM-DD format", 422, "invalid_field") from error
 
 
+def _month_from_date(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value[:7]
+
+
 def _validate_id(identifier: str, field: str = "id") -> int:
     try:
         value = int(identifier)
@@ -272,6 +278,20 @@ def _require_existing_budget_line_category(budget_id: int, category: str | None)
             "category must match an existing budget line for this budget",
             422,
             "budget_line_category_required",
+        )
+
+
+def _require_date_within_budget_month(budget: Budget, date_value: str | None):
+    if date_value is None:
+        return
+    budget_month = budget.month
+    if budget_month is None:
+        return
+    if _month_from_date(date_value) != budget_month:
+        raise ApiError(
+            "date must be inside the parent budget month",
+            422,
+            "planned_event_month_mismatch",
         )
 
 
@@ -440,6 +460,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
         budget = _get_budget_or_404(budget_id)
         values = _validate_planned_event_payload(_json_body())
         _require_existing_budget_line_category(budget.id, values.get("category"))
+        _require_date_within_budget_month(budget, values.get("date"))
         now = _now_timestamp()
         planned_event = PlannedEvent(
             budget_id=budget.id,
@@ -469,6 +490,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
             raise ApiError("no updatable fields supplied", 400, "missing_required_fields")
         category = values.get("category", planned_event.category)
         _require_existing_budget_line_category(planned_event.budget_id, category)
+        _require_date_within_budget_month(planned_event.budget, values.get("date", planned_event.date))
         for field, value in values.items():
             setattr(planned_event, field, value)
         planned_event.updated_at = _now_timestamp()
