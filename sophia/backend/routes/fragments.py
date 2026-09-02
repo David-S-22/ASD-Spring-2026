@@ -578,11 +578,31 @@ def suggestions_panel():
     return _render_suggestions_panel()
 
 
+def _render_adapt_reply():
+    """One extra model turn after a rejection — the Observe→Adapt half of the
+    loop. Best-effort by design: the rejection itself has already been
+    recorded, so a model hiccup here must never turn a successful reject into
+    an error response."""
+    try:
+        adapt = chat_service.adapt_after_rejection()
+    except Exception:
+        return ""
+    title = None
+    if adapt["preview"] and adapt["preview"].get("suggestion_id"):
+        row = bills_db.get_suggestion(adapt["preview"]["suggestion_id"])
+        if row:
+            title = _suggestion_view(row)["title"]
+    return render_template("chat_adapt.html", reply=adapt["reply"], suggestion_title=title)
+
+
 def _suggestion_action_response(action, suggestion_id):
     """Approve or reject, then tell every surface the truth: the refreshed
-    panel is the primary swap, the bills views ride along OOB when something
-    was applied, and a suggestionResolved trigger lets the chat's inline card
-    flip to the same resolved state."""
+    panel is the primary swap, and the bills views ride along OOB when
+    something was applied. Rejecting a pending suggestion also closes the
+    loop — Tally observes the rejection and adapts in the chat, sometimes
+    with a corrected proposal, so the panel is rendered after that turn."""
+    pre_row = bills_db.get_suggestion(suggestion_id)
+    was_pending = bool(pre_row and pre_row["status"] == "pending")
     toast = None
     try:
         if action == "approve":
@@ -594,9 +614,13 @@ def _suggestion_action_response(action, suggestion_id):
     except ServiceError as error:
         toast = f"Couldn't apply: {error.message}" if action == "approve" else error.message
 
+    adapt_html = ""
+    if action == "reject" and was_pending:
+        adapt_html = _render_adapt_reply()
+
     row = bills_db.get_suggestion(suggestion_id)
     status = row["status"] if row else "failed"
-    html = _render_suggestions_panel()
+    html = _render_suggestions_panel() + adapt_html
     if status == "applied":
         html += _render_bills_table_oob() + _render_timeline(oob=True) + _render_calendar_card(oob=True)
     response = make_response(html, 200)
@@ -645,11 +669,20 @@ def _render_chat_panel():
 @bp.post("/chat")
 def chat_send():
     result = chat_service.send_message(request.form.get("message", ""))
-    has_suggestion = bool(result["preview"] and result["preview"].get("suggestion_id"))
+    # The pointer names the proposal's ACTUAL target, from the suggestion row
+    # itself, never from the model's prose. A small model asked about Netflix
+    # sometimes emits Prime Video's id; the reply saying "ending Netflix" next
+    # to a pointer saying "Proposed: Update Prime Video" is what lets the user
+    # catch that without even opening the panel.
+    suggestion_title = None
+    if result["preview"] and result["preview"].get("suggestion_id"):
+        row = bills_db.get_suggestion(result["preview"]["suggestion_id"])
+        if row:
+            suggestion_title = _suggestion_view(row)["title"]
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], has_suggestion=has_suggestion, fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"]
     )
-    if has_suggestion:
+    if suggestion_title:
         # The panel is the one surface for the proposal; refresh it so the
         # badge and card appear the moment the reply does.
         reply_html += _render_suggestions_panel(oob=True)
