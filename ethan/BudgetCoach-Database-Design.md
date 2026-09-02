@@ -43,7 +43,7 @@ These are the current written definitions that implementation should follow:
 These decisions are now part of the intended implementation unless they are later revised:
 
 1. all money values are stored as integers
-2. all primary keys use GUID values
+2. all primary keys use integer values
 3. `month` uses `YYYY-MM`
 4. there is only one budget per month
 5. budget lines should use categories from the transactions service, storing the transaction `category_id` plus the resolved category name
@@ -71,7 +71,7 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the monthly budget
+- `id`: integer primary key and unique identifier for the monthly budget
 - `month`: the month this budget applies to, such as `2026-09`
 - `declared_income`: the user's income for that month
 - `status`: lifecycle state such as `draft`, `active`, or `closed`
@@ -115,7 +115,7 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the budget line
+- `id`: integer primary key and unique identifier for the budget line
 - `budget_id`: foreign key linking the line to a row in `budgets`
 - `category_id`: category identifier from the transactions service
 - `category`: resolved spending category name from the transactions service, such as groceries or transport
@@ -174,7 +174,7 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the planned event
+- `id`: integer primary key and unique identifier for the planned event
 - `budget_id`: foreign key linking the event to the relevant monthly budget
 - `date`: expected date of the event
 - `label`: short human-readable description

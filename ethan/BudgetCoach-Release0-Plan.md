@@ -159,6 +159,7 @@ Suggested fields:
 Rules:
 
 - one budget per month
+- `id` uses an integer primary key
 - `declared_income` should be stored as an integer amount
 - `month` should use the `YYYY-MM` format
 
@@ -178,6 +179,7 @@ Suggested fields:
 Rules:
 
 - `warn_at <= hard_cap`
+- `id` uses an integer primary key
 - `warn_at` and `hard_cap` should be stored as integer amounts
 - category ids should be unique within a budget
 - budget lines should be selected from the transactions service categories rather than free-typed
@@ -200,6 +202,7 @@ Suggested fields:
 
 Rules:
 
+- `id` uses an integer primary key
 - `est_low <= est_high`
 - `est_low` and `est_high` should be stored as integer amounts
 - each planned event belongs to a budget through `budget_id`
@@ -218,6 +221,10 @@ Suggested fields:
 - `rejection_reason`
 - `decided_at`
 - `created_at`
+
+Rules:
+
+- `id` uses an integer primary key
 
 Rules:
 

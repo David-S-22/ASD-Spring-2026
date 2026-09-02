@@ -30,6 +30,7 @@ def test_budget_crud_round_trip(client):
     )
     assert created.status_code == 201
     budget = created.get_json()
+    assert isinstance(budget["id"], int)
     assert budget["month"] == "2026-09"
     assert budget["declared_income"] == 500000
 
@@ -59,6 +60,7 @@ def test_budget_line_round_trip_and_unique_category_per_budget(client):
     )
     assert created.status_code == 201
     line = created.get_json()
+    assert isinstance(line["id"], int)
     assert line["category_id"] == 81
     assert line["category"] == "Groceries"
 
@@ -116,6 +118,7 @@ def test_planned_event_requires_matching_budget_line_category(client):
     )
     assert created.status_code == 201
     planned_event = created.get_json()
+    assert isinstance(planned_event["id"], int)
     assert planned_event["category"] == "Dining"
 
     updated = client.patch(
@@ -146,6 +149,7 @@ def test_coach_proposal_round_trip(client):
     )
     assert created.status_code == 201
     proposal = created.get_json()
+    assert isinstance(proposal["id"], int)
     assert proposal["status"] == "proposed"
     assert proposal["proposal_json"]["proposal_type"] == "chat_edit"
 
@@ -230,3 +234,20 @@ def test_budget_line_requires_category_id_and_category_together(client):
         json={"category": "Groceries"},
     )
     assert missing_id.status_code == 400
+
+
+def test_seeded_rows_use_simple_integer_ids(tmp_path):
+    db_path = str(tmp_path / "seeded-ids.db")
+    client = create_app(db_path).test_client()
+
+    budgets = client.get("/budgets").get_json()
+    assert [budget["id"] for budget in budgets] == list(range(1, len(budgets) + 1))
+
+    first_budget = budgets[0]
+    budget_lines = client.get(f"/budgets/{first_budget['id']}/budget-lines").get_json()
+    planned_events = client.get(f"/budgets/{first_budget['id']}/planned-events").get_json()
+    coach_proposals = client.get(f"/budgets/{first_budget['id']}/coach-proposals").get_json()
+
+    assert budget_lines[0]["id"] == 1
+    assert planned_events[0]["id"] == 1
+    assert coach_proposals[0]["id"] == 1
