@@ -160,11 +160,18 @@ def _validate_budget_payload(data: dict, partial: bool = False) -> dict:
 
 def _validate_budget_line_payload(data: dict, partial: bool = False) -> dict:
     if not partial:
-        _require_fields(data, ["category"])
+        _require_fields(data, ["category_id", "category"])
     values: dict = {}
+    _optional_int(data, "category_id", values)
     _optional_string(data, "category", values)
     _optional_int(data, "warn_at", values)
     _optional_int(data, "hard_cap", values)
+    if ("category_id" in values) != ("category" in values):
+        raise ApiError(
+            "category_id and category must be supplied together",
+            422,
+            "invalid_field",
+        )
     warn_at = values.get("warn_at")
     hard_cap = values.get("hard_cap")
     if warn_at is not None and hard_cap is not None and warn_at > hard_cap:
@@ -231,7 +238,19 @@ def _get_coach_proposal_or_404(proposal_id: str) -> CoachProposal:
     return proposal
 
 
-def _budget_has_category(budget_id: str, category: str | None, excluded_line_id: str | None = None) -> bool:
+def _budget_has_category_id(budget_id: str, category_id: int | None, excluded_line_id: str | None = None) -> bool:
+    if category_id is None:
+        return False
+    statement = select(func.count()).select_from(BudgetLine).where(
+        BudgetLine.budget_id == budget_id,
+        BudgetLine.category_id == category_id,
+    )
+    if excluded_line_id is not None:
+        statement = statement.where(BudgetLine.id != excluded_line_id)
+    return db.session.scalar(statement) > 0
+
+
+def _budget_has_category_name(budget_id: str, category: str | None, excluded_line_id: str | None = None) -> bool:
     if category is None:
         return False
     statement = select(func.count()).select_from(BudgetLine).where(
@@ -246,7 +265,7 @@ def _budget_has_category(budget_id: str, category: str | None, excluded_line_id:
 def _require_existing_budget_line_category(budget_id: str, category: str | None):
     if category is None:
         return
-    if not _budget_has_category(budget_id, category):
+    if not _budget_has_category_name(budget_id, category):
         raise ApiError(
             "category must match an existing budget line for this budget",
             422,
@@ -278,7 +297,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     @application.errorhandler(SQLAlchemyError)
     def handle_database_error(error: SQLAlchemyError):
         db.session.rollback()
-        application.logger.exception("Ethan database operation failed")
+        application.logger.exception("Budgets database operation failed")
         return jsonify(error="database unavailable", code="database_unavailable"), 503
 
     @application.errorhandler(HTTPException)
@@ -287,7 +306,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
     @application.get("/")
     def get_index():
-        return jsonify(container="ethan-db")
+        return jsonify(container="budgets-db")
 
     @application.get("/health")
     def get_health():
@@ -356,9 +375,16 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     def create_budget_line(budget_id: str):
         budget = _get_budget_or_404(budget_id)
         values = _validate_budget_line_payload(_json_body())
+        if _budget_has_category_id(budget.id, values.get("category_id")):
+            raise ApiError(
+                "category already exists for this budget",
+                409,
+                "budget_line_category_conflict",
+            )
         now = _now_timestamp()
         line = BudgetLine(
             budget_id=budget.id,
+            category_id=values.get("category_id"),
             category=values.get("category"),
             warn_at=values.get("warn_at"),
             hard_cap=values.get("hard_cap"),
@@ -379,10 +405,10 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
         values = _validate_budget_line_payload(_json_body(), partial=True)
         if not values:
             raise ApiError("no updatable fields supplied", 400, "missing_required_fields")
-        category = values.get("category", line.category)
-        if category is not None and _budget_has_category(line.budget_id, category, excluded_line_id=line.id):
+        category_id = values.get("category_id", line.category_id)
+        if category_id is not None and _budget_has_category_id(line.budget_id, category_id, excluded_line_id=line.id):
             raise ApiError(
-                "category name already exists for this budget",
+                "category already exists for this budget",
                 409,
                 "budget_line_category_conflict",
             )
@@ -511,6 +537,6 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
 def create_app(db_path: str | None = None, seed_demo_data: bool = True) -> Flask:
     return _create_app(
-        db_path or os.environ.get("DB_PATH", "./ethan.db"),
+        db_path or os.environ.get("DB_PATH", "./budgets.db"),
         seed_demo_data=seed_demo_data,
     )

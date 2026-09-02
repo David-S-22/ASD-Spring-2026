@@ -5,7 +5,7 @@ from database.app import create_app
 
 @pytest.fixture
 def client(tmp_path):
-    db_path = str(tmp_path / "ethan.db")
+    db_path = str(tmp_path / "budgets.db")
     app = create_app(db_path, seed_demo_data=False)
     app.config["TESTING"] = True
     return app.test_client()
@@ -16,7 +16,7 @@ def test_index(client):
 
     assert resp.status_code == 200
     assert isinstance(resp.json, dict)
-    assert resp.json["container"] == "ethan-db"
+    assert resp.json["container"] == "budgets-db"
 
 
 def test_budget_crud_round_trip(client):
@@ -55,10 +55,11 @@ def test_budget_line_round_trip_and_unique_category_per_budget(client):
 
     created = client.post(
         f"/budgets/{budget['id']}/budget-lines",
-        json={"category": "Groceries", "warn_at": 15000, "hard_cap": 20000},
+        json={"category_id": 81, "category": "Groceries", "warn_at": 15000, "hard_cap": 20000},
     )
     assert created.status_code == 201
     line = created.get_json()
+    assert line["category_id"] == 81
     assert line["category"] == "Groceries"
 
     fetched = client.get(f"/budget-lines/{line['id']}")
@@ -67,7 +68,7 @@ def test_budget_line_round_trip_and_unique_category_per_budget(client):
 
     duplicate = client.post(
         f"/budgets/{budget['id']}/budget-lines",
-        json={"category": "groceries"},
+        json={"category_id": 81, "category": "Groceries"},
     )
     assert duplicate.status_code == 409
 
@@ -84,7 +85,7 @@ def test_planned_event_requires_matching_budget_line_category(client):
     budget = client.post("/budgets", json={"month": "2026-11"}).get_json()
     client.post(
         f"/budgets/{budget['id']}/budget-lines",
-        json={"category": "Eating Out", "warn_at": 8000, "hard_cap": 12000},
+        json={"category_id": 80, "category": "Dining", "warn_at": 8000, "hard_cap": 12000},
     )
 
     invalid = client.post(
@@ -106,7 +107,7 @@ def test_planned_event_requires_matching_budget_line_category(client):
         json={
             "date": "2026-11-04",
             "label": "Dinner out",
-            "category": "Eating Out",
+            "category": "Dining",
             "est_low": 4000,
             "est_high": 6000,
             "source": "user",
@@ -115,7 +116,7 @@ def test_planned_event_requires_matching_budget_line_category(client):
     )
     assert created.status_code == 201
     planned_event = created.get_json()
-    assert planned_event["category"] == "Eating Out"
+    assert planned_event["category"] == "Dining"
 
     updated = client.patch(
         f"/planned-events/{planned_event['id']}",
@@ -162,7 +163,7 @@ def test_deleting_budget_cascades_to_child_records(client):
     budget = client.post("/budgets", json={"month": "2027-01"}).get_json()
     line = client.post(
         f"/budgets/{budget['id']}/budget-lines",
-        json={"category": "Groceries"},
+        json={"category_id": 81, "category": "Groceries"},
     ).get_json()
     planned_event = client.post(
         f"/budgets/{budget['id']}/planned-events",
@@ -213,3 +214,19 @@ def test_startup_seed_skips_database_that_already_contains_data(tmp_path):
     assert seeded_client.get(f"/budgets/{created_budget['id']}/budget-lines").get_json() == []
     assert seeded_client.get(f"/budgets/{created_budget['id']}/planned-events").get_json() == []
     assert seeded_client.get(f"/budgets/{created_budget['id']}/coach-proposals").get_json() == []
+
+
+def test_budget_line_requires_category_id_and_category_together(client):
+    budget = client.post("/budgets", json={"month": "2027-03"}).get_json()
+
+    missing_name = client.post(
+        f"/budgets/{budget['id']}/budget-lines",
+        json={"category_id": 81},
+    )
+    assert missing_name.status_code == 400
+
+    missing_id = client.post(
+        f"/budgets/{budget['id']}/budget-lines",
+        json={"category": "Groceries"},
+    )
+    assert missing_id.status_code == 400

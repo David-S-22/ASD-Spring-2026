@@ -2,18 +2,18 @@
 
 ## 1. Purpose
 
-This document turns the Release 0 brief into a practical implementation plan for Ethan's **Budget Coach** feature. It focuses on what still needs to be built so the feature is not just present in isolation, but integrated into the shared team application and assessable under the Release 0 marking criteria.
+This document turns the Release 0 brief into a practical implementation plan for the **Budget Coach** feature. It focuses on what still needs to be built so the feature is not just present in isolation, but integrated into the shared team application and assessable under the Release 0 marking criteria.
 
 ## 2. What is already in place
 
-The Ethan folder already has a basic service scaffold:
+The `ethan` folder already has a basic service scaffold:
 
 - `ethan/frontend` contains a minimal nginx-based frontend container template.
 - `ethan/backend` contains a minimal Flask backend container template.
 - `ethan/database` contains a minimal Flask database container template.
 - `ethan/test` contains basic pytest health-route tests.
-- `docker-compose.yml` already includes `ethan-frontend`, `ethan-backend`, and `ethan-db`.
-- `.github/workflows/ethan-ci.yml` already runs Ethan tests and container build/health checks.
+- `docker-compose.yml` already includes `budgets-frontend`, `budgets-backend`, and `budgets-db`.
+- `.github/workflows/budgets-ci.yml` already runs Budgets tests and container build/health checks.
 
 This means the container and CI foundation exists, but the actual **Budget Coach feature** is still largely unimplemented.
 
@@ -72,7 +72,7 @@ Implement AI-Mode with Ollama and approved open-source models:
 Complete the integration items needed for assessment:
 
 - connect the feature to the team's shared frontend entry point
-- ensure Docker Compose runs the Ethan feature with the group system
+- ensure Docker Compose runs the Budgets feature with the group system
 - ensure GitHub Actions remain green
 - capture screenshots, terminal logs, workflow runs, and prompt records for the technical report
 - prepare a clear demo script for the showcase video
@@ -86,12 +86,12 @@ To score well, Budget Coach must be delivered as an **integrated feature** rathe
 Budget Coach should demonstrate all of the following:
 
 1. A user can open the Budget Coach UI from the shared index.
-2. A user can create, read, update, and delete budget data through the Ethan frontend, backend, and database services.
+2. A user can create, read, update, and delete budget data through the Budgets frontend, backend, and database services.
 3. The backend reads transaction history from another team's **Statement API** rather than from another team's SQLite database.
 4. The backend can call Ollama with an approved model and return structured coaching or structured proposed edits.
 5. AI-generated changes are never auto-applied; the user must explicitly accept them.
 6. The feature runs through the shared Docker Compose configuration.
-7. The Ethan GitHub Actions workflow proves the feature still builds and passes validation.
+7. The Budgets GitHub Actions workflow proves the feature still builds and passes validation.
 
 If any of these are missing, the feature risks losing marks under working software, AI integration, Docker Compose integration, DevOps, and project setup.
 
@@ -125,7 +125,7 @@ Recommended responsibilities:
 - Expose frontend-facing endpoints.
 - Own budgeting calculations.
 - Aggregate data from:
-  - Ethan database API
+  - Budgets database API
   - Statement API from the transactions feature
   - Ollama AI service
 - Enforce validation and workflow rules.
@@ -168,6 +168,7 @@ Suggested fields:
 
 - `id` as the primary key
 - `budget_id` as a foreign key to `budgets.id`
+- `category_id` using the transactions service category identity
 - `category`
 - `warn_at`
 - `hard_cap`
@@ -178,8 +179,8 @@ Rules:
 
 - `warn_at <= hard_cap`
 - `warn_at` and `hard_cap` should be stored as integer amounts
-- categories should be unique within a budget
-- categories are free text, but business rules should keep usage aligned to real budget lines
+- category ids should be unique within a budget
+- budget lines should be selected from the transactions service categories rather than free-typed
 
 ### 6.3 `planned_events`
 
@@ -250,7 +251,7 @@ Suggested initial endpoints:
 
 ## 7.2 Database API endpoints
 
-The backend should call the Ethan database microservice over HTTP for:
+The backend should call the Budgets database microservice over HTTP for:
 
 - budgets CRUD
 - budget lines CRUD
@@ -346,7 +347,7 @@ Needed work:
 
 1. Identify the exact statement-service endpoint for transaction history.
 2. Agree a response shape with the teammate owning that service.
-3. Build a backend adapter client in Ethan's backend.
+3. Build a backend adapter client in the Budgets backend.
 4. Handle unreachable-service and malformed-response failures explicitly.
 
 ## 10. Docker and Compose plan
@@ -362,27 +363,27 @@ Required updates likely include:
   - Ollama base URL
   - selected model names
 - optional shared network naming only if the team is already standardising it
-- mounted data volume for the Ethan SQLite file
+- mounted data volume for the Budgets SQLite file
 
 Compose should be able to start:
 
-- Ethan frontend
-- Ethan backend
-- Ethan database
+- Budgets frontend
+- Budgets backend
+- Budgets database
 - shared AI services
 - other team services needed for integration
 
 ## 11. GitHub Actions plan
 
-The existing `ethan-ci.yml` should evolve from scaffold validation into feature validation.
+The existing `budgets-ci.yml` should evolve from scaffold validation into feature validation.
 
 Recommended stages:
 
 1. install backend, database, and test dependencies
 2. run targeted tests
 3. optionally run integration tests that mock the Statement API and Ollama responses
-4. build Ethan containers
-5. bring up Ethan services
+4. build Budgets containers
+5. bring up Budgets services
 6. run endpoint smoke tests
 
 Recommended test coverage:
@@ -429,7 +430,7 @@ Define the shapes of the data and API calls before building logic, so the fronte
 
 **Goal**
 
-Implement the Ethan database service as the single owner of Budget Coach persistence.
+Implement the Budgets database service as the single owner of Budget Coach persistence.
 
 **What to do**
 
@@ -449,7 +450,7 @@ Implement the Ethan database service as the single owner of Budget Coach persist
 
 **Output of this step**
 
-- real Ethan database API
+- real Budgets database API
 - working SQLite schema
 - tested CRUD foundation
 
@@ -462,7 +463,7 @@ Turn the backend into the orchestration layer that calculates budget state and c
 **What to do**
 
 1. Add a backend service layer for budget calculations.
-2. Add an HTTP client for the Ethan database API.
+2. Add an HTTP client for the Budgets database API.
 3. Add an HTTP client for the Statement API.
 4. Implement backend CRUD endpoints that call the database API.
 5. Implement computed summary endpoints for the frontend.
@@ -494,7 +495,7 @@ Generate the first realistic budget from transaction history so the feature is u
 2. Pull recent transactions from the Statement API.
 3. Group spending by category.
 4. Produce starter `warn_at` and `hard_cap` values.
-5. Save the starter budget through the Ethan database API.
+5. Save the starter budget through the Budgets database API.
 
 **Instructions**
 
@@ -611,7 +612,7 @@ Make sure the feature is assessable as part of the group application rather than
 
 - Treat integration as a feature requirement, not a final cleanup step.
 - Use service names in compose for internal communication between containers.
-- Verify the team entry point can navigate to Ethan's frontend container.
+- Verify the team entry point can navigate to the Budgets frontend container.
 - Document the cross-feature API-only rule in both code and report material.
 - Work with the teammate owning the Statement API early, because this dependency can block the demo.
 
@@ -630,9 +631,9 @@ Make the feature reliable in the repository's shared DevOps workflow.
 
 1. Update Dockerfiles with real dependencies and startup commands.
 2. Add any required environment variables to compose and workflow definitions.
-3. Expand `ethan-ci.yml` from health checks to feature validation.
+3. Expand `budgets-ci.yml` from health checks to feature validation.
 4. Add integration tests or smoke tests for key endpoints.
-5. Keep the workflow focused on Ethan-owned paths and dependencies.
+5. Keep the workflow focused on Budgets-owned paths and dependencies.
 
 **Instructions**
 
@@ -723,7 +724,7 @@ This loop should be shown:
 To support the technical report and showcase, collect evidence for:
 
 - repository structure
-- Ethan architecture diagram
+- Budgets architecture diagram
 - integrated architecture diagram
 - Docker Compose architecture diagram
 - DevOps pipeline diagram
@@ -745,21 +746,21 @@ To support the technical report and showcase, collect evidence for:
 
 Budget Coach is ready for Release 0 when:
 
-- all three Ethan services are implemented beyond health-check stubs
+- all three Budgets services are implemented beyond health-check stubs
 - CRUD works end-to-end through frontend -> backend -> database API
 - transaction history is read from the Statement API
 - at least one approved LLM flow works through Ollama
 - AI proposals require acceptance before persistence
 - shared Docker Compose starts the integrated feature
-- Ethan CI passes
+- Budgets CI passes
 - screenshots, logs, and diagrams are ready for the report
 
 ## 18. Immediate next build targets
 
 If implementation starts now, the best order is:
 
-1. build the Ethan database schema and CRUD API
-2. build the Ethan backend orchestration endpoints and calculations
+1. build the Budgets database schema and CRUD API
+2. build the Budgets backend orchestration endpoints and calculations
 3. connect the Statement API
 4. add Ollama prompt + schema validation
 5. build the frontend editor, planner, and proposal flow
