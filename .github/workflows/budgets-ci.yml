@@ -1,18 +1,18 @@
-name: ethan-ci
+name: budgets-ci
 
 on:
   pull_request:
     branches:
       - main
     paths:
-      - .github/workflows/ethan-ci.yml
+      - .github/workflows/budgets-ci.yml
       - ethan/**
       - docker-compose.yml
   push:
     branches:
       - main
     paths:
-      - .github/workflows/ethan-ci.yml
+      - .github/workflows/budgets-ci.yml
       - ethan/**
       - docker-compose.yml
 
@@ -35,8 +35,8 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v6
-      - run: docker compose build ethan-frontend ethan-backend ethan-db
-      - run: docker compose up -d ethan-frontend ethan-backend ethan-db
+      - run: docker compose build budgets-frontend budgets-backend budgets-db
+      - run: docker compose up -d budgets-frontend budgets-backend budgets-db
       - run: sleep 3
       - name: Check frontend availability
         run: curl --fail http://127.0.0.1:3006/ || exit 1
@@ -44,7 +44,7 @@ jobs:
         run: curl --fail http://127.0.0.1:5006/ || exit 1
       - name: Check database availability
         run: curl --fail http://127.0.0.1:6006/ || exit 1
-      - run: docker compose logs ethan-frontend ethan-backend ethan-db
+      - run: docker compose logs budgets-frontend budgets-backend budgets-db
         if: failure()
-      - run: docker compose rm --stop --force --volumes ethan-frontend ethan-backend ethan-db
+      - run: docker compose rm --stop --force --volumes budgets-frontend budgets-backend budgets-db
         if: always()

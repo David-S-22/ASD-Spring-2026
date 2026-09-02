@@ -1,6 +1,106 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tally - Budgets</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+            crossorigin="anonymous"></script>
+</head>
 <body>
-    <p>ethan frontend service</p>
+    <style>
+        .budgets-toolbar {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .budgets-toolbar h1 {
+            margin-bottom: 0.25rem;
+        }
+
+        .budgets-toolbar p {
+            margin-top: 0;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
+        .budgets-table-wrapper {
+            overflow-x: auto;
+        }
+    </style>
+
+    <section class="panel">
+        <div class="budgets-toolbar">
+            <div>
+                <h1>Budgets</h1>
+                <p>View the budget records currently available in Tally.</p>
+            </div>
+        </div>
+
+        <div class="budgets-table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Status</th>
+                        <th>Declared income</th>
+                        <th>ID</th>
+                    </tr>
+                </thead>
+                <tbody id="budgets">
+                    <tr>
+                        <td colspan="4">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        async function loadBudgets() {
+            const tbody = document.getElementById('budgets');
+            try {
+                const response = await fetch('/budgets-backend/api/budgets');
+                const budgets = await response.json();
+
+                if (!response.ok || !Array.isArray(budgets)) {
+                    throw new Error('Unable to load budgets.');
+                }
+
+                if (budgets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No budgets found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = budgets.map(function (budget) {
+                    const declaredIncome = Number.isInteger(budget.declared_income)
+                        ? '$' + (budget.declared_income / 100).toFixed(2)
+                        : '-';
+                    return '<tr>'
+                        + '<td>' + escapeHtml(budget.month || '-') + '</td>'
+                        + '<td>' + escapeHtml(budget.status || '-') + '</td>'
+                        + '<td>' + declaredIncome + '</td>'
+                        + '<td><code>' + escapeHtml(budget.id || '-') + '</code></td>'
+                        + '</tr>';
+                }).join('');
+            } catch (_error) {
+                tbody.innerHTML = '<tr><td colspan="4">Budgets are unavailable right now.</td></tr>';
+            }
+        }
+
+        loadBudgets();
+    </script>
 </body>
 </html>

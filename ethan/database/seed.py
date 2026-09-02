@@ -19,16 +19,16 @@ SEED_BUDGETS = (
 )
 
 SEED_LINE_CATEGORIES = (
-    "Groceries",
-    "Transport",
-    "Eating Out",
-    "Entertainment",
-    "Utilities",
-    "Health",
-    "Shopping",
-    "Subscriptions",
-    "Travel",
-    "Emergency",
+    (30, "Housing"),
+    (31, "Fitness"),
+    (32, "Music subscriptions"),
+    (33, "Streaming subscriptions"),
+    (60, "Internet"),
+    (61, "Mobile"),
+    (62, "Utilities"),
+    (70, "Transport"),
+    (80, "Dining"),
+    (81, "Groceries"),
 )
 
 SEED_EVENT_LABELS = (
@@ -102,11 +102,12 @@ def seed_database_if_empty():
             db.session.add(budget)
             db.session.flush()
 
-            category = SEED_LINE_CATEGORIES[index - 1]
+            category_id, category = SEED_LINE_CATEGORIES[index - 1]
             warn_at = 10000 + index * 1000
             hard_cap = warn_at + 5000
             budget_line = BudgetLine(
                 budget_id=budget.id,
+                category_id=category_id,
                 category=category,
                 warn_at=warn_at,
                 hard_cap=hard_cap,

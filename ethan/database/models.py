@@ -71,6 +71,7 @@ class BudgetLine(db.Model):
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
+    category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     category: Mapped[str | None] = mapped_column(String(120, collation="NOCASE"), nullable=True)
     warn_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hard_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -80,7 +81,7 @@ class BudgetLine(db.Model):
     budget: Mapped[Budget] = relationship(back_populates="budget_lines")
 
     __table_args__ = (
-        UniqueConstraint("budget_id", "category", name="uq_budget_lines_budget_category"),
+        UniqueConstraint("budget_id", "category_id", name="uq_budget_lines_budget_category_id"),
         CheckConstraint(
             "warn_at IS NULL OR hard_cap IS NULL OR warn_at <= hard_cap",
             name="ck_budget_lines_warn_at_hard_cap",
@@ -91,6 +92,7 @@ class BudgetLine(db.Model):
         return {
             "id": self.id,
             "budget_id": self.budget_id,
+            "category_id": self.category_id,
             "category": self.category,
             "warn_at": self.warn_at,
             "hard_cap": self.hard_cap,

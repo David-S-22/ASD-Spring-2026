@@ -712,3 +712,686 @@ The other implementations still use a real database file when they run, but they
 So what gets committed to git is the **code that defines the schema and CRUD API**, not the `.db` file itself. The SQLite file only appears after the service starts and writes data.
 
 In Ethan, you only see a physical file if you point `DB_PATH` at a concrete location like `ethan\database\ethan.db` and run it locally. If you run through Docker, the file lives inside the mounted Docker volume instead of appearing as a tracked repo file.
+
+## 2026-09-02T11:45:38.144+10:00
+
+### User
+begin work on next phase
+
+### Assistant
+Implemented the first backend/API phase for Budget Coach. Ethan's backend now has a dedicated database API client in `ethan/backend/db_api.py`, shared backend configuration in `ethan/backend/config.py`, and a real Flask backend app factory in `ethan/backend/app.py`.
+
+The backend now exposes the first JSON API routes that talk to `ethan-db` instead of touching SQLite directly:
+
+- `GET /health`
+- `GET/POST /api/budgets`
+- `GET /api/budgets/by-month/<month>`
+- `GET/PATCH/DELETE /api/budgets/<budget_id>`
+- `GET /api/budgets/<budget_id>/snapshot`
+- `GET/POST /api/budgets/<budget_id>/budget-lines`
+- `GET/PATCH/DELETE /api/budget-lines/<line_id>`
+- `GET/POST /api/budgets/<budget_id>/planned-events`
+- `GET/PATCH/DELETE /api/planned-events/<event_id>`
+- `GET/POST /api/budgets/<budget_id>/coach-proposals`
+- `GET/PATCH/DELETE /api/coach-proposals/<proposal_id>`
+
+The new snapshot route starts the orchestration layer by aggregating a budget together with its lines, planned events, and coach proposals in one backend response. I also updated the backend requirements to include `requests`, switched `ethan/backend/__main__.py` to use the app factory, and replaced the placeholder backend test with targeted route tests covering healthy responses, CRUD proxying, snapshot aggregation, clean 4xx forwarding, and database-unavailable handling.
+
+## 2026-09-02T12:09:44.084+10:00
+
+### User
+whats next
+
+### Assistant
+Next is the **budget calculations and summary layer** in the backend. You now have storage plus backend-to-database orchestration, so the next step is to make the backend produce Budget Coach-specific answers instead of just proxying CRUD.
+
+The immediate next build order should be:
+
+1. add a backend service module that calculates totals, remaining budget, warning-state, and cap-state from a budget plus its lines and planned events
+2. expose a summary endpoint such as `GET /api/budgets/<budget_id>/summary`
+3. add the Statement API client so actual transaction history can be pulled in from the transactions feature
+4. combine DB data plus transaction history to compute real spend-vs-budget values by category
+5. build starter-budget generation from that transaction history
+
+So the next concrete target is: **implement the backend calculation layer and a summary endpoint**, then wire in the Statement API right after.
+
+## 2026-09-02T12:13:05.903+10:00
+
+### User
+how to test backend
+
+### Assistant
+There are two good ways to test the Ethan backend: **automated pytest** and **manual HTTP requests**.
+
+For automated tests, from the repo root run:
+
+```powershell
+py -3 -m pip install -r ethan\backend\requirements.txt -r ethan\database\requirements.txt -r ethan\test\requirements.txt
+py -3 -m pytest ethan\test -q
+```
+
+That runs both the backend and database test files. If you want only the backend tests:
+
+```powershell
+py -3 -m pytest ethan\test\test_backend.py -q
+```
+
+For manual backend testing, start both the Ethan database service and the Ethan backend in separate terminals.
+
+Terminal 1, start the database:
+
+```powershell
+$env:DB_PATH = "C:\git\GitHub\Uni\ASD Bank\ethan\database\ethan.db"
+$env:PORT = "6006"
+py -3 -m ethan.database
+```
+
+Terminal 2, start the backend:
+
+```powershell
+$env:ETHAN_DB_URL = "http://127.0.0.1:6006"
+$env:PORT = "5006"
+py -3 -m ethan.backend
+```
+
+Then, in a third terminal, call the backend routes instead of the DB routes:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5006/health
+Invoke-RestMethod http://127.0.0.1:5006/api/budgets
+```
+
+A simple end-to-end backend test flow is:
+
+1. create a budget through the backend
+2. create a budget line through the backend
+3. create a planned event through the backend
+4. create a coach proposal through the backend
+5. fetch the combined snapshot through the backend
+
+Example requests:
+
+```powershell
+$budget = Invoke-RestMethod -Method POST `
+  -Uri http://127.0.0.1:5006/api/budgets `
+  -ContentType "application/json" `
+  -Body '{"month":"2026-09","declared_income":500000,"status":"draft"}'
+
+$line = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:5006/api/budgets/$($budget.id)/budget-lines" `
+  -ContentType "application/json" `
+  -Body '{"category":"Groceries","warn_at":15000,"hard_cap":20000}'
+
+$event = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:5006/api/budgets/$($budget.id)/planned-events" `
+  -ContentType "application/json" `
+  -Body '{"date":"2026-09-04","label":"Dinner out","category":"Groceries","est_low":4000,"est_high":6000,"source":"user","status":"planned"}'
+
+$proposal = Invoke-RestMethod -Method POST `
+  -Uri "http://127.0.0.1:5006/api/budgets/$($budget.id)/coach-proposals" `
+  -ContentType "application/json" `
+  -Body '{"proposal_json":{"proposal_type":"coach"},"rationale":"Test proposal"}'
+
+Invoke-RestMethod -Uri "http://127.0.0.1:5006/api/budgets/$($budget.id)/snapshot"
+```
+
+Useful backend routes to test are:
+
+- `GET /health`
+- `GET/POST /api/budgets`
+- `GET /api/budgets/by-month/<month>`
+- `GET/PATCH/DELETE /api/budgets/<budget_id>`
+- `GET /api/budgets/<budget_id>/snapshot`
+- `GET/POST /api/budgets/<budget_id>/budget-lines`
+- `GET/PATCH/DELETE /api/budget-lines/<line_id>`
+- `GET/POST /api/budgets/<budget_id>/planned-events`
+- `GET/PATCH/DELETE /api/planned-events/<event_id>`
+- `GET/POST /api/budgets/<budget_id>/coach-proposals`
+- `GET/PATCH/DELETE /api/coach-proposals/<proposal_id>`
+
+The most important things to verify are:
+
+1. `/health` shows the DB API as up
+2. creating data through the backend really persists it in the DB service
+3. `/snapshot` returns the budget plus its child collections together
+4. DB validation errors still come back cleanly through the backend
+## Prompt
+continue work on next phase
+
+## Response
+Implemented the next backend phase by adding transactions API integration and a real budget summary calculation endpoint. Ethan backend now calls the Statement API-style transactions service for month-filtered transactions and category names, matches those categories against Ethan budget-line categories case-insensitively, and computes actual spend, planned low/high totals, projected totals, warning/cap states, uncategorised transaction totals, and remaining income through `GET /api/budgets/<budget_id>/summary`.
+
+Updated backend health so it reports both Ethan DB API and transactions API availability, added dedicated backend modules for the transactions client and summary logic, and added targeted backend tests covering summary routing and calculation behavior.
+## Prompt
+how to test
+## Response
+Test it at three levels:
+
+1. Fast regression tests
+   - From the repo root: `pytest ethan/test`
+   - Backend-only: `pytest ethan/test/test_backend.py`
+   - Database-only: `pytest ethan/test/test_database.py`
+
+2. Run the services locally
+   - Install deps once: `pip install -r ethan/backend/requirements.txt -r ethan/database/requirements.txt -r ethan/test/requirements.txt`
+   - Start Ethan DB: `$env:DB_PATH='C:\git\GitHub\Uni\ASD Bank\ethan\database\ethan-local.db'; $env:PORT='6006'; py -3 -m ethan.database`
+   - Start Janelle transactions backend as well, because summary now depends on it: `$env:PORT='5001'; $env:TRANSACTIONS_DB_URL='http://127.0.0.1:6001'; py -3 -m janelle.backend`
+   - Start Ethan backend in a second terminal: `$env:PORT='5006'; $env:ETHAN_DB_URL='http://127.0.0.1:6006'; $env:TRANSACTIONS_API_URL='http://127.0.0.1:5001'; py -3 -m ethan.backend`
+
+3. Hit the key routes
+   - Health: `Invoke-RestMethod http://127.0.0.1:5006/health`
+   - Budgets list: `Invoke-RestMethod http://127.0.0.1:5006/api/budgets`
+   - Snapshot: `Invoke-RestMethod http://127.0.0.1:5006/api/budgets/<budget-id>/snapshot`
+   - New summary endpoint: `Invoke-RestMethod http://127.0.0.1:5006/api/budgets/<budget-id>/summary`
+
+To properly exercise `/summary`, make sure the budget has matching `budget_lines` categories and that the transactions service has categories/transactions for the same month. The summary response should show per-line actual spend, planned totals, projected totals, warning/cap flags, uncategorised transaction totals, and remaining income.
+
+If you want to test through Docker instead, use `docker compose up --build transactions-db transactions-backend ethan-db ethan-backend` and then call `http://127.0.0.1:5006/...`. If host port binding fails on `6001` or `6006`, that is the same Windows reserved-port issue we already identified.
+## Prompt
+http://127.0.0.1:5006/api/budgets/521aa9c1-14f0-41bf-b1ef-27d2f4506c13/summary is {"code":"database_unavailable","error":"ethan database is unavailable"}
+## Response
+That specific `/summary` failure is not actually Ethan DB being down. I traced it locally and found:
+
+- `http://127.0.0.1:5006/api/budgets` works
+- `http://127.0.0.1:6006/health` works
+- but `http://127.0.0.1:5001/transactions` and `http://127.0.0.1:6001/transactions` are currently failing
+
+So the summary route is failing when it tries to read transaction history from Janelle’s transactions service. Ethan was also masking that failure with the misleading response `{"code":"database_unavailable","error":"ethan database is unavailable"}`. I fixed that in Ethan so, after you restart Ethan backend, the same scenario will return `transactions_unavailable` instead.
+
+What to do right now:
+1. Restart Ethan backend so the improved error handling is loaded.
+2. Fix the transactions service, because that is the real failing dependency.
+3. Re-test these endpoints in order:
+   - `Invoke-RestMethod http://127.0.0.1:5006/health`
+   - `Invoke-RestMethod http://127.0.0.1:5001/transactions`
+   - `Invoke-RestMethod http://127.0.0.1:5006/api/budgets/521aa9c1-14f0-41bf-b1ef-27d2f4506c13/summary`
+
+Most likely cause on the transactions side is a bad or stale local transactions DB/runtime state, because `/categories` responds but `/transactions` does not. If needed, reset and restart Janelle’s DB/backend before re-testing Ethan summary.
+## Prompt
+create a simple page for the front end, tally website, a new 'Budgets' tab similar to other existing pages, that for now only shows a very simple list of the budgets and nothing else. The front end will be further worked on later. Also update the home page to add a short description of the budgets page like others there
+## Response
+Added a first-pass Budgets UI to the shared Tally frontend. The shared shell now has a new `Budgets` tab, the home page now includes a short description for that section, and Ethan frontend now serves a simple budgets page that fetches `GET /api/budgets` through frontend proxy routing and renders a basic table with month, status, declared income, and ID.
+
+Routing was also updated so the shared frontend can proxy `/budgets-frontend/` to Ethan frontend and `/budgets-backend/` through Ethan frontend to Ethan backend, matching the existing shell/frontend pattern used by the other features. This is intentionally minimal for now so the page can be expanded later.
+## Prompt
+diagnose 
+transactions-db        | Traceback (most recent call last):
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+transactions-db        |     self.dialect.do_execute(
+transactions-db        |     ~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         cursor, str_statement, effective_parameters, context
+transactions-db        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+transactions-db        |     cursor.execute(statement, parameters)
+transactions-db        |     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        | sqlite3.OperationalError: no such column: transactions.amount
+transactions-db        |
+transactions-db        | The above exception was the direct cause of the following exception:
+transactions-db        |
+transactions-db        | Traceback (most recent call last):
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+transactions-db        |     rv = self.dispatch_request()
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 902, in dispatch_request
+transactions-db        |     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+transactions-db        |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+transactions-db        |   File "/app/database/app.py", line 124, in get_transactions
+transactions-db        |     transactions = filtered_transactions(
+transactions-db        |        parse_transaction_filters(request.args)
+transactions-db        |     )
+transactions-db        |   File "/app/database/helpers.py", line 34, in filtered_transactions
+transactions-db        |     return db.session.scalars(
+transactions-db        |            ~~~~~~~~~~~~~~~~~~^
+transactions-db        |        statement.order_by(
+transactions-db        |      ^^^^^^^^^^^^^^^^^^^
+transactions-db        |     ...<3 lines>...
+transactions-db        |        )
+transactions-db        |      ^
+transactions-db        |     ).unique().all()
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/scoping.py", line 1890, in scalars
+transactions-db        |     return self._proxied.scalars(
+transactions-db        |            ~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         statement,
+transactions-db        |         ^^^^^^^^^^
+transactions-db        |     ...<3 lines>...
+transactions-db        |         **kw,
+transactions-db        |         ^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/session.py", line 2481, in scalars
+transactions-db        |     return self._execute_internal(
+transactions-db        |            ~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         statement,
+transactions-db        |         ^^^^^^^^^^
+transactions-db        |     ...<4 lines>...
+transactions-db        |         **kw,
+transactions-db        |         ^^^^^
+transactions-db        |     ).scalars()
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/session.py", line 2271, in _execute_internal
+transactions-db        |     result: Result[Any] = compile_state_cls.orm_execute_statement(
+transactions-db        |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         self,
+transactions-db        |         ^^^^^
+transactions-db        |     ...<4 lines>...
+transactions-db        |         conn,
+transactions-db        |         ^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+transactions-db        |     result = conn.execute(
+transactions-db        |         statement, params or {}, execution_options=execution_options
+transactions-db        |     )
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+transactions-db        |     return meth(
+transactions-db        |         self,
+transactions-db        |         distilled_parameters,
+transactions-db        |         execution_options or NO_OPTIONS,
+transactions-db        |     )
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+transactions-db        |     return connection._execute_clauseelement(
+transactions-db        |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         self, distilled_params, execution_options
+transactions-db        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+transactions-db        |     ret = self._execute_context(
+transactions-db        |         dialect,
+transactions-db        |     ...<8 lines>...
+transactions-db        |         cache_hit=cache_hit,
+transactions-db        |     )
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+transactions-db        |     return self._exec_single_context(
+transactions-db        |            ~~~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         dialect, context, statement, parameters
+transactions-db        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+transactions-db        |     self._handle_dbapi_exception(
+transactions-db        |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         e, str_statement, effective_parameters, cursor, context
+transactions-db        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+transactions-db        |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+transactions-db        |     self.dialect.do_execute(
+transactions-db        |     ~~~~~~~~~~~~~~~~~~~~~~~^
+transactions-db        |         cursor, str_statement, effective_parameters, context
+transactions-db        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        |     )
+transactions-db        |     ^
+transactions-db        |   File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+transactions-db        |     cursor.execute(statement, parameters)
+transactions-db        |     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+transactions-db        | sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: transactions.amount
+transactions-db        | [SQL: SELECT transactions.id, transactions.date, transactions.merchant, transactions.description, transactions.amount, transactions.category_id, transactions.created_at, transactions.updated_at, categories_1.id AS id_1, categories_1.name, categories_1.type
+transactions-db        | FROM transactions LEFT OUTER JOIN categories AS categories_1 ON categories_1.id = transactions.category_id ORDER BY transactions.date DESC, transactions.created_at DESC, transactions.id DESC]
+transactions-db        | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+transactions-db        | 172.18.0.9 - - [02/Sep/2026 03:42:39] "GET /transactions HTTP/1.1" 503 -
+## Response
+This stack trace shows a schema mismatch in Janelle's persisted SQLite database, not a new problem in Ethan's query code.
+
+Why:
+- Janelle's current SQLAlchemy model defines `transactions.amount` and the `/transactions` query explicitly selects it.
+- The error is `sqlite3.OperationalError: no such column: transactions.amount`, which means the physical SQLite file currently mounted in the container has an older `transactions` table definition.
+- `janelle\database\app.py` uses `db.create_all()`, which only creates missing tables. It does **not** alter an existing table to add new columns.
+- Docker Compose persists that DB file in the `transactions_data` volume, so rebuilding the image does not replace the old schema.
+
+That also explains the earlier symptoms:
+- `/categories` can still work because that table/schema is present.
+- `/transactions` fails because the existing `transactions` table in the persisted DB is missing `amount`.
+- Ethan `/summary` fails because it depends on `/transactions`.
+
+Practical meaning: the code expects the newer schema, but the mounted database file is from an older version. With the current setup, the fix is to recreate or migrate the transactions DB. Since there is no migration tool wired in here, the usual fix in this repo is to delete the persisted transactions DB/volume and let the service recreate and reseed it on startup.
+## Prompt
+how to do that
+
+## Response
+If you are using Docker Compose, the simplest reset is:
+
+```powershell
+docker compose stop transactions-backend transactions-db
+docker volume rm asd-bank_transactions_data
+```
+
+Then start them again:
+
+```powershell
+docker compose up --build transactions-db transactions-backend
+```
+
+If the volume name differs on your machine, list volumes first:
+
+```powershell
+docker volume ls
+```
+
+and remove the one for `transactions_data`.
+
+If Compose says the volume is still in use, fully remove the services first:
+
+```powershell
+docker compose rm --stop --force transactions-backend transactions-db
+docker volume rm asd-bank_transactions_data
+docker compose up --build transactions-db transactions-backend
+```
+
+If you are not using Docker and are running Janelle locally with a SQLite file path, delete the actual `.db` file being used by `DB_PATH`, then restart the service so `db.create_all()` and the seed routine recreate it.
+
+After restart, test in this order:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5001/categories
+Invoke-RestMethod http://127.0.0.1:5001/transactions
+Invoke-RestMethod http://127.0.0.1:5006/api/budgets/521aa9c1-14f0-41bf-b1ef-27d2f4506c13/summary
+```
+
+If you want to avoid deleting the whole volume, the alternative is a real SQLite migration, but that is more work than a reset in this repo because there is no migration framework wired in.
+## Prompt
+where are we up to
+## Response
+We’re through the scaffold, database, seed data, backend CRUD layer, backend summary layer, and the first Budgets frontend stub.
+
+Done so far:
+- Ethan containers and CI scaffold
+- Budget Coach plan and living DB design docs
+- Ethan database microservice with models, CRUD, validation, cascade delete, and startup seeding
+- Ethan backend CRUD proxy/orchestration layer
+- Ethan summary endpoint and transactions-service integration
+- Budgets tab in the shared Tally shell, plus a simple budgets list page
+
+Current blocker / last diagnosis:
+- Ethan summary depends on Janelle’s `/transactions`
+- Janelle’s transactions DB is currently using a stale persisted SQLite schema missing `transactions.amount`
+- so `/transactions` fails, which in turn breaks Ethan `/summary` until that DB is reset or migrated
+
+What is still not built yet:
+- starter-budget generation
+- coaching proposal application flow
+- AI coaching/chat integration
+- fuller Budgets UI beyond the simple list page
+- final polish/integration hardening once the transactions dependency is healthy
+## Prompt
+transactions was refreshed and works now, what is next steps
+
+## Response
+Now that transactions is healthy again, the next priority is to use that data for real Budget Coach workflows instead of stopping at a read-only summary.
+
+Recommended order:
+1. Starter-budget generation: build a backend endpoint that analyses recent transaction history and produces an initial set of budget lines for a chosen month.
+2. Summary verification in the UI: connect the Budgets frontend page to show one selected budget's snapshot/summary, not just the list.
+3. Proposal application flow: allow accepted coach proposals to be applied safely to the real budget tables.
+4. AI coaching layer: generate structured proposals and rationale using the existing `coach_proposals` pattern rather than writing directly to budgets.
+5. Integration hardening: re-test through Docker/shared shell and make sure the end-to-end demo path is reliable.
+
+So the immediate next build step is **starter-budget generation**, because it turns the now-working transactions feed into core Budget Coach functionality and gives the frontend something more meaningful to display next.
+## Prompt
+how do we store how much each budget is total, and how much has been used
+
+## Response
+With the current design, we should treat those as two different things:
+
+- **How much the budget is total**: right now we already store `declared_income` on the `budgets` row, and we store per-category limits on `budget_lines` (`warn_at` and `hard_cap`). So the budget’s overall "total" is currently derived, not stored as a separate dedicated field:
+  - total available money = `budgets.declared_income`
+  - total planned category caps = sum of `budget_lines.hard_cap`
+  - total planned warning thresholds = sum of `budget_lines.warn_at`
+
+- **How much has been used**: we should not store this permanently in the Ethan DB as a standalone field, because it comes from transaction history and can change whenever transactions change. Instead, we calculate it from the Statement API / transactions service.
+
+That is already the direction the backend now uses in `/api/budgets/<budget_id>/summary`:
+- per line used = `actual_spend`
+- whole budget used = `totals.actual_spend_total`
+- projected used after planned events = `projected_low_total` / `projected_high_total`
+- remaining money = `remaining_income_low` / `remaining_income_high`
+
+So the clean model is:
+- **store static planning data** in Ethan DB (`declared_income`, lines, planned events, proposals)
+- **derive used/spent data** from transactions at runtime
+
+If you want a single explicit "budget total" field separate from income, we can add one later, but I would avoid storing "amount used" as a DB column because it would become duplicated, stale, and harder to keep correct.
+## Prompt
+will how much is used be calculated evry time the page is accessed?
+
+## Response
+Yes, with the current design it is calculated each time the page or endpoint asks for the summary.
+
+Right now the flow is:
+- frontend requests Ethan summary
+- Ethan backend reads the budget data from Ethan DB
+- Ethan backend requests the matching month’s transactions from the transactions service
+- Ethan calculates `actual_spend_total`, per-line `actual_spend`, projected totals, and remaining values on the fly
+
+That means it is always based on the latest transaction data, which is the safest and cleanest behaviour for now.
+
+Later, if performance becomes a problem, we could add caching or a stored snapshot layer, but I would not do that yet. For Release 0, recalculating on access is the better default because it avoids stale totals and keeps the logic simple.
+## Prompt
+how are the transactions mapped to budget lines
+
+## Response
+Right now, transactions are mapped to budget lines by **category name matching**.
+
+Current flow:
+1. Ethan reads the budget lines for the selected budget. Each line has a free-text category such as `Dining` or `Groceries`.
+2. Ethan fetches transactions for that budget month from the transactions service.
+3. Each transaction comes with a numeric `category_id`, not a budget-line name.
+4. Ethan also fetches the transactions service category list, so it can translate `category_id -> category name`.
+5. Ethan normalises both sides case-insensitively and matches them:
+   - transaction category name `Dining` -> budget line category `Dining`
+   - transaction category name `groceries` -> budget line category `Groceries`
+
+So the match is effectively:
+- transaction `category_id`
+- looked up to transaction category `name`
+- compared against `budget_lines.category`
+
+Important limitation: this is **exact name matching after case normalisation**, not fuzzy matching. So:
+- `Dining` matches `Dining`
+- `dining` matches `Dining`
+- but `Restaurants` does **not** match `Dining` unless we later add a mapping/alias layer
+
+If a transaction category does not match any budget line category, it is not assigned to a line and currently contributes to the `uncategorised_total` part of the summary instead.
+## Prompt
+can we make it so that the budget lines categories uses the categories from transactions
+## Prompt
+can we make it so that the budget lines categories uses the categories from transactions
+
+## Response
+Yes. That is a better design than relying on free-text names.
+
+The clean way to do it is:
+- keep the transactions service as the source of truth for available categories
+- make Ethan only allow budget lines to be created from that category list
+- store the selected transaction category identity with the budget line instead of relying only on text matching
+
+Best version:
+- add `transaction_category_id` to `budget_lines`
+- optionally still keep a `category` / `category_name` snapshot for display
+- when creating or editing a budget line, Ethan backend fetches categories from transactions and validates that the chosen category exists
+- summary mapping then uses `transaction_category_id` directly instead of category-name matching
+
+Why this is better:
+- no fragile `Dining` vs `dining` vs `Restaurants` string matching
+- one source of truth for categories
+- cleaner UI, because the budget line form can become a dropdown of real transaction categories
+- planned events can still inherit the budget line category, so they stay aligned
+
+Important detail: I would **not** make Ethan DB have a real foreign key to Janelle's DB, because they are separate services. Ethan should store the category ID/value it received from the transactions API, but validate it through the backend/API layer rather than with a cross-database FK.
+
+So yes: we should move from "free text category" to "transactions-category-backed budget line". That is the right next refinement for this part of the design.
+## Prompt
+update budget lines to use categories
+## Response
+Updated Ethan budget lines so they now use transactions categories rather than relying on free-text alone. Budget lines now store `category_id` plus the resolved category name, Ethan backend resolves and validates category IDs against the transactions service on create/update, and the budget summary now uses `category_id` for spend mapping instead of string matching.
+
+I also added `GET /api/transaction-categories` for the frontend, updated seed data to use real transaction categories, updated the database/plan docs, and extended the Ethan tests to cover the new contract.
+
+One runtime implication: because this changes the Ethan SQLite schema, an existing local `ethan.db` file or Docker `ethan_data` volume created under the old schema may need to be reset so `budget_lines.category_id` exists in the physical database.
+## Prompt
+here is a basic summarry of some of the features, with image mockups;
+the page will be split into different sections;
+the page itself will have an 'active budget', meaning the current budget we are looking at, and can be switched between each months.
+1st section; an overview of the budget including a display of each budget line, and a visual showing how much has been spent for each line, such as the below mock up.
+
+There will also be a ‘week ahead’ section, where the user can insert planned spendings that haven’t happened yet, with an estimate for pricing. e.g. Dinner on Tuesday $30-$50. This will make use of the planned events model. The user can create new, planned events, edit or cancel them from this page. This will warn the user if the proposal will result in exceeding the lines budget.
+
+There will also be a can I afford x section, where the user can input a value and set a category/budgetline, and the site will calculate if that puts that section over budget or not.
+
+Finally the coach section where the user can speak to an ai model and ask questions regarding budgeting. We will focus on this section later.
+
+
+What are all of the backend features we will need o implement to make this possible, making sure to adhere to the guidlines and marking rubric for the interim 0 submission
+
+## Response
+To support that UI cleanly and still satisfy Release 0, the backend needs to do more than simple CRUD. It needs to be the orchestration layer between Ethan DB, the transactions/Statement API, and later the AI service, while keeping all calculations and business rules server-side.
+
+Core backend features needed:
+1. Active-budget selection and month switching: endpoints to list budgets, get one by month, choose/load the current budget, and return the active budget plus available months.
+2. Overview summary service: return per-line actual spend, warn/cap values, projected totals including planned events, over/remaining amounts, and overall month totals for the selected budget.
+3. Budget-line management using transactions categories: expose the transactions category list, validate budget lines against it, and create/update/delete lines using `category_id` + resolved name.
+4. Week-ahead planner support: CRUD planned events plus projection logic that tells the frontend whether an added/edited event would push a line over warning or cap thresholds.
+5. Affordability check endpoint: given budget, category, and proposed spend amount, return whether it is affordable, how much headroom remains, and what overage would occur.
+6. Starter-budget generation: analyse recent transactions and generate an initial set of budget lines/thresholds for a month.
+7. Proposal workflow foundation: store structured coach proposals, accept/reject them, and later apply accepted proposals safely to real budget data.
+8. Consistent service/error handling: proper 4xx validation errors, 503 dependency failures, and no direct access to another team’s DB.
+9. Release 0 integration requirements: health endpoints, Docker-friendly configuration, backend tests, and strict JSON contracts so the feature is demonstrably integrated and assessable.
+
+For Interim 0 specifically, the must-have backend path is: budgets CRUD + category-backed budget lines + summary endpoint + planned-events CRUD/projection + affordability check + starter-budget generation foundation + tests. The coach chat itself can come later, but the proposal-based backend contract should remain the design target so AI changes are always reviewable before being applied.
+## Prompt
+are we at the point where each individual feture should be implemented indivdually from backend to front end, or should all of the backend be sorted out at once first
+
+## Response
+We should switch to **vertical slices**, not try to finish every backend endpoint first.
+
+At this point, the core backend foundation is already in place:
+- DB microservice exists
+- backend proxy/orchestration exists
+- summary foundation exists
+- category-backed budget lines exist
+- simple shared-shell frontend entry exists
+
+So the better approach now is to take each visible feature section and implement it end to end:
+1. backend logic/API for that section
+2. frontend UI for that section
+3. integration/test pass for that section
+
+That is the safer Release 0 strategy because it gives you working, demonstrable slices instead of a large unfinished backend with no usable UI.
+
+I would not leave the backend behind entirely though. For each slice, do the backend first just enough to support the UI, then immediately wire the frontend to it. So the pattern should be:
+- finish one section backend
+- connect its frontend
+- verify it works
+- move to the next section
+
+Recommended order now:
+1. Budget overview: active budget switching + full summary display
+2. Can I afford this?: affordability-check endpoint + simple UI
+3. Week ahead: planned-event preview/warning + CRUD UI
+4. Starter-budget generation
+5. Coach/proposal flow later
+
+So: **do not sort out all backend at once first**. Build each Budget Coach section as a vertical feature from backend through frontend.
+## Prompt
+how to test what we currently have right now before merging to repo, so individual feature dev starts
+
+## Response
+Before merging, test the current Ethan scope in three layers: automated tests, backend API checks, and shared-shell UI checks.
+
+1. Automated regression
+   - From repo root: `pytest ethan/test`
+   - This covers Ethan DB and backend behavior, including summary logic and category-backed budget lines.
+
+2. Reset Ethan DB if your local schema is stale
+   - Because `budget_lines` now has `category_id`, an older local Ethan DB file/volume may be out of date.
+   - Local file case: delete the Ethan SQLite file you are using, then restart Ethan DB.
+   - Docker case: remove the `ethan_data` volume and start Ethan again.
+
+3. Run the dependent services locally
+   - Ethan summary depends on transactions, so you need Janelle services up too.
+   - Minimum Docker stack to test current Ethan behavior:
+     `docker compose up --build transactions-db transactions-backend ethan-db ethan-backend ethan-frontend shared-frontend`
+
+4. API smoke checks
+   - `Invoke-RestMethod http://127.0.0.1:5001/transactions`
+   - `Invoke-RestMethod http://127.0.0.1:5006/health`
+   - `Invoke-RestMethod http://127.0.0.1:5006/api/transaction-categories`
+   - `Invoke-RestMethod http://127.0.0.1:5006/api/budgets`
+   - `Invoke-RestMethod http://127.0.0.1:5006/api/budgets/<budget-id>/summary`
+
+5. Shared frontend checks
+   - Open `http://127.0.0.1:3000`
+   - Confirm the shared shell shows the `Budgets` tab
+   - Confirm Home now lists Budgets in the feature table
+   - Click Budgets and confirm the list loads month, status, declared income, and ID
+
+6. Direct Ethan frontend check
+   - Open `http://127.0.0.1:3006`
+   - Confirm the simple budgets page loads directly
+   - Confirm it can fetch the budgets list through `/budgets-backend/api/budgets`
+
+7. Category-backed line contract check
+   - Create or inspect a budget line and confirm the payload/response includes both `category_id` and `category`
+   - Confirm duplicate `category_id` within one budget is rejected
+
+Good pre-merge confidence for the current state is:
+- `pytest ethan/test` passes
+- transactions `/transactions` works
+- Ethan `/health`, `/api/transaction-categories`, `/api/budgets`, and `/summary` work
+- shared shell Budgets tab loads correctly
+
+If you want a tight pre-merge run, use this order:
+1. `pytest ethan/test`
+2. start the minimum Docker stack
+3. hit the API smoke routes
+4. open the shared shell and click through Home -> Budgets
+
+That is enough to prove the current Ethan backend, integration dependency, and first frontend stub are working before you branch into individual feature development.
+## Prompt
+asdbank_ethan_data is in use
+
+## Response
+That means a container still has the volume attached, almost certainly `ethan-db`.
+
+Use this sequence:
+
+```powershell
+docker compose stop ethan-frontend ethan-backend ethan-db
+docker compose rm --stop --force ethan-frontend ethan-backend ethan-db
+docker volume rm asdbank_ethan_data
+```
+
+Then start Ethan again:
+
+```powershell
+docker compose up --build ethan-db ethan-backend ethan-frontend shared-frontend
+```
+
+If `docker volume rm asdbank_ethan_data` still says in use, check what still exists:
+
+```powershell
+docker ps -a --filter volume=asdbank_ethan_data
+```
+
+If a container is listed, remove that specific container and retry the volume removal.
+
+The key point is: `stop` is not always enough; the container can still exist and keep the volume attached, so `docker compose rm` is the important step.
+## Prompt
+can you stop everything for the asd bank, and then rename everything to replace 'ethan' with 'budgets', except for the overall ethan directory name
+## Response
+Stopped the ASD Bank compose stack and renamed the Ethan-facing service/workflow/runtime names to Budgets while keeping the top-level `ethan` directory unchanged.
+
+The main changes are:
+- compose services renamed to `budgets-frontend`, `budgets-backend`, and `budgets-db`
+- Ethan volume/file/env naming updated to `budgets_data`, `budgets.db`, and `BUDGETS_DB_URL`
+- backend/database root container IDs now report `budgets-backend` and `budgets-db`
+- workflow renamed from `.github/workflows/ethan-ci.yml` to `.github/workflows/budgets-ci.yml`
+- related docs and tests updated to use the Budgets naming where it refers to the feature rather than the `ethan` directory path
+
+The stack is currently stopped, `docker compose ps` shows no running services, `docker compose config` is valid, and `pytest ethan/test` passes.
+## Prompt
+why can the volumes still not be removed (in use)
