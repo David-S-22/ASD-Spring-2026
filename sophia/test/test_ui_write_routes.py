@@ -182,7 +182,9 @@ def test_ui_chat_never_writes_bills_and_apply_does(live_client, monkeypatch):
     monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
     chat_response = live_client.post("/ui/chat", data={"message": "cancel this"})
     assert chat_response.status_code == 200
-    assert json.loads(chat_response.headers["HX-Trigger"]) == {"toast": "Done — change saved."}
+    # Asking a question changes nothing, so it must not claim to. The apply
+    # route is the one that writes, and it still sends the toast.
+    assert "HX-Trigger" not in chat_response.headers
     assert bills_db_module.get_bill(bill_id) == before
 
     body = chat_response.get_data(as_text=True)
@@ -313,3 +315,68 @@ def test_ui_chat_apply_value_db_rejects_returns_422_not_500(live_client):
     body = response.get_data(as_text=True)
     assert "error-fragment" in body
     assert "cadence" in body
+
+
+def test_ui_chat_apply_can_create_a_bill_from_the_shape_the_model_emits(live_client):
+    """The whole point: an add-a-bill request from chat now lands as a row.
+
+    Fields are exactly what the model produces against the current prompt --
+    amount in dollars, real column names elsewhere.
+    """
+    fields = {
+        "name": "Audible",
+        "merchant": "Audible",
+        "amount": 16.45,
+        "cadence": "monthly",
+        "next_billing_date": "2026-09-10",
+        "type": "subscription",
+        "payment_method": "card",
+    }
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 200
+    created = [b for b in bills_db_module.list_bills() if b["name"] == "Audible"]
+    assert len(created) == 1
+    assert created[0]["amount_cents"] == 1645
+    assert created[0]["source"] == "chat"
+
+
+def test_ui_chat_apply_creates_a_bill_from_the_older_drifted_shape(live_client):
+    """A smaller model says "amount"/"next" and names no merchant; still lands."""
+    fields = {"name": "Kindle", "amount": 9.99, "next": "2026-09-20",
+              "cadence": "monthly", "type": "subscription"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 200
+    created = [b for b in bills_db_module.list_bills() if b["name"] == "Kindle"]
+    assert created[0]["amount_cents"] == 999
+    assert created[0]["merchant"] == "Kindle"
+    assert created[0]["next_billing_date"] == "2026-09-20"
+
+
+def test_ui_chat_apply_still_refuses_an_invented_field_on_create(live_client):
+    """Normalisation widens the vocabulary; it must not disarm the allowlist."""
+    fields = {"name": "X", "amount": 5, "cadence": "monthly", "type": "bill",
+              "next_billing_date": "2026-09-01", "colour": "blue"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 422
+    assert "field 'colour' cannot be set via chat" in _text(response)
+    assert not [b for b in bills_db_module.list_bills() if b["name"] == "X"]
+
+
+def test_ui_chat_apply_refuses_an_amount_that_is_not_a_number(live_client):
+    fields = {"name": "Y", "amount": "lots", "cadence": "monthly", "type": "bill",
+              "next_billing_date": "2026-09-01"}
+    response = live_client.post(
+        "/ui/chat/apply",
+        data={"op": "create", "entity": "bill", "fields": json.dumps(fields)},
+    )
+    assert response.status_code == 422
+    assert "must be an amount" in _text(response)

@@ -13,9 +13,31 @@ from sophia.backend.ai.schemas import validate_chat_response
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
+from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
 from sophia.backend.services import disputes as disputes_service
 from sophia.backend.services.errors import NotFound, ServiceError
+
+# The model is asked for the real column names, but a small model drifts, and
+# it drifts predictably: it says "amount" in dollars where the column is
+# amount_cents, and "next" where the column is next_billing_date. Those two are
+# translated here rather than widened into the whitelist, so the whitelist keeps
+# doing its job -- a genuinely invented field still fails loudly.
+#
+# Deliberately narrow. Mapping every plausible synonym would turn a strict
+# allowlist into a guessing game, and a wrong guess writes bad data silently.
+CHAT_FIELD_ALIASES = {
+    "bill": {
+        "amount": "amount_cents",
+        "next": "next_billing_date",
+        "next_date": "next_billing_date",
+        "next_billing": "next_billing_date",
+    },
+    "payment": {"amount": "amount_cents"},
+}
+
+# Values the model states in dollars; stored in cents.
+DOLLAR_VALUED_ALIASES = {"amount"}
 
 BILL_FIELD_WHITELIST = {
     "bill": {
@@ -39,11 +61,26 @@ def _recent_history():
 
 
 def _answer_total():
+    """Answer the "what do my bills add up to" question with both figures.
+
+    There are two defensible totals and they do not match. The table header
+    shows the ongoing monthly rate -- every bill scaled to a month -- while this
+    answer is about the calendar month actually in view, where a five-Monday
+    month or a bill that starts mid-month changes the number. Quoting only the
+    second put "around $1,695" two inches from a header reading $1,731.95, and
+    from the user's chair that is the app disagreeing with itself. Naming both,
+    and what each measures, costs one clause.
+    """
     today = config.DEMO_TODAY
     bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     breakdown = month_breakdown(bills, payments, today.year, today.month, today)
-    return f"This month you're set to pay around {money.format_estimate_single(breakdown.total_high_cents)} in bills and subscriptions."
+    monthly_rate = sum(b.amount_cents * expected_per_month(b.cadence) for b in bills)
+    return (
+        f"{today.strftime('%B')} is set to cost around "
+        f"{money.format_estimate_single(breakdown.total_high_cents)}. "
+        f"Your ongoing monthly total across all bills is {money.format_actual(monthly_rate)}."
+    )
 
 
 def _answer_barely_using():
@@ -131,10 +168,39 @@ def send_message(message):
     return {"reply": reply, "op": preview["op"] if preview else None, "preview": preview, "fallback": data.get("fallback", False)}
 
 
+def _normalise_chat_fields(entity, op, fields):
+    """Translate the model's field names onto the real columns.
+
+    Runs before the whitelist check, so an alias is accepted and anything still
+    unrecognised afterwards is rejected exactly as before.
+    """
+    aliases = CHAT_FIELD_ALIASES.get(entity, {})
+    out = {}
+    for key, value in fields.items():
+        target = aliases.get(key, key)
+        if key in DOLLAR_VALUED_ALIASES:
+            try:
+                value = money.parse_dollars_to_cents(value)
+            except ValueError:
+                raise ServiceError(f"'{key}' must be an amount, got {value!r}")
+        if target in out and out[target] != value:
+            raise ServiceError(f"conflicting values for '{target}'")
+        out[target] = value
+
+    # A bill needs a merchant and the request rarely names one separately --
+    # "add Disney Plus" gives the name and nothing else. Falling back to the
+    # name keeps the row valid and honest: it says what the user actually told
+    # us rather than inventing a trading entity.
+    if entity == "bill" and op == "create" and not out.get("merchant") and out.get("name"):
+        out["merchant"] = out["name"]
+    return out
+
+
 def apply(op, entity, entity_id, fields, message_id=None):
     fields = fields or {}
     if entity not in BILL_FIELD_WHITELIST:
         raise ServiceError("unknown entity")
+    fields = _normalise_chat_fields(entity, op, fields)
     allowed = BILL_FIELD_WHITELIST[entity]
     for key in fields:
         if key not in allowed:

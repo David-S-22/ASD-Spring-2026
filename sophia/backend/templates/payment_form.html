@@ -1,7 +1,9 @@
 {# Record-payment modal form: date defaults to today, amount defaults to the bill's usual amount. #}
 <div class="modal-form" id="payment-form">
   <h3>Record a payment for {{ bill.name }}</h3>
-  <form hx-post="/bills-backend/ui/payments" hx-target="#bills-table" hx-swap="outerHTML">
+  {# Names the bill, not the amount: the amount field is editable right up to
+     submit, so quoting it here could contradict what was actually sent. #}
+  <form hx-post="/bills-backend/ui/payments" hx-target="#bills-table" hx-swap="outerHTML" data-confirm="Record this payment for {{ bill.name }}?">
     <input type="hidden" name="bill_id" value="{{ bill.id }}">
     <label>Date
       <input name="date" type="date" value="{{ today }}" required>

@@ -4,7 +4,10 @@
   {% if evidence %}
   <p class="evidence-note">Suggested by Spending Alerts — based on {{ evidence.occurrences }} charges from {{ evidence.first_seen }} to {{ evidence.last_seen }}{{ " (low confidence — please check the amount and cadence)" if evidence.low_confidence else "" }}{% if evidence.return_url %} <a href="{{ evidence.return_url }}">Back to alerts</a>{% endif %}</p>
   {% endif %}
-  <form hx-post="{{ action }}" hx-target="#bills-table" hx-swap="outerHTML">
+  {# htmx's elt for a form submit is the form, so this is where confirmPromptFor
+     looks. Without it the dialog reads "Confirm this change", which says nothing
+     about which bill or which direction. #}
+  <form hx-post="{{ action }}" hx-target="#bills-table" hx-swap="outerHTML" data-confirm="{{ ('Save changes to ' ~ bill.name ~ '?') if bill and bill.id else 'Add this bill?' }}">
     <input type="hidden" name="source" value="{{ bill.source if bill and bill.source else 'manual' }}">
     <label>Name
       <input name="name" value="{{ bill.name if bill else '' }}" required>
@@ -47,7 +50,10 @@
     <div class="form-actions">
       <button type="submit">{{ "Save changes" if bill and bill.id else "Add bill" }}</button>
       {% if bill and bill.id %}
-      <button type="button" hx-post="/bills-backend/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML">Delete</button>
+      {# closest() starts at the element itself, so this beats the form's
+         data-confirm above -- which is what we want, since it is the one
+         irreversible control on the form. #}
+      <button type="button" hx-post="/bills-backend/ui/bills/{{ bill.id }}/delete" hx-target="#bills-table" hx-swap="outerHTML" data-confirm="Delete {{ bill.name }}? This can't be undone.">Delete</button>
       {% endif %}
       <button type="button" data-action="dismiss-modal">Cancel</button>
     </div>

@@ -32,6 +32,16 @@
         <button type="button" data-tab="disputes">Disputes</button>
       </div>
       <div class="tab-page active" data-tab-page="bills">
+        <!-- Outside #bills-table on purpose. That div is a fragment root and is
+             replaced wholesale by seven different paths -- the initial load, the
+             five write forms that target it, and the out-of-band swap after a
+             chat apply. Anything inside it loses its value and its focus on
+             every write, which for a search box people are typing into is not a
+             detail. app.js re-applies the filter on htmx:afterSwap. -->
+        <label class="bills-search">
+          <span class="visually-hidden">Search bills</span>
+          <input type="search" id="bills-search" placeholder="Search bills…" autocomplete="off">
+        </label>
         <div id="bills-table" class="card" hx-get="/bills-backend/ui/bills" hx-trigger="load" hx-swap="outerHTML"></div>
       </div>
       <div class="tab-page" data-tab-page="calendar">

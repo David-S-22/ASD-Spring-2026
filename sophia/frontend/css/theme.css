@@ -1,91 +1,199 @@
-/* Shared Tally theme — donated by the Bills feature; lift as-is for the shell. */
-:root {
-  --ink: #1d222c;
-  --mut: #6b7280;
-  --line: #dcdfe6;
-  --bg: #f2f4f6;
-  --card: #ffffff;
-  --accent: #136066;
-  --accent-bg: #e6f0f0;
-  --a100: #eef5f5;
-  --a200: #e0eded;
-  --a300: #cde2e2;
-  --a500: #5f9296;
-  --warn: #8a6d1a;
-  --warn-bg: #faf3d9;
-  --bad: #8f2f3b;
-  --bad-bg: #fbe9ec;
-  --ok: #2e6b3a;
-  --ok-bg: #e9f3ea;
+/* Bills' theme. Dark in both contexts, matching the shared shell.
+ *
+ * Every token is `var(--color-*, <dark default>)`. Inside the shell those
+ * resolve to the shell's own custom properties, so Bills tracks the shell if
+ * its palette is ever retuned; standalone on :3005 nothing defines them and the
+ * fallbacks apply, which are the same values written out. One palette, no
+ * per-context fork.
+ *
+ * The tokens hang off #bills-root, not :root, and so does everything that
+ * paints. In the shell this stylesheet is injected into the shell's own
+ * document, so a :root or body rule here reaches the entire shell -- that is
+ * how an earlier version repainted the whole page and made the shell's centred
+ * content column read as dead whitespace. Scope is not tidiness here; it is the
+ * whole reason the feature can be embedded at all.
+ */
+#bills-root {
+  --bg: var(--color-bg, #0f172a);
+  --card: var(--color-surface, #1e293b);
+  --raised: var(--color-surface-alt, #273449);
+  --line: var(--color-border, #334155);
+  --ink: var(--color-text, #e2e8f0);
+  --mut: var(--color-text-muted, #94a3b8);
+
+  --accent: var(--color-primary, #38bdf8);
+  --accent-hover: var(--color-primary-hover, #0ea5e9);
+  /* Text sitting on --accent. The shell uses this same near-black against its
+     primary; light text on #38bdf8 fails contrast badly. */
+  --on-accent: #062430;
+
+  /* Accent washes. Alpha rather than opaque tints so they read correctly over
+     both --bg and --card without a second set of values. */
+  --a100: rgba(56, 189, 248, 0.10);
+  --a200: rgba(56, 189, 248, 0.18);
+  /* The edge companion to --a200, matching the -line alphas below. */
+  --a300: rgba(56, 189, 248, 0.38);
+
+  /* Status colours: a saturated foreground with a low-alpha wash of itself
+     behind. Solid pale backgrounds like the old light set turn to mud on a dark
+     surface, and the foreground has to carry the meaning anyway.
+
+     Each tone carries two alphas, not one. The first version set a chip's
+     border-color to the same value as its background, which is the same as
+     having no border: at 0.14 over --card the edge is invisible and the chip
+     reads as loose coloured text rather than a badge. The -line value is the
+     same hue at an alpha that actually resolves against both --card and the
+     --a100 row-hover wash. */
+  --ok: var(--color-success, #4ade80);
+  --ok-bg: rgba(74, 222, 128, 0.16);
+  --ok-line: rgba(74, 222, 128, 0.38);
+  /* The shell publishes no --color-warning today. Naming the source anyway
+     costs nothing -- the fallback is what resolves -- and means Bills tracks
+     the shell automatically if warning is ever added to the shared palette. */
+  --warn: var(--color-warning, #fbbf24);
+  --warn-bg: rgba(251, 191, 36, 0.16);
+  --warn-line: rgba(251, 191, 36, 0.38);
+  --bad: var(--color-danger, #f87171);
+  --bad-bg: rgba(248, 113, 113, 0.16);
+  --bad-line: rgba(248, 113, 113, 0.38);
+
+  --scrim: rgba(2, 6, 23, 0.66);
+
+  /* Type and spacing scales. These are Bills-local literals with no --color-*
+     equivalent, so unlike the palette above they have no shell source to track.
+     They must NOT be named after a shell token: `--radius: var(--radius, 10px)`
+     would be a self-reference, which is invalid at computed-value time and
+     silently resolves to unset rather than erroring. That is the reason the
+     colour tokens above are --bg/--ink/--mut and not --color-bg and friends. */
+  --lh: 1.35;
+  --fs-sm: 0.82rem;
+  --fs-base: 0.95rem;
+  --sp-1: 0.25rem;
+  --sp-2: 0.4rem;
+  --sp-3: 0.6rem;
+  --sp-4: 0.9rem;
+  --r-sm: 6px;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font, "Segoe UI", system-ui, -apple-system, sans-serif);
+  /* Claimed deliberately, for both contexts at once. The shell's body rule sets
+     line-height: 1.5 and font-size is left to the UA, so before this Bills
+     rendered at 1.5 inside the shell and at the UA's ~1.2 standalone -- the
+     table was a different height depending on where you looked at it. Declaring
+     both here is what makes the two contexts agree. */
+  line-height: var(--lh);
+  font-size: var(--fs-base);
+  /* Standalone, #bills-root is only as tall as its content and nothing else
+     paints the page, so without this the area below it falls back to white.
+     In the shell the panel is always taller than this anyway. */
+  min-height: 100vh;
 }
 
-* {
+/* Scoped, like every other paint rule in this file. A bare `*` selector reaches
+   every element in the shell's document, not only Bills' subtree -- which is
+   the exact class of leak the header comment above says must not exist. It has
+   been harmless so far only because the shell declares the same value; relying
+   on that is a coincidence, not a design. */
+#bills-root,
+#bills-root * {
   box-sizing: border-box;
 }
 
-/* Only the margin reset is safe to put on body. Inside the shared shell this
-   stylesheet is injected into the shell's own document, so a body rule here
-   repaints the whole shell for as long as the Bills tab is open -- which is
-   what made the shell's centred content column read as dead whitespace beside
-   Bills rather than as the shell's own background. Everything that paints now
-   hangs off #bills-root, so Bills renders as a light panel inside the shell's
-   dark chrome and the shell keeps its own theme. */
+/* The one deliberate exception to the scoping rule. Standalone there is no
+   other stylesheet, and the UA's 8px body margin would inset the whole app; in
+   the shell this is a no-op because the shell sets the same value. It cannot be
+   scoped to #bills-root, because body is the element that needs it. */
 body {
   margin: 0;
 }
 
-#bills-root {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  /* Standalone on :3005 nothing else paints the page, and #bills-root is only
-     as tall as its content -- without this the area below it falls back to the
-     browser default white. Inside the shell the panel is always taller than
-     this anyway, so it changes nothing there. */
-  min-height: 100vh;
-}
-
-a {
+#bills-root a {
   color: var(--accent);
 }
 
-.card {
+#bills-root .card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
 }
 
-button {
+#bills-root button {
   font-family: inherit;
-  border-radius: 6px;
+  /* Claimed for the same reason as line-height above: the shell sets
+     `button, input, textarea, select { font-size: 0.9rem }`, which Bills did
+     not override, so buttons rendered 14.4px in the shell and at the UA's
+     ~13.3px standalone. .btn-sm was immune (its 0.85em resolves against the
+     cell either way); everything else was not. */
+  font-size: var(--fs-base);
+  border-radius: var(--r-sm);
   border: 1px solid var(--line);
-  background: var(--card);
+  background: var(--raised);
   color: var(--ink);
   padding: 0.4em 0.9em;
   cursor: pointer;
 }
 
-button.btn-sm {
+#bills-root button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* The shell styles bare `button:not(.nav-tab)` so that features pulled in over
+   htmx pick up its look even without their own stylesheet. Bills has one, and
+   two sets of button rules fighting is how you get a control that is legible in
+   one context and not the other -- so Bills states its own, at a specificity
+   that settles it, and states them in the shell's colours so the two agree
+   rather than alternate. */
+#bills-root button.confirm,
+#bills-root button[type="submit"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+#bills-root button.confirm:hover:not(:disabled),
+#bills-root button[type="submit"]:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+#bills-root button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#bills-root button.btn-sm {
   padding: 0.25em 0.6em;
   font-size: 0.85em;
 }
 
-button.confirm,
-button[type="submit"] {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-input,
-textarea,
-select {
+#bills-root input,
+#bills-root textarea,
+#bills-root select {
   font-family: inherit;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.4em 0.6em;
-  background: var(--card);
+  background: var(--raised);
   color: var(--ink);
+}
+
+#bills-root input::placeholder,
+#bills-root textarea::placeholder {
+  color: var(--mut);
+}
+
+#bills-root input:focus,
+#bills-root textarea:focus,
+#bills-root select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+#bills-root label {
+  color: var(--mut);
 }
 
 .chip {
@@ -93,19 +201,62 @@ select {
   border-radius: 999px;
   padding: 0.15em 0.75em;
   font-size: 0.85em;
+  border: 1px solid transparent;
 }
 
+/* Deliberately left unscoped, unlike the paint rules above. Scoping these to
+   #bills-root would raise them to an id specificity that beats
+   `.bills-table tbody tr:hover .chip`, the rule in bills.css that swaps the
+   border to currentColor so a badge stays legible over the row-hover wash --
+   the tone would win and the hover fix would silently stop working. The class
+   names are Bills-specific enough that the leak is theoretical. */
 .chip-paid {
   background: var(--ok-bg);
   color: var(--ok);
+  border-color: var(--ok-line);
 }
 
 .chip-due {
   background: var(--warn-bg);
   color: var(--warn);
+  border-color: var(--warn-line);
+}
+
+/* Paid for the current cycle, but the next charge is within 7 days. Neither
+   green (nothing is owed yet) nor red (nothing is late) -- the accent reads as
+   "coming", which is what it is. */
+.chip-upcoming {
+  background: var(--a200);
+  color: var(--accent);
+  border-color: var(--a300);
 }
 
 .chip-overdue {
   background: var(--bad-bg);
   color: var(--bad);
+  border-color: var(--bad-line);
+}
+
+/* The dispute lifecycle tones. These class names are emitted by
+   disputes_tab.html but had no rule anywhere, so every dispute chip rendered as
+   a bare .chip -- transparent border, inherited ink -- and the three states
+   were indistinguishable from each other and from plain text. Draft is
+   deliberately the muted one: it is the only state that is not yet an action
+   the user has taken. */
+.chip-dispute-draft {
+  background: var(--raised);
+  color: var(--mut);
+  border-color: var(--line);
+}
+
+.chip-dispute-sent {
+  background: var(--a200);
+  color: var(--accent);
+  border-color: var(--a300);
+}
+
+.chip-dispute-resolved {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: var(--ok-line);
 }
