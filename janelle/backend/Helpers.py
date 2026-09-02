@@ -90,6 +90,42 @@ def render_transaction_form(db_url, error=None, values=None):
     )
 
 
+def render_transaction_table(transactions, error=None):
+    TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
+    DEFAULT_TRANSACTION_PAGE_SIZE = TRANSACTION_PAGE_SIZES[0]
+    requested_page_size = request.args.get("page_size", type=int)
+    page_size = (
+        requested_page_size
+        if requested_page_size in TRANSACTION_PAGE_SIZES
+        else DEFAULT_TRANSACTION_PAGE_SIZE
+    )
+    requested_page = request.args.get("page", default=1, type=int)
+    page = max(requested_page or 1, 1)
+    total_transactions = len(transactions)
+    total_pages = max(
+        1,
+        (total_transactions + page_size - 1) // page_size,
+    )
+    page = min(page, total_pages)
+    first_index = (page - 1) * page_size
+    last_index = min(first_index + page_size, total_transactions)
+
+    return render_template(
+        "transactions_table.jinja",
+        transactions=transactions[first_index:last_index],
+        error=error,
+        page=page,
+        page_size=page_size,
+        page_sizes=TRANSACTION_PAGE_SIZES,
+        total_pages=total_pages,
+        total_transactions=total_transactions,
+        first_transaction=first_index + 1 if total_transactions else 0,
+        last_transaction=last_index,
+        has_previous=page > 1,
+        has_next=page < total_pages,
+    )
+
+
 def json_response(response):
     if response.status_code == 204:
         return "", 204

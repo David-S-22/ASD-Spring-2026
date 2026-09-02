@@ -1,21 +1,97 @@
 {% autoescape true %}
-{% if error %}
-<tr>
-    <td colspan="5">{{ error }}</td>
-</tr>
-{% else %}
-{% for transaction in transactions %}
-<tr>
-    <td>{{ transaction.get("date", "")[:16] }}</td>
-    <td>{{ transaction.get("merchant", "") }}</td>
-    <td>{{ transaction.get("description", "") }}</td>
-    <td>{{ "%.2f"|format(transaction.get("amount")) }}</td>
-    <td>{{ transaction.get("category_name") or transaction.get("category_id") or "Uncategorised" }}</td>
-</tr>
-{% else %}
-<tr>
-    <td colspan="5">No transactions found.</td>
-</tr>
-{% endfor %}
-{% endif %}
+<div id="transactions-table"
+     hx-get="/transactions-backend/ui/transactions?page={{ page }}&amp;page_size={{ page_size }}"
+     hx-trigger="transactionsChanged from:body"
+     hx-swap="outerHTML">
+    <div class="transactions-table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Category</th>
+                </tr>
+            </thead>
+            <tbody id="transactions">
+                {% if error %}
+                <tr>
+                    <td colspan="5">{{ error }}</td>
+                </tr>
+                {% else %}
+                {% for transaction in transactions %}
+                <tr>
+                    <td>{{ transaction.get("date", "")[:16] }}</td>
+                    <td>{{ transaction.get("merchant", "") }}</td>
+                    <td>{{ transaction.get("description", "") }}</td>
+                    <td>{{ "%.2f"|format(transaction.get("amount")) }}</td>
+                    <td>{{ transaction.get("category_name") or transaction.get("category_id") or "Uncategorised" }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">No transactions found.</td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="transactions-pagination">
+        <form class="transactions-page-size"
+              hx-get="/transactions-backend/ui/transactions"
+              hx-trigger="change"
+              hx-target="#transactions-table"
+              hx-swap="outerHTML">
+            <input type="hidden" name="page" value="1">
+            <label for="transactions-page-size">Rows per page</label>
+            <select id="transactions-page-size" name="page_size">
+                {% for size in page_sizes %}
+                <option value="{{ size }}"{% if size == page_size %} selected{% endif %}>{{ size }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <div class="transactions-page-details">
+            <p class="transactions-page-count" aria-live="polite">
+                Showing {{ first_transaction }}-{{ last_transaction }} of {{ total_transactions }} transactions
+            </p>
+            <nav class="transactions-page-navigation"
+                 aria-label="Transactions pages">
+                <button id="previous-transactions-page"
+                        class="transactions-page-button"
+                        type="button"
+                        aria-label="Previous page"
+                        aria-controls="transactions"
+                        {% if has_previous %}
+                        hx-get="/transactions-backend/ui/transactions?page={{ page - 1 }}&amp;page_size={{ page_size }}"
+                        hx-target="#transactions-table"
+                        hx-swap="outerHTML"
+                        {% else %}
+                        disabled
+                        {% endif %}>
+                    <span aria-hidden="true">&larr;</span>
+                </button>
+                <span class="transactions-page-number">
+                    Page {{ page }} of {{ total_pages }}
+                </span>
+                <button id="next-transactions-page"
+                        class="transactions-page-button"
+                        type="button"
+                        aria-label="Next page"
+                        aria-controls="transactions"
+                        {% if has_next %}
+                        hx-get="/transactions-backend/ui/transactions?page={{ page + 1 }}&amp;page_size={{ page_size }}"
+                        hx-target="#transactions-table"
+                        hx-swap="outerHTML"
+                        {% else %}
+                        disabled
+                        {% endif %}>
+                    <span aria-hidden="true">&rarr;</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+</div>
 {% endautoescape %}

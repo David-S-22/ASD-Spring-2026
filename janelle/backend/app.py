@@ -11,6 +11,7 @@ from .Helpers import (
     json_object,
     json_response,
     render_transaction_form,
+    render_transaction_table,
 )
 from .services.chat_service import ChatError, apply_preview, handle_message
 
@@ -82,25 +83,21 @@ def setup_app(db_url: str) -> Flask:
             ):
                 raise ValueError("invalid database response")
         except (ValueError, RecursionError):
-            return render_template(
-                "transactions_table.jinja",
-                transactions=[],
-                error="Unable to load transactions because the database response was invalid.",
+            return render_transaction_table(
+                [],
+                "Unable to load transactions because the database response was invalid.",
             ), 502
         except requests.RequestException:
-            return render_template(
-                "transactions_table.jinja",
-                transactions=[],
-                error="Unable to load transactions because the database service is unavailable.",
+            return render_transaction_table(
+                [],
+                "Unable to load transactions because the database service is unavailable.",
             ), 502
 
-        return render_template(
-            "transactions_table.jinja",
-            transactions=align_transactions_with_corresponding_category_names(
+        return render_transaction_table(
+            align_transactions_with_corresponding_category_names(
                 transactions,
                 categories,
             ),
-            error=None,
         )
 
     @application.get("/ui/transactions/page")

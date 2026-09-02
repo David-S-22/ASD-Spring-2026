@@ -32,6 +32,68 @@
         overflow-x: auto;
     }
 
+    .transactions-pagination,
+    .transactions-page-size,
+    .transactions-page-details,
+    .transactions-page-navigation {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .transactions-pagination {
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        min-width: 0;
+        margin-top: 0.85rem;
+    }
+
+    .transactions-page-size {
+        flex: 0 0 auto;
+        margin: 0;
+    }
+
+    .transactions-page-size label,
+    .transactions-page-count,
+    .transactions-page-number {
+        margin: 0;
+        color: var(--color-text-muted, #64748b);
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .transactions-page-size select {
+        width: 4.5rem !important;
+        min-width: 4.5rem;
+        min-height: 2.5rem;
+        padding: 0.4rem 0.7rem;
+    }
+
+    .transactions-page-details {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    .transactions-page-navigation {
+        flex: 0 0 auto;
+    }
+
+    .transactions-page-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        min-width: 2.5rem;
+        height: 2.5rem;
+        padding: 0 !important;
+        font-size: 1.15rem;
+    }
+
+    .transactions-page-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
     .transaction-form-screen {
         max-width: 960px;
         margin: 0 auto;
@@ -287,6 +349,15 @@
         .transaction-chat-preview-grid {
             display: grid;
             grid-template-columns: 1fr;
+        }
+
+        .transactions-page-count {
+            display: none;
+        }
+
+        .transactions-page-navigation {
+            gap: 0.5rem;
+            justify-content: flex-end;
         }
 
         .transactions-toolbar button,

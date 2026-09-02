@@ -88,6 +88,82 @@ def test_transaction_rows_are_loaded_from_database(
     ]
 
 
+@mark.parametrize("page_size", [5, 10, 15, 20])
+def test_transaction_rows_support_allowed_page_sizes(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    page_size,
+):
+    transactions = [
+        {
+            "id": transaction_id,
+            "date": "Mon, 31 Aug 2026 14:30:00 GMT",
+            "merchant": f"Merchant {transaction_id}",
+            "description": "Purchase",
+            "amount": transaction_id,
+            "category_id": 80,
+        }
+        for transaction_id in range(1, 22)
+    ]
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(transactions),
+            response_with_json([]),
+        ]),
+    )
+
+    response = client.get(f"/ui/transactions?page_size={page_size}")
+
+    assert response.status_code == 200
+    assert response.text.count("<td>Merchant ") == page_size
+    assert f'<option value="{page_size}" selected>' in response.text
+
+
+def test_transaction_rows_can_move_between_pages(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    transactions = [
+        {
+            "id": transaction_id,
+            "date": "Mon, 31 Aug 2026 14:30:00 GMT",
+            "merchant": f"Merchant {transaction_id}",
+            "description": "Purchase",
+            "amount": transaction_id,
+            "category_id": 80,
+        }
+        for transaction_id in range(1, 13)
+    ]
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(transactions),
+            response_with_json([]),
+        ]),
+    )
+
+    response = client.get("/ui/transactions?page=2&page_size=5")
+
+    assert response.status_code == 200
+    for transaction_id in range(6, 11):
+        assert f"<td>Merchant {transaction_id}</td>" in response.text
+    assert "<td>Merchant 5</td>" not in response.text
+    assert "<td>Merchant 11</td>" not in response.text
+    assert "Showing 6-10 of 12 transactions" in response.text
+    assert "Page 2 of 3" in response.text
+    assert (
+        'hx-get="/transactions-backend/ui/transactions?page=1&amp;page_size=5"'
+        in response.text
+    )
+    assert (
+        'hx-get="/transactions-backend/ui/transactions?page=3&amp;page_size=5"'
+        in response.text
+    )
+
+
 def test_transaction_rows_show_empty_state(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
@@ -397,4 +473,3 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
         },
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )
-

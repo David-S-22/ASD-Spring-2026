@@ -18,12 +18,56 @@ def test_frontend_loads_transaction_rows_with_htmx():
 
     assert "htmx.org@2.0.10" in index
     assert 'hx-get="/transactions-backend/ui/transactions/page"' in index
+    assert 'id="transactions-table"' in page
     assert 'id="transactions"' in page
-    assert 'hx-get="/transactions-backend/ui/transactions"' in page
+    assert (
+        'hx-get="/transactions-backend/ui/transactions?page=1&amp;page_size=5"'
+        in page
+    )
     assert 'hx-trigger="load, transactionsChanged from:body"' in page
-    assert 'hx-swap="innerHTML"' in page
+    assert 'hx-swap="outerHTML"' in page
     assert "<th>ID</th>" not in page
     assert 'colspan="5"' in page
+
+
+def test_transaction_table_has_page_size_and_navigation_controls():
+    table = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "transactions_table.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="transactions-page-size"' in table
+    assert 'name="page_size"' in table
+    assert "{% for size in page_sizes %}" in table
+    assert '<option value="{{ size }}"' in table
+    assert 'id="previous-transactions-page"' in table
+    assert 'aria-label="Previous page"' in table
+    assert "&larr;" in table
+    assert 'id="next-transactions-page"' in table
+    assert 'aria-label="Next page"' in table
+    assert "&rarr;" in table
+    assert "Page {{ page }} of {{ total_pages }}" in table
+
+
+def test_transaction_pagination_uses_compact_single_row_layout():
+    index = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "public" / "index.html"
+    ).read_text(encoding="utf-8")
+    pagination_styles = index.split(
+        ".transactions-pagination {",
+        1,
+    )[1].split(".transaction-form-screen", 1)[0]
+    mobile_styles = index.split("@media (max-width: 700px)", 1)[1]
+
+    assert "flex-wrap: nowrap;" in pagination_styles
+    assert "width: 4.5rem !important;" in pagination_styles
+    assert ".transactions-pagination," not in mobile_styles
+    assert ".transactions-page-details," not in mobile_styles
+    assert ".transactions-page-count {" in mobile_styles
+    assert "display: none;" in mobile_styles
 
 
 def test_add_transaction_button_loads_jinja_form_with_htmx():
