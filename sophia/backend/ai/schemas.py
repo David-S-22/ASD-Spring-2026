@@ -47,4 +47,18 @@ def validate_chat_response(data):
     say = data.get("say")
     if not isinstance(say, str) or len(say) > 300:
         return "say must be a string of at most 300 characters"
+
+    # Coherence: each key was valid alone, but a change op with a missing
+    # counterpart used to slip straight through — {"op": "create", "entity":
+    # null} passed validation, built no preview, and the user was left with a
+    # reply promising a change that nothing would ever perform. Small models
+    # drop keys routinely, so incoherence must fail here, where the guard's
+    # retry (and ultimately the honest fallback) can catch it.
+    if op in ("create", "update", "delete"):
+        if entity is None:
+            return f'op "{op}" requires an entity'
+        if op == "create" and not data.get("fields"):
+            return 'op "create" requires fields'
+        if op in ("update", "delete") and not isinstance(data.get("id"), int):
+            return f'op "{op}" requires an integer id'
     return None

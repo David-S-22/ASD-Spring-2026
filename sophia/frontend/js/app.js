@@ -304,7 +304,16 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
   // comment argued the card had to stay gated because it sits in the same panel
   // as the ask form; that reasoning was about where the control lives, not what
   // it does, and the card was already a review step by the time it was written.
-  if (evt.detail.elt && (evt.detail.elt.closest(".chat-panel form") || evt.detail.elt.closest(".preview-card"))) {
+  // The suggestion card (chat copy or panel copy) is the same review step the
+  // preview card was: it names the change field by field and Approve/Reject
+  // is the deliberate decision. A dialog on top would ask twice with less
+  // information than the card already shows.
+  if (
+    evt.detail.elt &&
+    (evt.detail.elt.closest(".chat-panel form") ||
+      evt.detail.elt.closest(".preview-card") ||
+      evt.detail.elt.closest(".suggestion-card"))
+  ) {
     return;
   }
   evt.preventDefault();
@@ -446,15 +455,6 @@ billsRoot.addEventListener("click", function (evt) {
   var setAside = evt.target.closest('[data-action="set-aside"]');
   if (setAside) {
     showToast(setAside.getAttribute("data-toast") || "Done — change saved.");
-    return;
-  }
-
-  var dismissPreview = evt.target.closest('[data-action="dismiss-preview"]');
-  if (dismissPreview) {
-    var card = dismissPreview.closest(".preview-card");
-    if (card) {
-      card.remove();
-    }
     return;
   }
 

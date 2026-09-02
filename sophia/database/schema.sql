@@ -42,6 +42,19 @@ CREATE TABLE IF NOT EXISTS dispute_drafts (
     UNIQUE(dispute_id, version)
 );
 
+CREATE TABLE IF NOT EXISTS suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    op TEXT NOT NULL CHECK(op IN ('create','update','delete')),
+    entity TEXT NOT NULL CHECK(entity IN ('bill','payment','dispute')),
+    entity_id INTEGER,
+    payload_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','rejected','failed')),
+    error TEXT,
+    message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     role TEXT NOT NULL CHECK(role IN ('user','assistant')),
