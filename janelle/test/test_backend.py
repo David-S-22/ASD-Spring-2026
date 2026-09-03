@@ -689,7 +689,7 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
     assert "Transaction saved." in response.text
     assert 'id="add-transaction-button"' in response.text
     assert '<option value="80">Dining</option>' in response.text
-    post.assert_called_once_with(
+    assert post.call_args_list[0] == call(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
         json={
             "date": "2026-09-02",
@@ -699,6 +699,18 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
             "category_id": 80,
         },
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    assert post.call_args_list[1] == call(
+        f"{backend_app.config.ANOMALIES_BACKEND_URL}/check-transaction",
+        json={
+            "id": 90,
+            "date": "2026-09-02",
+            "merchant": "Atomic Cafe",
+            "description": "Lunch",
+            "amount": 24.5,
+            "category_id": 80,
+        },
+        timeout=backend_app.config.ANOMALIES_TIMEOUT_SECONDS,
     )
     get.assert_called_once_with(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",

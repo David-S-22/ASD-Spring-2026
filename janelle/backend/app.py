@@ -227,6 +227,14 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
+        if response.status_code == 201:
+            try:
+                created = response.json()
+            except (ValueError, RecursionError):
+                created = None
+            if isinstance(created, dict):
+                check_transaction_for_anomalies(created)
+
         return render_transaction_page(
             db_url,
             notice="Transaction saved.",

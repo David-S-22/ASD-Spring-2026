@@ -35,6 +35,9 @@ def enqueue(transaction: dto.Transaction) -> int:
     with _state:
         _pending.add(key)
     transaction_queue.put(transaction)
+    current_app.logger.info(
+        "Enqueued transaction %s for anomaly review (queue size now %s, pending %s)",
+        key, transaction_queue.qsize(), len(_pending))
     return key
 
 
@@ -53,8 +56,18 @@ def wait_for_result(key: int, timeout: float) -> Optional[dto.Anomaly]:
     unknown, or the wait timed out while the item was still being processed (the
     caller can re-poll).
     """
+    current_app.logger.info(
+        "Waiting up to %ss for transaction %s to be reviewed", timeout, key)
     with _state:
-        _state.wait_for(lambda: key not in _pending, timeout=timeout)
+        released = _state.wait_for(lambda: key not in _pending, timeout=timeout)
+
+    if released:
+        current_app.logger.info(
+            "Transaction %s finished review; fetching result", key)
+    else:
+        current_app.logger.info(
+            "Timed out waiting for transaction %s review; caller may re-poll", key)
+
     return _find_anomaly(key)
 
 
@@ -102,19 +115,26 @@ def process_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
 def _worker(app: Flask) -> None:
     while True:
         transaction = transaction_queue.get()
+        key = getattr(transaction, "id", "unknown")
+        app.logger.info(
+            "Worker picked up transaction %s for review (queue size now %s)",
+            key, transaction_queue.qsize())
         try:
             with app.app_context():
                 process_transaction(transaction)
         except Exception:
             app.logger.exception(
-                "Failed to review queued transaction %s",
-                getattr(transaction, "id", "unknown"))
+                "Failed to review queued transaction %s", key)
         finally:
             _mark_reviewed(transaction.id)
             transaction_queue.task_done()
+            app.logger.info(
+                "Worker released transaction %s (pending %s, queue size %s)",
+                key, len(_pending), transaction_queue.qsize())
 
 
 def start_worker(app: Flask) -> threading.Thread:
     thread = threading.Thread(target=_worker, args=(app,), name="anomaly-worker", daemon=True)
     thread.start()
+    app.logger.info("Started anomaly review worker thread %r", thread.name)
     return thread
