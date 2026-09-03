@@ -3,7 +3,7 @@ from __future__ import annotations
 import requests
 from flask import Flask, jsonify, request
 
-from . import config, db_api, summary_service, transactions_api
+from . import chat_service, config, db_api, proposal_service, summary_service, transactions_api
 from .db_api import ServiceError
 
 
@@ -35,6 +35,19 @@ def _resolve_budget_line_payload(payload: dict | None) -> dict | None:
     resolved_payload = dict(payload)
     resolved_payload["category"] = category["name"]
     return resolved_payload
+
+
+def _ollama_api_base() -> str:
+    return config.OLLAMA_URL.removesuffix("/v1")
+
+
+def _ollama_status() -> str:
+    try:
+        response = requests.get(f"{_ollama_api_base()}/api/tags", timeout=2)
+        response.raise_for_status()
+    except requests.RequestException:
+        return "down"
+    return "up"
 
 
 def create_app() -> Flask:
@@ -79,6 +92,7 @@ def create_app() -> Flask:
                 "transactions_api": transactions_status,
                 "transactions_categories_count": None if transactions_categories is None else len(transactions_categories),
                 "transactions_count": None if transactions_rows is None else len(transactions_rows),
+                "ollama": _ollama_status(),
             }
         )
 
@@ -178,6 +192,13 @@ def create_app() -> Flask:
         _payload, status = db_api.delete_planned_event(event_id)
         return "", status
 
+    @application.post("/api/chat")
+    def send_chat_message():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise ServiceError("request body must be a JSON object", 400, "invalid_json")
+        return jsonify(chat_service.send_message(payload.get("budget_id"), payload.get("message"), payload.get("history")))
+
     @application.get("/api/budgets/<budget_id>/coach-proposals")
     def list_coach_proposals(budget_id: str):
         return jsonify(db_api.list_coach_proposals(budget_id))
@@ -194,6 +215,10 @@ def create_app() -> Flask:
     @application.patch("/api/coach-proposals/<proposal_id>")
     def patch_coach_proposal(proposal_id: str):
         return jsonify(db_api.update_coach_proposal(proposal_id, request.get_json(silent=True)))
+
+    @application.post("/api/coach-proposals/<proposal_id>/apply")
+    def apply_coach_proposal(proposal_id: str):
+        return jsonify(proposal_service.apply(proposal_id))
 
     @application.delete("/api/coach-proposals/<proposal_id>")
     def delete_coach_proposal(proposal_id: str):
