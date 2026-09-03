@@ -4,7 +4,23 @@
   <td>{{ anomaly.transaction_id }}</td>
   <td>{{ anomaly.agent_reason_suspected }}</td>
   <td>{% if anomaly.is_confirmed_by_user is none %}Unreviewed{% elif anomaly.is_confirmed_by_user %}Confirmed{% else %}Dismissed{% endif %}</td>
+  <td>
+    {% if anomaly.is_confirmed_by_user is none %}
+    <button type="button"
+            hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/confirm"
+            hx-target="#anomalies"
+            hx-swap="innerHTML">
+      Confirm
+    </button>
+    <button type="button"
+            hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/dismiss"
+            hx-target="#anomalies"
+            hx-swap="innerHTML">
+      Reject
+    </button>
+    {% endif %}
+  </td>
 </tr>
 {% else %}
-<tr><td colspan="4" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="5" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}

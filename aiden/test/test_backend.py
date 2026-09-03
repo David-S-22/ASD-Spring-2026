@@ -328,6 +328,56 @@ def test_find_anomaly_uses_transaction_lookup(client: FlaskClient):
 
 
 
+def test_confirm_anomaly_sets_status(client: FlaskClient):
+    with app.app_context():
+        created = anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=2001, agent_reason_suspected="review me", is_confirmed_by_user=None))
+
+    resp = client.post(f"/anomalies/{created.id}/confirm")
+
+    assert resp.status_code == 200
+    assert "Confirmed" in resp.text
+
+    with app.app_context():
+        assert anomalies_api.get_anomaly_by_transaction_id(2001).is_confirmed_by_user is True
+
+
+def test_dismiss_anomaly_sets_status(client: FlaskClient):
+    with app.app_context():
+        created = anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=2002, agent_reason_suspected="review me", is_confirmed_by_user=None))
+
+    resp = client.post(f"/anomalies/{created.id}/dismiss")
+
+    assert resp.status_code == 200
+    assert "Dismissed" in resp.text
+
+    with app.app_context():
+        assert anomalies_api.get_anomaly_by_transaction_id(2002).is_confirmed_by_user is False
+
+
+def test_review_buttons_only_render_when_unreviewed(client: FlaskClient):
+    with app.app_context():
+        unreviewed = anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=2003, agent_reason_suspected="pending", is_confirmed_by_user=None))
+
+    rows = client.get("/anomalies").text
+    assert f"/anomalies/{unreviewed.id}/confirm" in rows
+    assert f"/anomalies/{unreviewed.id}/dismiss" in rows
+
+    client.post(f"/anomalies/{unreviewed.id}/confirm")
+
+    rows = client.get("/anomalies").text
+    assert f"/anomalies/{unreviewed.id}/confirm" not in rows
+    assert f"/anomalies/{unreviewed.id}/dismiss" not in rows
+
+
+def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
+    resp = client.post("/anomalies/999999/confirm")
+
+    assert resp.status_code == 404
+
+
 # Pytest fixtures
 @fixture
 def client():

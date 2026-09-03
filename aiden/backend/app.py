@@ -66,6 +66,16 @@ def wait_for_anomaly_alert():
 
     return render_template("alert.jinja", anomaly=anomaly)
 
+@app.post("/anomalies/<int:id>/confirm")
+def confirm_anomaly(id: int):
+    anomalies_api.set_confirmation(id, True)
+    return get_anomaly_rows()
+
+@app.post("/anomalies/<int:id>/dismiss")
+def dismiss_anomaly(id: int):
+    anomalies_api.set_confirmation(id, False)
+    return get_anomaly_rows()
+
 @app.post("/dummy-anomaly")
 def create_dummy_anomaly():
     anomaly = dto.Anomaly(
