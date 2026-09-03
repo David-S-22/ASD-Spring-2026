@@ -33,11 +33,13 @@ services:
       ANOMALIES_FRONTEND_URL: http://anomalies-frontend:3004
       SAVINGS_FRONTEND_URL: http://savings-frontend:3002
       BILLS_FRONTEND_URL: http://bills-frontend:80
+      BUDGETS_FRONTEND_URL: http://budgets-frontend:3006
     depends_on:
       - transactions-frontend
       - anomalies-frontend
       - savings-frontend
       - bills-frontend
+      - budgets-frontend
 
   transactions-frontend:
     build: ./janelle/frontend
@@ -49,7 +51,9 @@ services:
     depends_on:
       - transactions-backend
   transactions-backend:
-    build: ./janelle/backend
+    build:
+      context: .
+      dockerfile: janelle/backend/Dockerfile
     container_name: transactions-backend
     ports:
       - "5001:5001"
@@ -60,8 +64,17 @@ services:
       DATABASE_TIMEOUT_SECONDS: 20
       ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
       ANOMALIES_TIMEOUT_SECONDS: 10
+      OLLAMA_URL: http://ollama:11434
+      CHAT_MODEL: qwen2.5:3b
+      AGENT_MAX_ITERATIONS: 2
+      AGENT_TRACE_ENABLED: "true"
+      AGENT_REQUEST_TTL_SECONDS: 900
+      AI_TIMEOUT_SECONDS: 90
     depends_on:
-      - transactions-db
+      transactions-db:
+        condition: service_started
+      ollama:
+        condition: service_healthy
   transactions-db:
     build:
       dockerfile: ./janelle/database/Dockerfile
@@ -150,37 +163,38 @@ services:
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
 
-  ethan-frontend:
+  budgets-frontend:
     build: ./ethan/frontend
-    container_name: ethan-frontend
+    container_name: budgets-frontend
     ports:
       - "3006:3006"
     environment:
       PORT: 3006
+      BUDGETS_BACKEND_URL: http://budgets-backend:5006
     depends_on:
-      - ethan-backend
-  ethan-backend:
+      - budgets-backend
+  budgets-backend:
     build: ./ethan/backend
-    container_name: ethan-backend
+    container_name: budgets-backend
     ports:
       - "5006:5006"
     environment:
       FLASK_ENV: production
       PORT: 5006
-      ETHAN_DB_URL: http://ethan-db:6006
+      BUDGETS_DB_URL: http://budgets-db:6006
     depends_on:
-      - ethan-db
-  ethan-db:
+      - budgets-db
+  budgets-db:
     build: ./ethan/database
-    container_name: ethan-db
+    container_name: budgets-db
     ports:
       - "6006:6006"
     volumes:
-      - ethan_data:/app/data
+      - budgets_data:/app/data
     environment:
       FLASK_ENV: production
       PORT: 6006
-      DB_PATH: /app/data/ethan.db
+      DB_PATH: /app/data/budgets.db
 
   savings-db:
     build: 
@@ -206,7 +220,7 @@ services:
       DB_URL: http://savings-db:6002
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
-      OLLAMA_MODEL: qwen2.5:3b
+      OLLAMA_MODEL: llama3.1:8b
     depends_on:
       savings-db:
         condition: service_started
@@ -233,5 +247,5 @@ volumes:
   transactions_data:
   bills_data:
   anomalies_data:
-  ethan_data:
+  budgets_data:
   savings_data:

@@ -9,10 +9,15 @@ shows a month-by-month "what to set aside" calendar, tracks paid/due/overdue
 status per bill, drafts dispute letters for charges that look wrong, and
 answers plain-language questions about the bills through a small chat
 assistant ("Ask Tally"). Nothing writes to the database without an explicit
-user action: chat replies with a preview card, and only `POST
-/api/chat/apply` actually executes a change, through the same CRUD routes a
-manual edit would use. Disputes are drafts only — there is no send
-integration.
+user action: every change the chat proposes becomes a **pending suggestion**,
+shown both as a card in the chat reply and in the Suggestions panel beneath
+it (with field-level detail — a before/after diff for updates, the row being
+removed for deletes). Approving applies it through the same services layer a
+manual edit uses and refreshes the table in place; rejecting discards it. The
+outcome — applied, rejected, or failed — is written back into the chat
+transcript, so the assistant's next turn knows what actually happened and
+never reports an unapproved or failed change as done. Disputes are drafts
+only — there is no send integration.
 
 ## Run it
 

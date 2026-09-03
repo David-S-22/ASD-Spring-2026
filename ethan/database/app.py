@@ -4,7 +4,6 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
 
 from flask import Flask, jsonify, request
 from sqlalchemy import func, select
@@ -130,11 +129,20 @@ def _validate_date(value: str | None, field: str):
         raise ApiError(f"{field} must use YYYY-MM-DD format", 422, "invalid_field") from error
 
 
-def _validate_guid(identifier: str, field: str = "id") -> str:
+def _month_from_date(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value[:7]
+
+
+def _validate_id(identifier: str, field: str = "id") -> int:
     try:
-        return str(UUID(identifier))
+        value = int(identifier)
     except (ValueError, TypeError) as error:
-        raise ApiError(f"{field} must be a valid GUID", 422, "invalid_field") from error
+        raise ApiError(f"{field} must be an integer", 422, "invalid_field") from error
+    if value < 1:
+        raise ApiError(f"{field} must be an integer", 422, "invalid_field")
+    return value
 
 
 def _require_fields(data: dict, fields: list[str]):
@@ -160,11 +168,18 @@ def _validate_budget_payload(data: dict, partial: bool = False) -> dict:
 
 def _validate_budget_line_payload(data: dict, partial: bool = False) -> dict:
     if not partial:
-        _require_fields(data, ["category"])
+        _require_fields(data, ["category_id", "category"])
     values: dict = {}
+    _optional_int(data, "category_id", values)
     _optional_string(data, "category", values)
     _optional_int(data, "warn_at", values)
     _optional_int(data, "hard_cap", values)
+    if ("category_id" in values) != ("category" in values):
+        raise ApiError(
+            "category_id and category must be supplied together",
+            422,
+            "invalid_field",
+        )
     warn_at = values.get("warn_at")
     hard_cap = values.get("hard_cap")
     if warn_at is not None and hard_cap is not None and warn_at > hard_cap:
@@ -204,34 +219,46 @@ def _validate_coach_proposal_payload(data: dict, partial: bool = False) -> dict:
 
 
 def _get_budget_or_404(budget_id: str) -> Budget:
-    budget = db.session.get(Budget, _validate_guid(budget_id, "budget_id"))
+    budget = db.session.get(Budget, _validate_id(budget_id, "budget_id"))
     if budget is None:
         raise ApiError("budget not found", 404, "budget_not_found")
     return budget
 
 
 def _get_budget_line_or_404(line_id: str) -> BudgetLine:
-    line = db.session.get(BudgetLine, _validate_guid(line_id, "budget_line_id"))
+    line = db.session.get(BudgetLine, _validate_id(line_id, "budget_line_id"))
     if line is None:
         raise ApiError("budget line not found", 404, "budget_line_not_found")
     return line
 
 
 def _get_planned_event_or_404(event_id: str) -> PlannedEvent:
-    planned_event = db.session.get(PlannedEvent, _validate_guid(event_id, "planned_event_id"))
+    planned_event = db.session.get(PlannedEvent, _validate_id(event_id, "planned_event_id"))
     if planned_event is None:
         raise ApiError("planned event not found", 404, "planned_event_not_found")
     return planned_event
 
 
 def _get_coach_proposal_or_404(proposal_id: str) -> CoachProposal:
-    proposal = db.session.get(CoachProposal, _validate_guid(proposal_id, "coach_proposal_id"))
+    proposal = db.session.get(CoachProposal, _validate_id(proposal_id, "coach_proposal_id"))
     if proposal is None:
         raise ApiError("coach proposal not found", 404, "coach_proposal_not_found")
     return proposal
 
 
-def _budget_has_category(budget_id: str, category: str | None, excluded_line_id: str | None = None) -> bool:
+def _budget_has_category_id(budget_id: int, category_id: int | None, excluded_line_id: int | None = None) -> bool:
+    if category_id is None:
+        return False
+    statement = select(func.count()).select_from(BudgetLine).where(
+        BudgetLine.budget_id == budget_id,
+        BudgetLine.category_id == category_id,
+    )
+    if excluded_line_id is not None:
+        statement = statement.where(BudgetLine.id != excluded_line_id)
+    return db.session.scalar(statement) > 0
+
+
+def _budget_has_category_name(budget_id: int, category: str | None, excluded_line_id: int | None = None) -> bool:
     if category is None:
         return False
     statement = select(func.count()).select_from(BudgetLine).where(
@@ -243,14 +270,28 @@ def _budget_has_category(budget_id: str, category: str | None, excluded_line_id:
     return db.session.scalar(statement) > 0
 
 
-def _require_existing_budget_line_category(budget_id: str, category: str | None):
+def _require_existing_budget_line_category(budget_id: int, category: str | None):
     if category is None:
         return
-    if not _budget_has_category(budget_id, category):
+    if not _budget_has_category_name(budget_id, category):
         raise ApiError(
             "category must match an existing budget line for this budget",
             422,
             "budget_line_category_required",
+        )
+
+
+def _require_date_within_budget_month(budget: Budget, date_value: str | None):
+    if date_value is None:
+        return
+    budget_month = budget.month
+    if budget_month is None:
+        return
+    if _month_from_date(date_value) != budget_month:
+        raise ApiError(
+            "date must be inside the parent budget month",
+            422,
+            "planned_event_month_mismatch",
         )
 
 
@@ -278,7 +319,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     @application.errorhandler(SQLAlchemyError)
     def handle_database_error(error: SQLAlchemyError):
         db.session.rollback()
-        application.logger.exception("Ethan database operation failed")
+        application.logger.exception("Budgets database operation failed")
         return jsonify(error="database unavailable", code="database_unavailable"), 503
 
     @application.errorhandler(HTTPException)
@@ -287,7 +328,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
     @application.get("/")
     def get_index():
-        return jsonify(container="ethan-db")
+        return jsonify(container="budgets-db")
 
     @application.get("/health")
     def get_health():
@@ -356,9 +397,16 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     def create_budget_line(budget_id: str):
         budget = _get_budget_or_404(budget_id)
         values = _validate_budget_line_payload(_json_body())
+        if _budget_has_category_id(budget.id, values.get("category_id")):
+            raise ApiError(
+                "category already exists for this budget",
+                409,
+                "budget_line_category_conflict",
+            )
         now = _now_timestamp()
         line = BudgetLine(
             budget_id=budget.id,
+            category_id=values.get("category_id"),
             category=values.get("category"),
             warn_at=values.get("warn_at"),
             hard_cap=values.get("hard_cap"),
@@ -379,10 +427,10 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
         values = _validate_budget_line_payload(_json_body(), partial=True)
         if not values:
             raise ApiError("no updatable fields supplied", 400, "missing_required_fields")
-        category = values.get("category", line.category)
-        if category is not None and _budget_has_category(line.budget_id, category, excluded_line_id=line.id):
+        category_id = values.get("category_id", line.category_id)
+        if category_id is not None and _budget_has_category_id(line.budget_id, category_id, excluded_line_id=line.id):
             raise ApiError(
-                "category name already exists for this budget",
+                "category already exists for this budget",
                 409,
                 "budget_line_category_conflict",
             )
@@ -412,6 +460,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
         budget = _get_budget_or_404(budget_id)
         values = _validate_planned_event_payload(_json_body())
         _require_existing_budget_line_category(budget.id, values.get("category"))
+        _require_date_within_budget_month(budget, values.get("date"))
         now = _now_timestamp()
         planned_event = PlannedEvent(
             budget_id=budget.id,
@@ -441,6 +490,7 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
             raise ApiError("no updatable fields supplied", 400, "missing_required_fields")
         category = values.get("category", planned_event.category)
         _require_existing_budget_line_category(planned_event.budget_id, category)
+        _require_date_within_budget_month(planned_event.budget, values.get("date", planned_event.date))
         for field, value in values.items():
             setattr(planned_event, field, value)
         planned_event.updated_at = _now_timestamp()
@@ -511,6 +561,6 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
 def create_app(db_path: str | None = None, seed_demo_data: bool = True) -> Flask:
     return _create_app(
-        db_path or os.environ.get("DB_PATH", "./ethan.db"),
+        db_path or os.environ.get("DB_PATH", "./budgets.db"),
         seed_demo_data=seed_demo_data,
     )

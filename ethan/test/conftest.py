@@ -2,8 +2,8 @@ import pathlib
 import sys
 
 
-ethan_path = pathlib.Path(__file__).resolve().parent.parent
-ethan_path_str = str(ethan_path)
+package_root = pathlib.Path(__file__).resolve().parent.parent
+package_root_str = str(package_root)
 
-if ethan_path_str not in sys.path:
-    sys.path.insert(0, ethan_path_str)
+if package_root_str not in sys.path:
+    sys.path.insert(0, package_root_str)

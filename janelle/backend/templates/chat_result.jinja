@@ -1,0 +1,285 @@
+{% macro transaction_preview(title, transaction, changes=None) -%}
+<section class="transaction-chat-preview">
+    <h3>{{ title }}</h3>
+    <dl>
+        {% if transaction.id is not none %}
+        <dt>ID</dt>
+        <dd>#{{ transaction.id }}</dd>
+        {% endif %}
+        <dt{% if changes and "date" in changes %} class="changed"{% endif %}>Date</dt>
+        <dd{% if changes and "date" in changes %} class="changed"{% endif %}>{{ transaction.date|transaction_date }}</dd>
+        <dt{% if changes and "merchant" in changes %} class="changed"{% endif %}>Merchant</dt>
+        <dd{% if changes and "merchant" in changes %} class="changed"{% endif %}>{{ transaction.merchant }}</dd>
+        <dt{% if changes and "description" in changes %} class="changed"{% endif %}>Description</dt>
+        <dd{% if changes and "description" in changes %} class="changed"{% endif %}>{{ transaction.description }}</dd>
+        <dt{% if changes and "amount" in changes %} class="changed"{% endif %}>Amount</dt>
+        <dd{% if changes and "amount" in changes %} class="changed"{% endif %}>{{ transaction.amount|currency }}</dd>
+        <dt{% if changes and "category_id" in changes %} class="changed"{% endif %}>Category</dt>
+        <dd{% if changes and "category_id" in changes %} class="changed"{% endif %}>{{ transaction.category_name or transaction.category_id }}</dd>
+    </dl>
+</section>
+{%- endmacro %}
+
+<div class="transaction-chat-response-card"
+     {% if error %}role="alert"{% endif %}>
+{% if error %}
+    <p>{{ error }}</p>
+{% elif result %}
+    {% if result.saved %}
+        {% set state = "Saved and verified" %}
+    {% elif result.fallback %}
+        {% set state = "Could not complete safely" %}
+    {% elif result.category_selection and result.category_selection.requires_user_response %}
+        {% set state = "Suggested category" %}
+    {% elif result.requires_confirmation %}
+        {% set state = "Ready for your review" %}
+    {% elif result.requires_clarification %}
+        {% set state = "Needs clarification" %}
+    {% else %}
+        {% set state = "Completed" %}
+    {% endif %}
+    <span class="transaction-chat-state">{{ state }}</span>
+    {% if not (
+        result.category_selection
+        and result.category_selection.requires_user_response
+    ) %}
+    <p>{{ result.reply }}</p>
+    {% endif %}
+
+    {% if result.category_selection and result.category_selection.requires_user_response %}
+    {% set selection = result.category_selection %}
+    <section class="transaction-chat-category">
+        <h3>Suggested category</h3>
+        {% if selection.suggested_category_name %}
+        <p>
+            <strong>{{ selection.suggested_category_name }}</strong>
+            looks like the best fit.
+            Accept it or choose another category to continue.
+            Nothing will be saved until you confirm the transaction.
+        </p>
+        <form hx-post="/transactions-backend/ui/chat/category"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-disabled-elt="button"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="request_id"
+                   value="{{ result.agent.request_id }}">
+            <input type="hidden"
+                   name="category_id"
+                   value="{{ selection.suggested_category_id }}">
+            {% if request_context %}
+            <input type="hidden"
+                   name="request_context"
+                   value="{{ request_context }}">
+            {% endif %}
+            <button type="submit">Accept suggestion</button>
+        </form>
+        {% else %}
+        <p>
+            Choose a category to continue.
+            Nothing will be saved until you confirm the transaction.
+        </p>
+        {% endif %}
+
+        <form class="transaction-chat-category-form"
+              hx-post="/transactions-backend/ui/chat/category"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-disabled-elt="button"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="request_id"
+                   value="{{ result.agent.request_id }}">
+            {% if request_context %}
+            <input type="hidden"
+                   name="request_context"
+                   value="{{ request_context }}">
+            {% endif %}
+            <label for="transaction-chat-category-select">
+                Choose another category
+            </label>
+            <select id="transaction-chat-category-select"
+                    name="category_id"
+                    required>
+                {% for category in result.categories %}
+                <option value="{{ category.id }}"
+                        {% if category.id == selection.suggested_category_id %}selected{% endif %}>
+                    {{ category.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit">Use selected category</button>
+        </form>
+        <button type="button"
+                class="transaction-chat-cancel"
+                hx-get="/transactions-backend/ui/chat/clear"
+                hx-target="#transaction-chat-response"
+                hx-swap="innerHTML">
+            Cancel
+        </button>
+    </section>
+    {% endif %}
+
+    {% if result.analytics and (
+        "count" in result.analytics.calculations
+        or "sum" in result.analytics.calculations
+        or "average" in result.analytics.calculations
+    ) %}
+    <div class="transaction-chat-summary">
+        {% if "count" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            {{ result.analytics.count }}
+            transaction{% if result.analytics.count != 1 %}s{% endif %}
+        </span>
+        {% endif %}
+        {% if "sum" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            Total {{ result.analytics.sum|currency }}
+        </span>
+        {% endif %}
+        {% if "average" in result.analytics.calculations %}
+        <span class="transaction-chat-metric">
+            Average {{ result.analytics.average|currency }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if result.requires_clarification and result.matches %}
+    <ul class="transaction-chat-matches">
+        {% for transaction in result.matches %}
+        <li>
+            #{{ transaction.id }} ·
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if (
+        result.requires_clarification
+        and not (
+            result.category_selection
+            and result.category_selection.requires_user_response
+        )
+        and request_context
+    ) %}
+    <form class="transaction-chat-clarification-form"
+          hx-post="/transactions-backend/ui/chat"
+          hx-target="#transaction-chat-response"
+          hx-swap="innerHTML"
+          hx-disabled-elt="button"
+          hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+        <input type="hidden"
+               name="original_message"
+               value="{{ request_context }}">
+        <label for="transaction-chat-clarification">
+            Your answer
+        </label>
+        <input id="transaction-chat-clarification"
+               name="clarification"
+               type="text"
+               placeholder="Enter the missing details"
+               autocomplete="off"
+               required
+               autofocus>
+        <button type="submit">Continue</button>
+    </form>
+    {% endif %}
+
+    {% if result.analytics and not result.analytics.calculations and result.transactions %}
+    <h3>Matching transactions</h3>
+    <ul class="transaction-chat-matches">
+        {% for transaction in result.transactions %}
+        <li>
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.description }} ·
+            {{ transaction.category_name }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if result.analytics and "largest" in result.analytics.calculations and result.transactions %}
+    <h3>Biggest purchases</h3>
+    <ol class="transaction-chat-matches">
+        {% for transaction in result.transactions %}
+        <li>
+            {{ transaction.date|transaction_date }} ·
+            {{ transaction.merchant }} ·
+            {{ transaction.description }} ·
+            {{ transaction.amount|currency }}
+        </li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+
+    {% if result.preview %}
+    {% set preview = result.preview %}
+    <div class="transaction-chat-preview-grid{% if preview.operation != "update" %} single{% endif %}">
+        {% if preview.operation == "create" %}
+            {{ transaction_preview("Transaction to create", preview.after) }}
+        {% elif preview.operation == "delete" %}
+            <p class="transaction-chat-warning">
+                This will permanently delete the transaction below.
+            </p>
+            {{ transaction_preview("Transaction to delete", preview.before) }}
+        {% else %}
+            {{ transaction_preview("Before", preview.before, preview.changes) }}
+            {{ transaction_preview("After", preview.after, preview.changes) }}
+        {% endif %}
+    </div>
+
+    <div class="transaction-chat-actions">
+        <form hx-post="/transactions-backend/ui/chat/apply"
+              hx-target="#transaction-chat-response"
+              hx-swap="innerHTML"
+              hx-disabled-elt="button"
+              hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+            <input type="hidden"
+                   name="preview"
+                   value='{{ preview|tojson }}'>
+            <input type="hidden"
+                   name="request_id"
+                   value="{{ result.agent.request_id }}">
+            <button type="submit">Confirm</button>
+        </form>
+        <button type="button"
+                class="transaction-chat-cancel"
+                hx-get="/transactions-backend/ui/chat/clear"
+                hx-target="#transaction-chat-response"
+                hx-swap="innerHTML">
+            Cancel
+        </button>
+    </div>
+    {% if request_context and preview.operation != "delete" %}
+    <form class="transaction-chat-adjustment-form"
+          hx-post="/transactions-backend/ui/chat"
+          hx-target="#transaction-chat-response"
+          hx-swap="innerHTML"
+          hx-disabled-elt="button"
+          hx-on::response-error="document.getElementById('transaction-chat-response').innerHTML = event.detail.xhr.responseText">
+        <input type="hidden"
+               name="request_id"
+               value="{{ result.agent.request_id }}">
+        <label for="transaction-chat-adjustment">
+            Want to change something?
+        </label>
+        <textarea id="transaction-chat-adjustment"
+                  name="adjustment"
+                  rows="2"
+                  placeholder="Describe what you want to change"
+                  required></textarea>
+        <button type="submit">Update preview</button>
+    </form>
+    {% endif %}
+    {% endif %}
+{% elif success %}
+    <p>{{ success }}</p>
+{% endif %}
+</div>

@@ -23,41 +23,44 @@
 <link rel="stylesheet" href="/bills-frontend/css/theme.css">
 <link rel="stylesheet" href="/bills-frontend/css/bills.css">
 <div id="bills-root">
-  <div class="app-shell">
-    <div class="tab-panel">
-      <div class="tabs">
-        <button type="button" class="active" data-tab="bills">Bills</button>
-        <button type="button" data-tab="calendar">Calendar</button>
-        <button type="button" data-tab="timeline">Coming up</button>
-        <button type="button" data-tab="disputes">Disputes</button>
-      </div>
-      <div class="tab-page active" data-tab-page="bills">
+  <!-- One page, no inner tabs: the table, then Disputes, then Ask Tally.
+       Calendar and Coming up are deliberately absent (low priority) — their
+       /ui/calendar and /ui/timeline routes still exist for direct use. -->
+  <!-- Wide screens: two tracks — the work (table, then Disputes) on the left,
+       Ask Tally + Suggestions as a sticky sidebar on the right, so the chat
+       loop is visible while the table it changes is on screen. Narrow
+       screens stack back to the single column: table → Disputes → chat. -->
+  <div class="bills-page">
+    <div class="main-column">
+      <div class="table-section">
         <!-- Outside #bills-table on purpose. That div is a fragment root and is
-             replaced wholesale by seven different paths -- the initial load, the
-             five write forms that target it, and the out-of-band swap after a
-             chat apply. Anything inside it loses its value and its focus on
-             every write, which for a search box people are typing into is not a
-             detail. app.js re-applies the filter on htmx:afterSwap. -->
+             replaced wholesale by every write path, and anything inside it loses
+             its value and focus on every write — which for a search box people
+             are typing into is not a detail. app.js re-applies the filter on
+             htmx:afterSwap. -->
         <label class="bills-search">
           <span class="visually-hidden">Search bills</span>
           <input type="search" id="bills-search" placeholder="Search bills…" autocomplete="off">
         </label>
         <div id="bills-table" class="card" hx-get="/bills-backend/ui/bills" hx-trigger="load" hx-swap="outerHTML"></div>
       </div>
-      <div class="tab-page" data-tab-page="calendar">
-        <div id="calendar-card" class="card" hx-get="/bills-backend/ui/calendar" hx-trigger="load" hx-swap="outerHTML"></div>
-      </div>
-      <div class="tab-page" data-tab-page="timeline">
-        <div id="timeline" class="card" hx-get="/bills-backend/ui/timeline" hx-trigger="load" hx-swap="outerHTML"></div>
-      </div>
-      <div class="tab-page" data-tab-page="disputes">
-        <div id="disputes-tab" class="card" hx-get="/bills-backend/ui/disputes-tab" hx-trigger="load"></div>
-      </div>
+      <section class="disputes-section card" id="disputes-section" aria-label="Disputes">
+        <h3>Disputes</h3>
+        <div id="disputes-tab" hx-get="/bills-backend/ui/disputes-tab" hx-trigger="load"></div>
+      </section>
     </div>
-    <div class="ask-tally card">
-      <h3>Ask Tally</h3>
-      <div id="chat-panel" hx-get="/bills-backend/ui/chat" hx-trigger="load"></div>
-    </div>
+    <aside class="side-column">
+      <div class="ask-tally card">
+        <h3>Ask Tally</h3>
+        <div id="chat-panel" hx-get="/bills-backend/ui/chat" hx-trigger="load"></div>
+        <!-- The approve/reject window. Everything the AI proposes lands here as
+             a pending suggestion; nothing is written until it is approved.
+             Fragment root replaces this div (outerHTML) and carries the same id,
+             so approve/reject responses and the chat's OOB refresh all have one
+             target. -->
+        <div id="suggestions-panel" hx-get="/bills-backend/ui/suggestions" hx-trigger="load" hx-swap="outerHTML"></div>
+      </div>
+    </aside>
   </div>
   <div id="modal-root"></div>
   <div class="toast-holder" id="toast-root"></div>

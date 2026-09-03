@@ -1,0 +1,27 @@
+{# The left-hand list of disputes. Own fragment with a stable id so writes
+   that change what belongs in it — removing a dispute, moving one along the
+   status tracker — can refresh it out of band instead of leaving stale rows
+   and chips standing until the tab is reopened. #}
+<div class="dispute-list" id="dispute-list"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if disputes %}
+  <ul>
+    {% for d in disputes %}
+    <li>
+      <button
+        class="dispute-list-item"
+        hx-get="/bills-backend/ui/disputes?dispute_id={{ d.id }}"
+        hx-target="#dispute-panel"
+        hx-swap="outerHTML"
+      >
+        <span class="bill-name">{{ d.bill_name }}</span>
+        <span class="reason">{{ d.reason }}</span>
+        <span class="chip chip-dispute-{{ d.status }}">{{ d.status }}</span>
+        <span class="opened">{{ d.opened_at }}</span>
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No open disputes. If a charge looks wrong, open the bill and choose "Dispute".</p>
+  {% endif %}
+</div>

@@ -1,60 +1,55 @@
-/* Bills feature layout: tabs, panels, and the Ask Tally side panel. */
-/* The panel pair sizes from this container, never from the viewport, and the
-   two tracks say what they actually need rather than trading on a percentage.
-
-   The table track floors at its own min-content (673px measured): that is the
-   width below which the action controls start disappearing, so it is the width
-   the table refuses to go under. 1fr gives it everything spare above that.
-
-   The chat track wants 320px and will surrender down to 240px, and only when
-   the table would otherwise be squeezed below its floor. So at the shell's
-   1052px column the chat gets its full 320px, and in the narrow band just above
-   the stacking breakpoint it gives up pixels one at a time instead of the table
-   clipping. An earlier version used clamp() with a percentage; it hit 320px
-   only above ~1230px and left the chat at 263px in the shell, which is the
-   cramped state this was supposed to fix. */
-.app-shell {
+/* Bills feature layout: the work (table, then Disputes) in the main track,
+   Ask Tally + Suggestions as a sticky sidebar — the chat loop stays visible
+   while the table it changes is on screen. Narrow viewports stack back to
+   one column: table → Disputes → chat. Calendar and Coming up remain
+   unrendered (low priority; their routes live on). */
+.bills-page {
   display: grid;
-  grid-template-columns: minmax(min-content, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
   gap: 1rem;
-  max-width: 1320px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 1rem;
 }
 
-.tabs {
+.main-column {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.tabs button {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0.5em 0.25em;
-}
-
-.tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tab-panel {
-  grid-column: 1;
-  /* Grid items default to min-width:auto, which is the intrinsic width for a
-     table. The track above is already capped; this stops the item overflowing
-     the track it sits in. */
+  flex-direction: column;
+  gap: 1rem;
   min-width: 0;
 }
 
-.ask-tally {
-  grid-column: 2;
-  align-self: start;
+.side-column {
   position: sticky;
   top: 1rem;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .bills-page {
+    grid-template-columns: 1fr;
+  }
+
+  .side-column {
+    position: static;
+  }
+}
+
+.bills-page .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.disputes-section,
+.ask-tally {
+  padding: 1rem;
+}
+
+.disputes-section > h3,
+.ask-tally > h3 {
+  margin-top: 0;
 }
 
 .bills-table {
@@ -62,12 +57,9 @@
   border-collapse: collapse;
 }
 
-/* index.html gives these divs class="card", but each fragment root replaces the
-   whole element and brings its own class instead -- so after the first swap the
-   card treatment is gone. That was invisible while everything was white on
-   off-white; on a dark palette it is the difference between a panel and a void,
-   so the treatment names them directly. (#disputes-tab is the one fragment that
-   does return class="card".) */
+/* The fragment root replaces the index.html placeholder (and its class="card")
+   wholesale, so the card treatment is named directly on the fragment classes.
+   Calendar and Coming up keep theirs for anyone hitting their routes directly. */
 .bills-panel,
 .calendar-card,
 .timeline {
@@ -77,12 +69,24 @@
   padding: 0.25rem 0 1rem;
 }
 
+.bills-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bills-head .monthly-total {
+  color: var(--mut);
+  white-space: nowrap;
+}
+
 /* The table runs full-bleed to the panel edge and the chrome around it is
    padded instead. Horizontal padding on the panel comes straight off the
    table's width, and the table has none to give: the scroll container's own
    vertical scrollbar already takes 15px, which was enough to push the table
    back into horizontal overflow and undo #96's no-scrollbar guarantee. */
-.bills-panel > h2,
+.bills-panel > .bills-head,
 .bills-panel > button,
 .calendar-card > *,
 .timeline > * {
@@ -99,20 +103,11 @@
    a sticky header only works against its nearest scrolling ancestor, and two
    nested scroll contexts is how you get a header that sticks to the wrong one.
 
-   620px is kept, but the arithmetic behind it has changed completely and the
-   figures here were re-measured on 2 Sep rather than carried over. The previous
-   note said rows were ~94px because four action controls wrapped to three
-   lines; both numbers were stale. Measured in the shell before this change:
-   rows were 135px, uniformly, with the controls on FOUR lines.
-
-   After moving three of them into the row menu, rows are 47px where the name
-   fits on one line, 61-62px where it wraps to two, and 108px for GymCo, which
-   carries the Spending Alerts prompt. Twelve seeded bills plus the header come
-   to 755px, so the cap still engages and the sticky header is still doing
-   something -- about ten rows sit above the fold, which covers Spotify (row 3)
-   and GymCo (row 6), the two the demo actually touches. */
+   330px caps the visible table at roughly six rows (measured: header ~41px,
+   one-line rows ~47px), so the panel stays compact and Disputes sits above
+   the fold; the rest of the bills scroll under the sticky header. */
 .table-scroll {
-  max-height: 620px;
+  max-height: 330px;
   overflow: auto;
 }
 
@@ -156,13 +151,16 @@
   padding: 1.4em 0.6em;
 }
 
+/* Compact and right-aligned above the table — a full-width bar floating over
+   the page read as detached chrome on wide screens. */
 .bills-search {
-  display: block;
-  margin: 0 0 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.6rem;
 }
 
 .bills-search input {
-  width: 100%;
+  width: min(100%, 240px);
 }
 
 .visually-hidden {
@@ -197,8 +195,7 @@
    and the name column are allowed to wrap. Holding every one of them at nowrap
    pinned the table's intrinsic width at 854px, 170px past the shell's track. */
 .bills-table td:nth-child(2),
-.bills-table td:nth-child(3),
-.bills-table td:nth-child(4) {
+.bills-table td:nth-child(3) {
   white-space: nowrap;
 }
 
@@ -341,25 +338,8 @@
   font-size: 0.85em;
 }
 
-/* Stack below 1024px. The old breakpoint was 900px, which left a broken band:
-   at a 1000px window the table track fell to 617px against a 673px min-content,
-   so 36 action controls clipped and the scrollbar returned while the panels
-   were still side by side. Side-by-side survives to ~1009px in the shell and
-   ~961px standalone once the chat can give way to 240px; 1024 clears both. */
-@media (max-width: 1024px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-panel,
-  .ask-tally {
-    grid-column: 1;
-  }
-
-  .ask-tally {
-    position: static;
-  }
-}
+/* The single-column page needs no stacking breakpoint; the table's own
+   scroll container handles narrow viewports. */
 
 .timeline ul,
 .dispute-panel ul,
@@ -499,14 +479,6 @@
   border-radius: 999px;
 }
 
-.tab-page {
-  display: none;
-}
-
-.tab-page.active {
-  display: block;
-}
-
 .modal-form {
   background: var(--card);
   border-radius: 10px;
@@ -555,7 +527,27 @@
 .disputes-tab {
   display: grid;
   grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  align-items: start;
   gap: 1rem;
+}
+
+/* The list scrolls inside the card; the card's height follows the letter
+   panel instead of ten dispute cards stacking a tower of empty space
+   beside a short letter. */
+.dispute-list {
+  max-height: 30rem;
+  overflow-y: auto;
+}
+
+/* Destructive, so it reads as such — same palette the error fragment uses. */
+.dispute-panel .remove-dispute {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  background: transparent;
+}
+
+.dispute-panel .remove-dispute:hover {
+  background: var(--bad-bg);
 }
 
 .dispute-list ul {
@@ -599,6 +591,92 @@
   display: inline-block;
 }
 
+/* --- Suggestions: the approve/reject window ------------------------------ */
+
+.suggestions-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+
+.suggestions-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 0.4em;
+}
+
+.suggestions-badge {
+  background: var(--accent);
+  color: var(--card);
+  border-radius: 999px;
+  font-size: 0.75em;
+  min-width: 1.6em;
+  text-align: center;
+  padding: 0.1em 0.4em;
+}
+
+.suggestions-empty {
+  color: var(--mut);
+  font-size: 0.9em;
+  margin: 0.4em 0;
+}
+
+.suggestion-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+  margin: 0.5em 0;
+}
+
+/* The reply's one-line pointer at the Suggestions panel below. */
+.suggestion-pointer {
+  color: var(--mut);
+  font-size: 0.85em;
+  margin: 0.2em 0 0.3em 2em;
+}
+
+.suggestion-title {
+  font-weight: 600;
+  margin: 0 0 0.3em;
+}
+
+.suggestion-detail {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 0.4em;
+}
+
+.suggestion-detail th {
+  color: var(--mut);
+  font-weight: 400;
+  text-align: left;
+  padding-right: 0.8em;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.suggestion-old {
+  color: var(--mut);
+}
+
+.suggestion-warning,
+.suggestion-error {
+  color: var(--bad);
+  font-size: 0.9em;
+  margin: 0.3em 0;
+}
+
+.suggestion-card.status-failed {
+  border-color: var(--bad);
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 0.4em;
+}
+
+
 #modal-root:has(.modal-form) {
   position: fixed;
   inset: 0;
@@ -637,4 +715,74 @@
 #bills-root .htmx-request button:disabled,
 #bills-root button.htmx-request:disabled {
   cursor: progress;
+}
+
+/* Full-width chat: the input row stretches, the Ask button keeps its size,
+   and long conversations scroll inside the card instead of growing the page. */
+.chat-panel form {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.chat-panel form input[name="message"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-panel .history {
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+
+/* --- Collapsed disputes (preview) ---------------------------------------- */
+
+.collapsed-disputes {
+  display: block;
+}
+
+.collapsed-disputes .dispute-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.collapsed-disputes .dispute-list ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.collapsed-disputes .dispute-list ul li {
+  display: block;
+}
+
+.collapsed-disputes .dispute-list-item {
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+}
+
+.collapsed-disputes .dispute-list-item:hover {
+  border-color: var(--accent);
+}
+
+.collapsed-disputes .dispute-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  position: relative;
+}
+
+/* In flow, right-aligned — NOT absolutely positioned. Out of flow it reserved
+   no space, and the panel's first in-flow child is conditional: with no
+   context line and a single draft version that child is the letter textarea at
+   width:100%, which then ran 24px UNDER the button. Measured on the seed: 2 of
+   10 disputes, where elementFromPoint at the textarea's top-right returned the
+   Close button — so clicking into the letter closed the panel instead. */
+.collapsed-disputes .dispute-panel .close-dispute {
+  display: block;
+  margin: 0 0 0.6rem auto;
 }

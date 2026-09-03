@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -14,14 +12,10 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 
-def _new_guid() -> str:
-    return str(uuid4())
-
-
 class Budget(db.Model):
     __tablename__ = "budgets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     month: Mapped[str | None] = mapped_column(String(7), nullable=True)
     declared_income: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -66,11 +60,12 @@ class Budget(db.Model):
 class BudgetLine(db.Model):
     __tablename__ = "budget_lines"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
+    category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     category: Mapped[str | None] = mapped_column(String(120, collation="NOCASE"), nullable=True)
     warn_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hard_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -80,7 +75,7 @@ class BudgetLine(db.Model):
     budget: Mapped[Budget] = relationship(back_populates="budget_lines")
 
     __table_args__ = (
-        UniqueConstraint("budget_id", "category", name="uq_budget_lines_budget_category"),
+        UniqueConstraint("budget_id", "category_id", name="uq_budget_lines_budget_category_id"),
         CheckConstraint(
             "warn_at IS NULL OR hard_cap IS NULL OR warn_at <= hard_cap",
             name="ck_budget_lines_warn_at_hard_cap",
@@ -91,6 +86,7 @@ class BudgetLine(db.Model):
         return {
             "id": self.id,
             "budget_id": self.budget_id,
+            "category_id": self.category_id,
             "category": self.category,
             "warn_at": self.warn_at,
             "hard_cap": self.hard_cap,
@@ -102,8 +98,8 @@ class BudgetLine(db.Model):
 class PlannedEvent(db.Model):
     __tablename__ = "planned_events"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -153,8 +149,8 @@ class PlannedEvent(db.Model):
 class CoachProposal(db.Model):
     __tablename__ = "coach_proposals"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_guid)
-    budget_id: Mapped[str] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
         ForeignKey("budgets.id", ondelete="CASCADE"),
         nullable=False,
     )

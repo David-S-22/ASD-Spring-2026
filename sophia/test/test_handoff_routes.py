@@ -1,5 +1,6 @@
 """Tests for the inbound handoff routes, against the FakeStore pattern from test_backend_routes."""
 from datetime import date
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -77,6 +78,41 @@ def test_recurring_response_is_preview_only_with_apply_url_and_ui_url(client, st
     assert data["apply_url"] == "/api/chat/apply"
     assert data["ui_url"].startswith(config.FRONTEND_ORIGIN)
     assert store.bills == bills_before
+
+
+def test_ui_url_puts_the_parameter_in_the_query_and_keeps_the_hash_routable(client, store):
+    """The shared shell routes on an EXACT hash match:
+
+        tabs.find(t => t.dataset.page === location.hash.slice(1)) || tabs[0]
+
+    so "#chat?handoff=x" slices to "chat?handoff=x", matches no tab, and falls
+    back to Home -- Bills never loads and the link silently does nothing.
+    Verified in a real browser against the running shell. There is no "chat"
+    page either, so the hash has to be "#bills" and the intent has to travel in
+    the query string, which the shell leaves untouched.
+    """
+    response = client.post(
+        "/api/handoff/recurring", json={"source": "transactions", "merchant": "Spotify AU", "intent": "end"}
+    )
+    parsed = urlparse(response.get_json()["ui_url"])
+    assert parsed.fragment == "bills", "the hash must be a bare shell page name"
+    assert parse_qs(parsed.query)["handoff"] == ["end-spotify-au"]
+
+
+def test_confirm_url_puts_the_parameter_in_the_query_and_keeps_the_hash_routable(client, store):
+    """Same contract as ui_url: "#bills?confirm=7" slices to "bills?confirm=7"
+    and lands on Home."""
+    response = client.post(
+        "/api/suggestions",
+        json={
+            "source": "alerts", "alert_id": 12, "merchant": "Beem", "amount": 599,
+            "cadence": "monthly", "last_seen": "2026-08-10", "occurrences": 3,
+        },
+    )
+    data = response.get_json()
+    parsed = urlparse(data["confirm_url"])
+    assert parsed.fragment == "bills"
+    assert parse_qs(parsed.query)["confirm"] == [str(data["bill_id"])]
 
 
 def test_suggestions_creates_unconfirmed_f4_subscription(client, store):

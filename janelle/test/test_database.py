@@ -6,11 +6,12 @@ from pathlib import Path
 from flask.testing import FlaskClient
 from pytest import fixture, mark, raises
 from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import janelle.database.seed as database_seed
+from janelle.backend.services.chat_service import expected_transaction_header
 from janelle.database.app import setup_app
-from janelle.database.models import Category, Transaction, db
+from janelle.database.models import Category, CategoryCorrection, Transaction, db
 from shared.backend import dto
 
 
@@ -47,7 +48,7 @@ def response_datetime(value):
 	return parsedate_to_datetime(value).replace(tzinfo=None)
 
 
-def _transaction_payload(**overrides):
+def transaction_payload(**overrides):
 	payload = {
 		"date": "2026-08-31T14:30:00",
 		"merchant": "Atomic Cafe",
@@ -202,11 +203,11 @@ def test_startup_does_not_reseed_a_database_that_contains_data(database_client):
 
 	first_user_row = client.post(
 		"/transactions",
-		json=_transaction_payload(merchant="Replacement One"),
+		json=transaction_payload(merchant="Replacement One"),
 	).get_json()
 	second_user_row = client.post(
 		"/transactions",
-		json=_transaction_payload(merchant="Replacement Two"),
+		json=transaction_payload(merchant="Replacement Two"),
 	).get_json()
 	assert isinstance(first_user_row["id"], int)
 	assert isinstance(second_user_row["id"], int)
@@ -262,7 +263,7 @@ def test_startup_seed_skips_a_partially_populated_database(tmp_path):
 def test_transaction_crud_round_trip(database_client):
 	client, _database_path = database_client
 
-	create_response = client.post("/transactions", json=_transaction_payload())
+	create_response = client.post("/transactions", json=transaction_payload())
 
 	assert create_response.status_code == 201
 	created = create_response.get_json()
@@ -305,7 +306,7 @@ def test_transaction_datetime_uses_shared_dto_serialization(database_client):
 
 	response = client.post(
 		"/transactions",
-		json=_transaction_payload(date="2026-09-01T10:15:30+10:00"),
+		json=transaction_payload(date="2026-09-01T10:15:30+10:00"),
 	)
 
 	assert response.status_code == 201
@@ -317,6 +318,233 @@ def test_transaction_datetime_uses_shared_dto_serialization(database_client):
 		15,
 		30,
 	)
+
+
+def test_conditional_transaction_update_is_atomic(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(
+			date="2026-09-01T10:15:30.123456",
+			merchant="Conditional update",
+		),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	header = expected_transaction_header(versioned)
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 30},
+		headers={"X-Expected-Transaction": header},
+	)
+
+	assert response.status_code == 200
+	assert response.get_json()["amount"] == 30
+
+
+def test_conditional_update_rejects_raced_transaction(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Raced update"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	stale_header = expected_transaction_header(versioned)
+	assert client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 30},
+	).status_code == 200
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 40},
+		headers={"X-Expected-Transaction": stale_header},
+	)
+
+	assert response.status_code == 409
+	assert response.get_json()["code"] == "stale_preview"
+	assert client.get(
+		f"/transactions/{created['id']}"
+	).get_json()["amount"] == 30
+
+
+def test_conditional_delete_rejects_raced_transaction(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Raced delete"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	stale_header = expected_transaction_header(versioned)
+	assert client.patch(
+		f"/transactions/{created['id']}",
+		json={"description": "Changed after preview"},
+	).status_code == 200
+
+	response = client.delete(
+		f"/transactions/{created['id']}",
+		headers={"X-Expected-Transaction": stale_header},
+	)
+
+	assert response.status_code == 409
+	assert response.get_json()["code"] == "stale_preview"
+	assert client.get(f"/transactions/{created['id']}").status_code == 200
+
+
+def test_transaction_create_records_ai_category_override_atomically(
+	database_client,
+):
+	client, database_path = database_client
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="AI category override",
+			category_id=81,
+			suggested_category_id=80,
+		),
+	)
+
+	assert response.status_code == 201
+	created = response.get_json()
+	assert created["category_id"] == 81
+	assert "suggested_category_id" not in created
+
+	connection = get_connection(database_path)
+	try:
+		correction = connection.execute(
+			"""
+			SELECT previous_category_id, user_category_id
+			FROM category_corrections
+			WHERE transaction_id = ?
+			""",
+			(created["id"],),
+		).fetchone()
+		assert dict(correction) == {
+			"previous_category_id": 80,
+			"user_category_id": 81,
+		}
+	finally:
+		connection.close()
+
+
+def test_transaction_create_does_not_record_accepted_ai_suggestion(
+	database_client,
+):
+	client, database_path = database_client
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(suggested_category_id=80),
+	)
+
+	assert response.status_code == 201
+	created = response.get_json()
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"""
+			SELECT COUNT(*)
+			FROM category_corrections
+			WHERE transaction_id = ?
+			""",
+			(created["id"],),
+		).fetchone()[0] == 0
+	finally:
+		connection.close()
+
+
+def test_transaction_create_rejects_invalid_ai_suggestion_without_insert(
+	database_client,
+):
+	client, database_path = database_client
+	connection = get_connection(database_path)
+	try:
+		before = connection.execute(
+			"SELECT COUNT(*) FROM transactions"
+		).fetchone()[0]
+	finally:
+		connection.close()
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="Invalid AI suggestion",
+			suggested_category_id=MISSING_CATEGORY_ID,
+		),
+	)
+
+	assert response.status_code == 422
+	assert response.get_json()["code"] == "category_not_found"
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"SELECT COUNT(*) FROM transactions"
+		).fetchone()[0] == before
+	finally:
+		connection.close()
+
+
+def test_transaction_update_rejects_create_only_ai_suggestion(
+	database_client,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(),
+	).get_json()
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"suggested_category_id": 81},
+	)
+
+	assert response.status_code == 422
+	assert response.get_json()["code"] == "unsupported_fields"
+
+
+def test_failed_ai_correction_insert_rolls_back_transaction(
+	database_client,
+	monkeypatch,
+):
+	client, database_path = database_client
+	original_add = db.session.add
+
+	def fail_correction_add(instance):
+		if isinstance(instance, CategoryCorrection):
+			raise SQLAlchemyError("correction insert failed")
+		return original_add(instance)
+
+	monkeypatch.setattr(db.session, "add", fail_correction_add)
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="Rolled back AI transaction",
+			category_id=81,
+			suggested_category_id=80,
+		),
+	)
+
+	assert response.status_code == 503
+	assert response.get_json()["code"] == "database_unavailable"
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"""
+			SELECT COUNT(*)
+			FROM transactions
+			WHERE merchant = 'Rolled back AI transaction'
+			"""
+		).fetchone()[0] == 0
+	finally:
+		connection.close()
 
 
 def test_transaction_model_uses_shared_transaction_dto(database_client):
@@ -359,13 +587,13 @@ def test_shared_transaction_dto_retains_original_constructor():
 @mark.parametrize(
 	("payload", "code"),
 	[
-		(_transaction_payload(date="31-08-2026"), "invalid_date"),
-		(_transaction_payload(amount=12.345), "invalid_amount"),
+		(transaction_payload(date="31-08-2026"), "invalid_date"),
+		(transaction_payload(amount=12.345), "invalid_amount"),
 		(
-			_transaction_payload(category_id=MISSING_CATEGORY_ID),
+			transaction_payload(category_id=MISSING_CATEGORY_ID),
 			"category_not_found",
 		),
-		(_transaction_payload(unexpected=True), "unsupported_fields"),
+		(transaction_payload(unexpected=True), "unsupported_fields"),
 	],
 )
 def test_transaction_create_rejects_invalid_values(
@@ -383,7 +611,7 @@ def test_transaction_create_rejects_invalid_values(
 
 def test_transaction_create_rejects_removed_amount_cents_field(database_client):
 	client, _database_path = database_client
-	payload = _transaction_payload(amount_cents=999)
+	payload = transaction_payload(amount_cents=999)
 
 	response = client.post("/transactions", json=payload)
 
@@ -453,7 +681,7 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 
 	client.post(
 		"/transactions",
-		json=_transaction_payload(merchant="Spotify AU Family"),
+		json=transaction_payload(merchant="Spotify AU Family"),
 	)
 	exact_spotify = client.get("/transactions?merchant=Spotify AU").get_json()
 	assert len(exact_spotify) == 3
@@ -461,7 +689,7 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 
 	client.post(
 		"/transactions",
-		json=_transaction_payload(merchant="CAF\u00c9 Central"),
+		json=transaction_payload(merchant="CAF\u00c9 Central"),
 	)
 	unicode_merchant = client.get(
 		"/transactions",
@@ -496,7 +724,7 @@ def test_date_only_filter_includes_the_entire_day(database_client):
 	client, _database_path = database_client
 	created = client.post(
 		"/transactions",
-		json=_transaction_payload(
+		json=transaction_payload(
 			date="2026-09-01T23:59:59.999999",
 			merchant="Late purchase",
 		),
@@ -692,7 +920,7 @@ def test_category_type_rejects_non_scalar_json(database_client):
 	[
 		(
 			"/transactions",
-			_transaction_payload(merchant="\ud800"),
+			transaction_payload(merchant="\ud800"),
 			"invalid_merchant",
 		),
 		(
@@ -718,7 +946,7 @@ def test_text_fields_reject_unpaired_unicode_surrogates(
 
 def test_category_correction_records_and_applies_atomically(database_client):
 	client, database_path = database_client
-	created = client.post("/transactions", json=_transaction_payload()).get_json()
+	created = client.post("/transactions", json=transaction_payload()).get_json()
 
 	response = client.post(
 		f"/transactions/{created['id']}/category-correction",
@@ -778,7 +1006,7 @@ def test_failed_category_correction_leaves_transaction_unchanged(database_client
 	client, database_path = database_client
 	created = client.post(
 		"/transactions",
-		json=_transaction_payload(merchant="Manual Category"),
+		json=transaction_payload(merchant="Manual Category"),
 	).get_json()
 
 	response = client.post(
@@ -852,7 +1080,7 @@ def test_database_connection_enforces_foreign_keys(database_client):
 
 def test_setup_preserves_user_data_without_duplicating_seed(database_client):
 	client, database_path = database_client
-	created = client.post("/transactions", json=_transaction_payload()).get_json()
+	created = client.post("/transactions", json=transaction_payload()).get_json()
 
 	setup_app(str(database_path))
 
@@ -900,7 +1128,7 @@ def test_startup_seed_rolls_back_when_any_seed_row_is_invalid(
 		(
 			"post",
 			"/transactions",
-			_transaction_payload(category_id=9223372036854775808),
+			transaction_payload(category_id=9223372036854775808),
 			422,
 		),
 		("get", "/transactions?category_id=9223372036854775808", None, 400),

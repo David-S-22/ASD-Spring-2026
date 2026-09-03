@@ -1,13 +1,15 @@
-<div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" hx-get="/savings-backend/ai-suggestion" hx-trigger="feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML">
+<div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" hx-get="/savings-backend/ai-suggestion" hx-trigger="feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML" hx-sync="this:replace">
     <div class="panel-header">
         <h2>AI Suggestion</h2>
     </div>
     <div class="ai-suggestion-body" id="ai-suggestion">
-        <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
+        <textarea class="ai-suggestion-textbox" name="suggestion" rows="3" readonly placeholder="Waiting for AI suggestion...">{{ suggestion or "No current AI suggestion available." }}</textarea>
+        {% if has_transactions and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and suggestion != "No current AI suggestion available." %}
         <div class="ai-suggestion-actions">
-            <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/action?accepted=true" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Accept</button>
-            <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/action?accepted=false" hx-include="closest #ai-suggestion-container" hx-target="#ai-suggestion-container" hx-swap="outerHTML">Reject</button>
+            <button type="button" class="btn-accept" hx-post="/savings-backend/ai-suggestion/action?accepted=true" hx-include="closest #ai-suggestion-container" hx-target="#suggestions" hx-swap="innerHTML">Accept</button>
+            <button type="button" class="btn-cancel" hx-post="/savings-backend/ai-suggestion/action?accepted=false" hx-include="closest #ai-suggestion-container" hx-target="#suggestions" hx-swap="innerHTML">Reject</button>
         </div>
+        {% endif %}
     </div>
 </div>
 

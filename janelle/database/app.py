@@ -1,9 +1,10 @@
 import os
-from datetime import datetime, timezone
+from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import BadRequest, HTTPException
 
@@ -21,6 +22,7 @@ from .validation import (
 	parse_transaction_filters,
 	validate_category_payload,
 	validate_correction_payload,
+	validate_expected_transaction,
 	validate_path_identifier,
 	validate_transaction_payload,
 )
@@ -29,7 +31,7 @@ from .validation import (
 PROTECTED_CATEGORY_NAME = "Uncategorised"
 
 
-def _database_uri(database_path):
+def database_uri(database_path):
 	if database_path == ":memory:":
 		return "sqlite:///:memory:"
 	path = Path(database_path).resolve()
@@ -37,11 +39,11 @@ def _database_uri(database_path):
 	return f"sqlite:///{path.as_posix()}"
 
 
-def _utc_datetime():
+def utc_datetime():
 	return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _json_body():
+def json_body():
 	if not request.is_json:
 		raise ApiError(
 			"request body must be a JSON object",
@@ -61,14 +63,14 @@ def _json_body():
 	return payload
 
 
-def _require_category(category_id):
+def require_category(category_id):
 	category = db.session.get(Category, category_id)
 	if category is None:
 		raise ApiError("category not found", "category_not_found", 422)
 	return category
 
 
-def _resolve_transaction(transaction_identifier):
+def resolve_transaction(transaction_identifier):
 	transaction_id = validate_path_identifier(transaction_identifier, "transaction")
 	transaction = db.session.get(Transaction, transaction_id)
 	if transaction is None:
@@ -76,16 +78,46 @@ def _resolve_transaction(transaction_identifier):
 	return transaction
 
 
-def _apply_transaction_values(transaction, values):
+def apply_transaction_values(transaction, values):
 	for field in ("date", "merchant", "description", "amount"):
 		if field in values:
 			setattr(transaction, field, values[field])
 	if "category_id" in values:
-		transaction.category = _require_category(values["category_id"])
-	transaction.updated_at = _utc_datetime()
+		transaction.category = require_category(values["category_id"])
+	transaction.updated_at = utc_datetime()
 
 
-def _register_error_handlers(application):
+def expected_transaction_conditions(expected):
+	return (
+		Transaction.id == expected["id"],
+		Transaction.updated_at == expected["version"],
+	)
+
+
+def require_matching_expected_id(transaction_id, expected):
+	if expected is not None and expected["id"] != transaction_id:
+		raise ApiError(
+			"transaction changed or no longer exists",
+			"stale_preview",
+			409,
+		)
+
+
+def transaction_response(transaction, include_version=False):
+	payload = asdict(transaction.to_dto())
+	if include_version:
+		payload["version"] = transaction.updated_at.isoformat()
+	return payload
+
+
+def conditional_update_time(expected):
+	now = utc_datetime()
+	if expected is not None and now <= expected["version"]:
+		return expected["version"] + timedelta(microseconds=1)
+	return now
+
+
+def register_error_handlers(application):
 	@application.errorhandler(ApiError)
 	def handle_api_error(error):
 		db.session.rollback()
@@ -114,7 +146,7 @@ def _register_error_handlers(application):
 		return jsonify(error=error.description, code=code), error.code
 
 
-def _register_routes(application):
+def register_routes(application):
 	@application.get("/")
 	def get_index():
 		return jsonify(container="transactions-db")
@@ -124,50 +156,129 @@ def _register_routes(application):
 		transactions = filtered_transactions(
 			parse_transaction_filters(request.args)
 		)
-		return jsonify([transaction.to_dto() for transaction in transactions])
+		include_version = request.args.get("_include_version") == "true"
+		return jsonify([
+			transaction_response(transaction, include_version)
+			for transaction in transactions
+		])
 
 	@application.post("/transactions")
 	def post_transaction():
-		values = validate_transaction_payload(_json_body())
-		now = _utc_datetime()
+		values = validate_transaction_payload(json_body())
+		now = utc_datetime()
+		category = require_category(values["category_id"])
+		suggested_category_id = values.get("suggested_category_id")
+		suggested_category = (
+			require_category(suggested_category_id)
+			if suggested_category_id is not None
+			else None
+		)
 		transaction = Transaction(
 			date=values["date"],
 			merchant=values["merchant"],
 			description=values["description"],
 			amount=values["amount"],
-			category=_require_category(values["category_id"]),
+			category=category,
 			created_at=now,
 			updated_at=now,
 		)
 		db.session.add(transaction)
+		db.session.flush()
+		if (
+			suggested_category is not None
+			and suggested_category.id != category.id
+		):
+			db.session.add(CategoryCorrection(
+				transaction=transaction,
+				previous_category=suggested_category,
+				user_category=category,
+				corrected_at=now.isoformat(),
+			))
 		db.session.commit()
-		return jsonify(transaction.to_dto()), 201
+		return jsonify(transaction_response(transaction)), 201
 
 	@application.get("/transactions/<transaction_id>")
 	def get_transaction(transaction_id):
-		transaction = _resolve_transaction(transaction_id)
-		return jsonify(transaction.to_dto())
+		transaction = resolve_transaction(transaction_id)
+		return jsonify(transaction_response(
+			transaction,
+			request.args.get("_include_version") == "true",
+		))
 
 	@application.patch("/transactions/<transaction_id>")
 	def patch_transaction(transaction_id):
-		transaction = _resolve_transaction(transaction_id)
-		values = validate_transaction_payload(_json_body(), partial=True)
-		_apply_transaction_values(transaction, values)
+		transaction_id = validate_path_identifier(
+			transaction_id,
+			"transaction",
+		)
+		values = validate_transaction_payload(json_body(), partial=True)
+		expected = validate_expected_transaction(
+			request.headers.get("X-Expected-Transaction")
+		)
+		require_matching_expected_id(transaction_id, expected)
+		if expected is not None:
+			if "category_id" in values:
+				require_category(values["category_id"])
+			update_values = {
+				**values,
+				"updated_at": conditional_update_time(expected),
+			}
+			result = db.session.execute(
+				sql_update(Transaction)
+				.where(*expected_transaction_conditions(expected))
+				.values(**update_values)
+				.execution_options(synchronize_session=False)
+			)
+			if result.rowcount != 1:
+				raise ApiError(
+					"transaction changed or no longer exists",
+					"stale_preview",
+					409,
+				)
+			db.session.commit()
+			transaction = db.session.get(Transaction, transaction_id)
+			return jsonify(transaction_response(transaction))
+
+		transaction = resolve_transaction(transaction_id)
+		apply_transaction_values(transaction, values)
 		db.session.commit()
-		return jsonify(transaction.to_dto())
+		return jsonify(transaction_response(transaction))
 
 	@application.delete("/transactions/<transaction_id>")
 	def delete_transaction(transaction_id):
-		db.session.delete(_resolve_transaction(transaction_id))
+		transaction_id = validate_path_identifier(
+			transaction_id,
+			"transaction",
+		)
+		expected = validate_expected_transaction(
+			request.headers.get("X-Expected-Transaction")
+		)
+		require_matching_expected_id(transaction_id, expected)
+		if expected is not None:
+			result = db.session.execute(
+				sql_delete(Transaction)
+				.where(*expected_transaction_conditions(expected))
+				.execution_options(synchronize_session=False)
+			)
+			if result.rowcount != 1:
+				raise ApiError(
+					"transaction changed or no longer exists",
+					"stale_preview",
+					409,
+				)
+			db.session.commit()
+			return "", 204
+
+		db.session.delete(resolve_transaction(transaction_id))
 		db.session.commit()
 		return "", 204
 
 	@application.post("/transactions/<transaction_id>/category-correction")
 	def post_category_correction(transaction_id):
-		user_category_id = validate_correction_payload(_json_body())
-		transaction = _resolve_transaction(transaction_id)
-		user_category = _require_category(user_category_id)
-		now = _utc_datetime()
+		user_category_id = validate_correction_payload(json_body())
+		transaction = resolve_transaction(transaction_id)
+		user_category = require_category(user_category_id)
+		now = utc_datetime()
 		correction = CategoryCorrection(
 			transaction=transaction,
 			previous_category=transaction.category,
@@ -179,7 +290,7 @@ def _register_routes(application):
 		db.session.add(correction)
 		db.session.commit()
 		return jsonify(
-			transaction=transaction.to_dto(),
+			transaction=transaction_response(transaction),
 			correction=correction.to_dict(),
 		), 201
 
@@ -199,7 +310,7 @@ def _register_routes(application):
 
 	@application.post("/categories")
 	def post_category():
-		values = validate_category_payload(_json_body())
+		values = validate_category_payload(json_body())
 		if category_name_exists(values["name"]):
 			raise ApiError(
 				"category name already exists",
@@ -231,7 +342,7 @@ def _register_routes(application):
 				"protected_category",
 				409,
 			)
-		values = validate_category_payload(_json_body(), partial=True)
+		values = validate_category_payload(json_body(), partial=True)
 		if "name" in values and category_name_exists(
 			values["name"],
 			excluded_id=category.id,
@@ -287,14 +398,14 @@ def setup_app(database_path=None):
 		"./transactions.db",
 	)
 	application.config["DB_PATH"] = resolved_database_path
-	application.config["SQLALCHEMY_DATABASE_URI"] = _database_uri(
+	application.config["SQLALCHEMY_DATABASE_URI"] = database_uri(
 		resolved_database_path
 	)
 	application.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 	db.init_app(application)
-	_register_error_handlers(application)
-	_register_routes(application)
+	register_error_handlers(application)
+	register_routes(application)
 
 	with application.app_context():
 		db.create_all()
