@@ -19,6 +19,10 @@ ANOMALIES_BACKEND_URL = os.environ.get(
     "ANOMALIES_BACKEND_URL",
     "http://anomalies-backend:5004",
 ).rstrip("/")
+ANOMALIES_DB_URL = os.environ.get(
+    "ANOMALIES_DB_URL",
+    "http://anomalies-db:6004/anomalies",
+).rstrip("/")
 ANOMALIES_TIMEOUT_SECONDS = float(
     os.environ.get("ANOMALIES_TIMEOUT_SECONDS", "10")
 )

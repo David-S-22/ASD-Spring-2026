@@ -1,5 +1,5 @@
 import json
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from flask.testing import FlaskClient
 from pytest import MonkeyPatch, fixture, mark, raises
@@ -1081,17 +1081,23 @@ def test_chat_delete_apply_rechecks_and_performs_exactly_one_write(
         response.get_json()["reply"]
         == "Your transaction was deleted successfully."
     )
-    delete.assert_called_once_with(
-        f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/27",
-        headers={
-            "X-Expected-Transaction": (
-                transaction_orchestrator.chat_service.expected_transaction_header(
-                    preview["before"]
-                )
-            ),
-        },
-        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
-    )
+    assert delete.call_args_list == [
+        call(
+            f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/27",
+            headers={
+                "X-Expected-Transaction": (
+                    transaction_orchestrator.chat_service.expected_transaction_header(
+                        preview["before"]
+                    )
+                ),
+            },
+            timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+        ),
+        call(
+            f"{backend_app.config.ANOMALIES_DB_URL}/by-transaction/27",
+            timeout=backend_app.config.ANOMALIES_TIMEOUT_SECONDS,
+        ),
+    ]
 
 
 def test_chat_ambiguous_update_returns_clarification_without_write(
