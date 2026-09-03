@@ -23,6 +23,10 @@ transaction_queue: "queue.Queue[dto.Transaction]" = queue.Queue()
 _state = threading.Condition()
 # Keys (transaction ids) currently queued or being processed.
 _pending: Set[int] = set()
+# Keys whose review has finished (kept so a poll that arrives *before* the item
+# is enqueued waits for completion instead of mistaking "not yet queued" for
+# "already reviewed").
+_completed: Set[int] = set()
 
 
 def enqueue(transaction: dto.Transaction) -> int:
@@ -33,7 +37,9 @@ def enqueue(transaction: dto.Transaction) -> int:
     """
     key = transaction.id
     with _state:
+        _completed.discard(key)
         _pending.add(key)
+        _state.notify_all()
     transaction_queue.put(transaction)
     current_app.logger.info(
         "Enqueued transaction %s for anomaly review (queue size now %s, pending %s)",
@@ -50,16 +56,17 @@ def is_pending(key: int) -> bool:
 def wait_for_result(key: int, timeout: float) -> Optional[dto.Anomaly]:
     """Wait until the item for ``key`` has been reviewed, then return its anomaly.
 
-    Blocks until the transaction leaves the queue (or ``timeout`` elapses), then
-    looks the transaction up in the anomalies database. Returns the anomaly that
-    was created for it, or ``None`` if the review produced no anomaly, the key is
-    unknown, or the wait timed out while the item was still being processed (the
-    caller can re-poll).
+    Blocks until the transaction has been enqueued *and* reviewed (or ``timeout``
+    elapses), then looks it up in the anomalies database. Returns the anomaly
+    that was created for it, or ``None`` if the review produced no anomaly or the
+    wait timed out before the item finished being reviewed (the caller can
+    re-poll). Waiting on completion — rather than merely "not pending" — closes
+    the race where a client polls before ``enqueue`` has added the item.
     """
     current_app.logger.info(
         "Waiting up to %ss for transaction %s to be reviewed", timeout, key)
     with _state:
-        released = _state.wait_for(lambda: key not in _pending, timeout=timeout)
+        released = _state.wait_for(lambda: key in _completed, timeout=timeout)
 
     if released:
         current_app.logger.info(
@@ -78,6 +85,7 @@ def _find_anomaly(key: int) -> Optional[dto.Anomaly]:
 def _mark_reviewed(key: int) -> None:
     with _state:
         _pending.discard(key)
+        _completed.add(key)
         _state.notify_all()
 
 
@@ -85,6 +93,7 @@ def reset() -> None:
     """Clear queued state (used when the DB is reset in tests)."""
     with _state:
         _pending.clear()
+        _completed.clear()
         _state.notify_all()
 
 

@@ -227,6 +227,7 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
+        created = None
         if response.status_code == 201:
             try:
                 created = response.json()
@@ -235,10 +236,15 @@ def setup_app(db_url: str) -> Flask:
             if isinstance(created, dict):
                 check_transaction_for_anomalies(created)
 
-        return render_transaction_page(
+        page = make_response(render_transaction_page(
             db_url,
             notice="Transaction saved.",
-        )
+        ))
+        if isinstance(created, dict) and created.get("id") is not None:
+            page.headers["HX-Trigger"] = json.dumps(
+                {"transaction-created": created["id"]}
+            )
+        return page
 
     @application.route("/transactions", methods=["POST"])
     def create_transaction():

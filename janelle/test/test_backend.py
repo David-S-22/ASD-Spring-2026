@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from unittest.mock import Mock, call
+import json
 
 import requests
 from flask.testing import FlaskClient
@@ -689,6 +690,7 @@ def test_ui_create_transaction_posts_typed_payload_and_returns_page(
     assert "Transaction saved." in response.text
     assert 'id="add-transaction-button"' in response.text
     assert '<option value="80">Dining</option>' in response.text
+    assert response.headers["HX-Trigger"] == json.dumps({"transaction-created": 90})
     assert post.call_args_list[0] == call(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
         json={

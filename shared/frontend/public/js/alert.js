@@ -27,6 +27,14 @@ window.dismissToast = function (toast) {
 if (!window.__sharedToastInit) {
     window.__sharedToastInit = true;
 
+    // When a transaction is created (the transactions backend fires an
+    // `HX-Trigger: transaction-created` response header with the new id), start
+    // polling the anomalies backend so any resulting alert surfaces as a toast.
+    document.body.addEventListener('transaction-created', function (evt) {
+        const key = evt.detail && (evt.detail.value != null ? evt.detail.value : evt.detail);
+        window.watchTransactionForAnomaly(key);
+    });
+
     // Auto-dismiss a toast 30s after it is swapped into #alert.
     document.body.addEventListener('htmx:afterSwap', function (evt) {
         const target = evt.detail && evt.detail.target;

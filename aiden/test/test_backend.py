@@ -1,4 +1,6 @@
 import re
+import threading
+import time
 
 from datetime import datetime
 from types import SimpleNamespace
@@ -253,6 +255,39 @@ def test_anomaly_alert_times_out_while_pending(client: FlaskClient, monkeypatch:
 
     assert resp.status_code == 204
     assert resp.data == b""
+
+
+def test_anomaly_alert_waits_when_polled_before_enqueue(monkeypatch: MonkeyPatch):
+    # Regression: a client that polls for a result *before* the transaction has
+    # been enqueued must block until the review completes, rather than treating
+    # "not yet pending" as "already reviewed" and returning immediately.
+    review_queue.reset()
+
+    sentinel = dto.Anomaly(
+        id=1, transaction_id=556, agent_reason_suspected="Raced ahead", is_confirmed_by_user=None)
+    monkeypatch.setattr(
+        review_queue, "_find_anomaly", lambda key: sentinel if key == 556 else None)
+
+    result = {}
+
+    def poll():
+        with app.app_context():
+            result["val"] = review_queue.wait_for_result(556, timeout=5)
+
+    poller = threading.Thread(target=poll)
+    poller.start()
+
+    # The item is not enqueued yet, so the poll must still be blocking here.
+    time.sleep(0.3)
+    assert poller.is_alive()
+    assert "val" not in result
+
+    # Simulate the transaction being enqueued and then finishing review.
+    review_queue._mark_reviewed(556)
+
+    poller.join(timeout=5)
+    assert not poller.is_alive()
+    assert result["val"] is sentinel
 
 
 def test_anomaly_alert_requires_key(client: FlaskClient):
