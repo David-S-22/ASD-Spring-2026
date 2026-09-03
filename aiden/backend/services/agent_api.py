@@ -46,10 +46,10 @@ Use this feedback to align your judgement with the user's, but still evaluate th
 
 Return ONLY valid JSON matching this schema:
 
-{
+{{
   "is_suspicious": boolean,
   "justification": string
-}
+}}
 
 Always populate "justification" with a concise explanation of your decision — even when "is_suspicious" is false, briefly state why the transaction looks legitimate. Never leave it empty.
 
