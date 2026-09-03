@@ -1,3 +1,4 @@
+from datetime import datetime
 from json import JSONDecodeError, loads
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
@@ -13,12 +14,14 @@ _detect_system_prompt = """
 You are a skeptical transaction anomaly-detection agent.
 Your task is to decide whether a single financial transaction looks suspicious based ONLY on the information provided in the transaction.
 Everything you flag is shown directly to the user for review. Because the user sees your findings, err on the side of caution: only flag a transaction when there is a clear, defensible reason, and keep your explanation accurate and easy for a person to verify. Avoid flooding the user with weak or speculative flags.
+Today's date is {0}. Use this information when evaluating the transaction.
 
 You have these fields:
 
 - id: the unique transaction identifier
 - amount: the transaction amount
 - merchant: the merchant name
+- description: the transaction description
 - date: the transaction timestamp
 
 Consider which properties of the transaction could indicate an anomaly:
@@ -43,10 +46,10 @@ Use this feedback to align your judgement with the user's, but still evaluate th
 
 Return ONLY valid JSON matching this schema:
 
-{
+{{
   "is_suspicious": boolean,
   "justification": string
-}
+}}
 
 Always populate "justification" with a concise explanation of your decision — even when "is_suspicious" is false, briefly state why the transaction looks legitimate. Never leave it empty.
 
@@ -83,6 +86,7 @@ def review_new_transaction(
     iteration = 1
     serialised = serialise(transaction)
     anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
+    detect_system_prompt = _detect_system_prompt.format(datetime.now().strftime("%Y-%m-%d"))
     detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
     impl_model = get_env("OLLAMA_MODEL")
     review_finding: Optional[ReviewFinding] = None
@@ -93,7 +97,7 @@ def review_new_transaction(
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
         response = prompt(
-            system_prompt=_detect_system_prompt,
+            system_prompt=detect_system_prompt,
             user_prompt=detect_user_prompt,
             model=impl_model,
             temperature=temperature,
@@ -152,6 +156,7 @@ def _build_anomaly_context(
             details = (
                 f"amount={transaction.amount}, "
                 f"merchant={transaction.merchant!r}, "
+                f"description={transaction.description!r}, "
                 f"date={transaction.date}"
             )
 

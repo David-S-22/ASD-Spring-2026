@@ -1,6 +1,8 @@
 from typing import List, Optional
 
-from requests import get, post
+from flask import abort
+
+from requests import get, patch, post
 
 from shared.backend import dto
 from ..helpers import deserialise_or_abort, serialise, get_env
@@ -24,6 +26,16 @@ def get_anomaly_by_transaction_id(transaction_id: int) -> Optional[dto.Anomaly]:
 
 def create_anomaly(anomaly: dto.Anomaly) -> dto.Anomaly:
     resp = post(_url("/"), json=serialise(anomaly))
+    resp.raise_for_status()
+
+    return deserialise_or_abort(dto.Anomaly, resp.json())
+
+def set_confirmation(id: int, is_confirmed_by_user: bool) -> dto.Anomaly:
+    resp = patch(_url(f"/{id}"), json={"is_confirmed_by_user": is_confirmed_by_user})
+
+    if resp.status_code == 404:
+        abort(404)
+
     resp.raise_for_status()
 
     return deserialise_or_abort(dto.Anomaly, resp.json())
