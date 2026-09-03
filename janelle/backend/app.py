@@ -17,6 +17,7 @@ from .Helpers import (
     render_transaction_table,
 )
 from .services.chat_service import ChatError
+from .services.anomalies import delete_anomaly_by_transaction_id
 from .services.transaction_orchestrator import (
     get_preview_request_context,
     orchestrate_transaction_request,
@@ -301,6 +302,8 @@ def setup_app(db_url: str) -> Flask:
             f"{db_url}/transactions/{transaction_id}",
             timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
+        if response.status_code < 400:
+            delete_anomaly_by_transaction_id(transaction_id)
         return json_response(response)
 
     @application.route("/categories")

@@ -419,10 +419,16 @@ def test_get_and_delete_transaction_forward_requests(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/42",
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )
-    delete.assert_called_once_with(
+    assert delete.call_args_list == [
+        call(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions/42",
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
-    )
+        ),
+        call(
+            f"{backend_app.config.ANOMALIES_DB_URL}/by-transaction/42",
+            timeout=backend_app.config.ANOMALIES_TIMEOUT_SECONDS,
+        ),
+    ]
 
 
 def test_transaction_filters_are_forwarded(
