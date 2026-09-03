@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tally — Dashboard</title>
     <link rel="stylesheet" href="styles/theme.css">
+    <link rel="stylesheet" href="alert.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
             integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
             crossorigin="anonymous"></script>
@@ -46,64 +47,6 @@
 
     <div id="alert"></div>
 
-    <style>
-        #alert {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            max-width: 22rem;
-            pointer-events: none;
-        }
-
-        #alert .toast {
-            pointer-events: auto;
-            position: relative;
-            background: #2b2b2b;
-            color: #fff;
-            border-left: 4px solid #e0a800;
-            border-radius: 6px;
-            padding: 0.75rem 2rem 0.75rem 1rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-            font-family: system-ui, -apple-system, sans-serif;
-            animation: toast-in 0.25s ease-out;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        #alert .toast-close {
-            position: absolute;
-            top: 0.35rem;
-            right: 0.45rem;
-            background: none;
-            border: none;
-            color: #fff;
-            opacity: 0.6;
-            font-size: 1.1rem;
-            line-height: 1;
-            cursor: pointer;
-            padding: 0.15rem 0.35rem;
-        }
-
-        #alert .toast-close:hover { opacity: 1; }
-
-        #alert .toast.toast--hide {
-            opacity: 0;
-            transform: translateX(1rem);
-        }
-
-        #alert .toast strong { display: block; margin-bottom: 0.15rem; }
-        #alert .toast p { margin: 0.15rem 0; font-size: 0.9rem; }
-        #alert .toast small { display: block; opacity: 0.7; font-size: 0.75rem; }
-
-        @keyframes toast-in {
-            from { opacity: 0; transform: translateX(1rem); }
-            to { opacity: 1; transform: none; }
-        }
-    </style>
-
     <script>
         // Highlight the tab that was clicked.
         document.getElementById('navbar').addEventListener('click', function (evt) {
@@ -114,36 +57,8 @@
             }
             tab.classList.add('active');
         });
-
-        window.dismissToast = function (toast) {
-            if (!toast || toast.classList.contains('toast--hide')) return;
-            toast.classList.add('toast--hide');
-            toast.addEventListener('transitionend', function () {
-                toast.remove();
-            }, { once: true });
-        };
-
-        if (!window.__sharedToastInit) {
-            window.__sharedToastInit = true;
-
-            document.body.addEventListener('htmx:afterSwap', function (evt) {
-                const target = evt.detail && evt.detail.target;
-                if (!target || target.id !== 'alert') return;
-
-                const toast = target.querySelector('.toast');
-                if (!toast) return;
-
-                setTimeout(function () {
-                    window.dismissToast(toast);
-                }, 30000);
-            });
-
-            document.body.addEventListener('click', function (evt) {
-                const closeBtn = evt.target.closest('.toast-close');
-                if (!closeBtn) return;
-                window.dismissToast(closeBtn.closest('.toast'));
-            });
-        }
     </script>
+
+    <script src="alert.js"></script>
 </body>
 </html>
