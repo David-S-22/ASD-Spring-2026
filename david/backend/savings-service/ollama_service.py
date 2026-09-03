@@ -67,7 +67,12 @@ def format_planner_prompt(
         ],
     }
 
-    return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
+    return (
+        f"User Financial Data:\n{json.dumps(tables, indent=2)}\n\n"
+        "Analyze the financial data above and deliver 1 or 2 direct advice sentences to me. "
+        "Do not include any intro, preamble, or meta-commentary (such as 'Based on the user's financial data, here are two advice sentences:'). "
+        "Begin immediately with the first word of the advice itself."
+    )
 
 
 def generate_advice(
@@ -79,9 +84,11 @@ def generate_advice(
     system_prompt = load_prompt("savings_prompt.txt")
     if not system_prompt:
         system_prompt = (
-            "You are a personal financial coach. Analyze the user's financial data "
-            "(goals, transactions, past suggestions, feedback rules) and output 1 or 2 "
-            "plain text advice sentences directly addressing the user."
+            "You are a personal financial advisor speaking directly to the user in the second person ('you'). "
+            "Analyze the user's financial data (goals, transactions, past suggestions, feedback rules) "
+            "and deliver 1 or 2 plain text advice sentences directly addressing the user. "
+            "Do not include any intro, preamble, or meta-commentary (such as 'Based on the user's financial data, here are two advice sentences:'). "
+            "Start immediately with the advice itself."
         )
 
     user_prompt = format_planner_prompt(goals, suggestions, feedbacks, transactions)
