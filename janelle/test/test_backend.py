@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import requests
 from flask.testing import FlaskClient
@@ -344,10 +344,15 @@ def test_create_transaction_forwards_request(
 
     assert response.status_code == 201
     assert response.get_json() == {"id": 43, **payload}
-    post.assert_called_once_with(
+    assert post.call_args_list[0] == call(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
         json=payload,
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+    )
+    assert post.call_args_list[1] == call(
+        f"{backend_app.config.ANOMALIES_BACKEND_URL}/check-transaction",
+        json={"id": 43, **payload},
+        timeout=backend_app.config.ANOMALIES_TIMEOUT_SECONDS,
     )
 
 
