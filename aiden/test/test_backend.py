@@ -10,6 +10,7 @@ from responses import RequestsMock
 
 from backend.app import app
 from backend.services import review_queue
+from backend.services import anomalies_api
 from backend.services.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
@@ -260,6 +261,38 @@ def test_anomaly_alert_requires_key(client: FlaskClient):
     assert resp.status_code == 400
 
 
+def test_get_anomaly_by_transaction_id_returns_created_anomaly(client: FlaskClient):
+    with app.app_context():
+        created = anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=911, agent_reason_suspected="beans", is_confirmed_by_user=False))
+
+        found = anomalies_api.get_anomaly_by_transaction_id(911)
+
+    assert found is not None
+    assert found.id == created.id
+    assert found.transaction_id == 911
+    assert found.agent_reason_suspected == "beans"
+
+
+def test_get_anomaly_by_transaction_id_returns_none_when_missing(client: FlaskClient):
+    with app.app_context():
+        assert anomalies_api.get_anomaly_by_transaction_id(999999) is None
+
+
+def test_find_anomaly_uses_transaction_lookup(client: FlaskClient):
+    with app.app_context():
+        created = anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=912, agent_reason_suspected="beans", is_confirmed_by_user=False))
+
+        found = review_queue._find_anomaly(912)
+        missing = review_queue._find_anomaly(888888)
+
+    assert found is not None
+    assert found.id == created.id
+    assert missing is None
+
+
+
 # Pytest fixtures
 @fixture
 def client():
@@ -283,7 +316,7 @@ def integrate_services(monkeypatch: MonkeyPatch):
     monkeypatch.setenv("OLLAMA_MODEL", "billy")
     monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
 
-    dburl = re.compile(r"^http://mock-database-url/anomalies/?$")
+    dburl = re.compile(r"^http://mock-database-url/anomalies(/.*)?$")
     transactionsurl = re.compile(r"^http://mock-transactions-url/.+$")
 
     with RequestsMock(assert_all_requests_are_fired=False) as rsps:

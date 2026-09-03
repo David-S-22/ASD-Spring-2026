@@ -59,10 +59,7 @@ def wait_for_result(key: int, timeout: float) -> Optional[dto.Anomaly]:
 
 
 def _find_anomaly(key: int) -> Optional[dto.Anomaly]:
-    for anomaly in anomalies_api.get_all_anomalies():
-        if anomaly.transaction_id == key:
-            return anomaly
-    return None
+    return anomalies_api.get_anomaly_by_transaction_id(key)
 
 
 def _mark_reviewed(key: int) -> None:

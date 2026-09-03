@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, json, jsonify, request
+from flask import Blueprint, Flask, abort, json, jsonify, request
 from sqlalchemy import select, inspect
 from werkzeug.exceptions import HTTPException
 
@@ -38,6 +38,17 @@ def post_anomaly():
 @anomalies.get("/<int:id>")
 def get_anomaly(id: int):
     anomaly = db.get_or_404(Anomaly, id)
+
+    return jsonify(anomaly.to_dto())
+
+@anomalies.get("/by-transaction/<int:id>")
+def get_anomaly_by_transaction(id: int):
+    anomaly = db.session.scalars(
+        select(Anomaly).where(Anomaly.transaction_id == id)
+    ).first()
+
+    if anomaly is None:
+        abort(404)
 
     return jsonify(anomaly.to_dto())
 
