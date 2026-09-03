@@ -344,7 +344,10 @@ def test_confirm_anomaly_sets_status(client: FlaskClient):
     assert "Confirmed" in resp.text
 
     with app.app_context():
-        assert anomalies_api.get_anomaly_by_transaction_id(2001).is_confirmed_by_user is True
+        confirmed = anomalies_api.get_anomaly_by_transaction_id(2001)
+
+    assert confirmed is not None
+    assert confirmed.is_confirmed_by_user is True
 
 
 def test_dismiss_anomaly_sets_status(client: FlaskClient):
@@ -358,7 +361,10 @@ def test_dismiss_anomaly_sets_status(client: FlaskClient):
     assert "Dismissed" in resp.text
 
     with app.app_context():
-        assert anomalies_api.get_anomaly_by_transaction_id(2002).is_confirmed_by_user is False
+        dismissed = anomalies_api.get_anomaly_by_transaction_id(2002)
+
+    assert dismissed is not None
+    assert dismissed.is_confirmed_by_user is False
 
 
 def test_review_button_only_renders_when_unreviewed(client: FlaskClient):
