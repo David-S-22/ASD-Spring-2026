@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tally — Dashboard</title>
-    <link rel="stylesheet" href="styles/theme.css">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/alert.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
             integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
             crossorigin="anonymous"></script>
@@ -48,6 +49,8 @@
         <p class="loading-state">Loading…</p>
     </main>
 
+    <div id="alert"></div>
+
     <script>
         const navbar = document.getElementById('navbar');
         const content = document.getElementById('content');
@@ -90,5 +93,7 @@
 
         window.addEventListener('popstate', loadPageFromUrl);
     </script>
+
+    <script src="js/alert.js"></script>
 </body>
 </html>

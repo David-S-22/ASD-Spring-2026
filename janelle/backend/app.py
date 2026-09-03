@@ -28,6 +28,38 @@ from .services.transaction_orchestrator import (
 def setup_app(db_url: str) -> Flask:
     application = Flask(__name__)
     db_url = db_url.rstrip("/")
+    anomalies_backend_url = config.ANOMALIES_BACKEND_URL.rstrip("/")
+
+    def check_transaction_for_anomalies(transaction):
+        """Ask the anomalies backend to review a newly created transaction.
+
+        Runs server-side so the check cannot be bypassed by the client. The
+        anomalies backend queues the transaction and returns immediately, so
+        this call is quick. Failures are logged and swallowed so they never
+        affect transaction creation.
+        """
+        try:
+            response = requests.post(
+                f"{anomalies_backend_url}/check-transaction",
+                json=transaction,
+                timeout=config.ANOMALIES_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as error:
+            application.logger.warning(
+                "Anomaly check request failed: %s",
+                error,
+            )
+            return
+
+        if response.status_code == 204 or response.ok:
+            return
+
+        application.logger.warning(
+            "Anomaly check returned %s: %s",
+            response.status_code,
+            response.text,
+        )
+
     application.jinja_env.filters["transaction_date"] = (
         format_transaction_date
     )
@@ -195,10 +227,24 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
-        return render_transaction_page(
+        created = None
+        if response.status_code == 201:
+            try:
+                created = response.json()
+            except (ValueError, RecursionError):
+                created = None
+            if isinstance(created, dict):
+                check_transaction_for_anomalies(created)
+
+        page = make_response(render_transaction_page(
             db_url,
             notice="Transaction saved.",
-        )
+        ))
+        if isinstance(created, dict) and created.get("id") is not None:
+            page.headers["HX-Trigger"] = json.dumps(
+                {"transaction-created": created["id"]}
+            )
+        return page
 
     @application.route("/transactions", methods=["POST"])
     def create_transaction():
@@ -215,6 +261,15 @@ def setup_app(db_url: str) -> Flask:
             json=payload,
             timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
+
+        if response.status_code == 201:
+            try:
+                created = response.json()
+            except (ValueError, RecursionError):
+                created = None
+            if isinstance(created, dict):
+                check_transaction_for_anomalies(created)
+
         return json_response(response)
 
     @application.route("/transactions/<int:transaction_id>")

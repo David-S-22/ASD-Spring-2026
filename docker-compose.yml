@@ -62,6 +62,8 @@ services:
       PORT: 5001
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       DATABASE_TIMEOUT_SECONDS: 20
+      ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
+      ANOMALIES_TIMEOUT_SECONDS: 10
       OLLAMA_URL: http://ollama:11434
       CHAT_MODEL: qwen2.5:3b
       AGENT_MAX_ITERATIONS: 2

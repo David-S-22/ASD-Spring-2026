@@ -1,13 +1,20 @@
+import os
 from random import choice, randint
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request
 
 from shared.backend import dto
-from .helpers import deserialise_or_abort, empty, get_env
-from .services import anomalies_api, ollama_api, agent_api, transaction_api
+from .helpers import deserialise_or_abort, get_env
+from .services import anomalies_api, ollama_api, review_queue
 
 
 app = Flask(__name__)
+review_queue.start_worker(app)
+
+# How long the /anomaly-alert endpoint long-polls for a new anomaly before
+# returning empty so the client can re-poll.
+ANOMALY_WAIT_SECONDS = float(os.environ.get("ANOMALY_WAIT_SECONDS", "60"))
+
 
 @app.get("/")
 def get_index():
@@ -32,21 +39,30 @@ def get_anomaly_rows():
 def check_transaction():
     data = request.get_json() or {}
     transaction = deserialise_or_abort(dto.Transaction, data)
-    all_anomalies = anomalies_api.get_all_anomalies()
-    all_transactions = transaction_api.get_all_transactions()
 
-    app.logger.info("Checking transaction %s (merchant=%r, amount=%s)", transaction.id, transaction.merchant, transaction.amount)
-    anomaly = agent_api.review_new_transaction(transaction, all_anomalies, all_transactions)
+    review_queue.enqueue(transaction)
+    app.logger.info("Queued transaction %s for anomaly review", transaction.id)
+
+    return jsonify(status="queued", transaction_id=transaction.id), 202
+
+@app.get("/anomaly-alert")
+def wait_for_anomaly_alert():
+    """Wait for a specific queued transaction to finish review, then report it.
+
+    The client passes the `key` (the transaction id returned by
+    /check-transaction). Blocks for up to ANOMALY_WAIT_SECONDS until that item
+    has been reviewed. Returns the alert HTML if the transaction was flagged as
+    anomalous, otherwise 204 (no anomaly, still processing, or unknown key) so
+    the client can re-poll.
+    """
+    key = request.args.get("key", type=int)
+    if key is None:
+        abort(400, "missing 'key' query parameter")
+
+    anomaly = review_queue.wait_for_result(key, timeout=ANOMALY_WAIT_SECONDS)
 
     if anomaly is None:
-        app.logger.warning("Transaction %s cleared (no anomaly) -> 204", transaction.id)
-        return empty()
-
-    app.logger.warning("Transaction %s flagged as anomalous: %s",
-                       transaction.id, anomaly.agent_reason_suspected)
-
-    # Save new anomaly to the database
-    anomalies_api.create_anomaly(anomaly)
+        return "", 204
 
     return render_template("alert.jinja", anomaly=anomaly)
 
