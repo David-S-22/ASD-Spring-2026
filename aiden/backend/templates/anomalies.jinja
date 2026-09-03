@@ -9,13 +9,15 @@
     <button type="button"
             hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/confirm"
             hx-target="#anomalies"
-            hx-swap="innerHTML">
+            hx-swap="innerHTML"
+            hx-confirm="Your feedback will be used to better predict future anomalies. Confirm this anomaly?">
       Confirm
     </button>
     <button type="button"
             hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/dismiss"
             hx-target="#anomalies"
-            hx-swap="innerHTML">
+            hx-swap="innerHTML"
+            hx-confirm="Your feedback will be used to better predict future anomalies. Reject this anomaly?">
       Reject
     </button>
     {% endif %}
