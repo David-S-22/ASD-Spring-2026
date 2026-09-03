@@ -195,7 +195,12 @@ def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, mo
 
     assert resp.status_code == 200
     assert "Persisted reason" in resp.text
-    assert "<td>90</td>" in resp.text
+
+    with app.app_context():
+        persisted = anomalies_api.get_anomaly_by_transaction_id(90)
+
+    assert persisted is not None
+    assert persisted.agent_reason_suspected == "Persisted reason"
 
 
 def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
@@ -374,6 +379,28 @@ def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
     resp = client.post("/anomalies/999999/confirm")
 
     assert resp.status_code == 404
+
+
+def test_anomaly_row_shows_transaction_date_and_merchant(client: FlaskClient, monkeypatch: MonkeyPatch):
+    with app.app_context():
+        anomalies_api.create_anomaly(
+            dto.Anomaly(id=0, transaction_id=4242, agent_reason_suspected="odd", is_confirmed_by_user=None))
+
+    txn = dto.Transaction(
+        id=4242,
+        amount=100,
+        merchant="Suspicious Merchant Co",
+        date=datetime(2025, 1, 15),
+        description="x",
+        category_id=0,
+    )
+    monkeypatch.setattr("backend.app.transaction_api.get_all_transactions", lambda: [txn])
+
+    rows = client.get("/anomalies").text
+
+    assert "Suspicious Merchant Co" in rows
+    assert "2025-01-15" in rows
+    assert "<td>4242</td>" not in rows
 
 
 # Pytest fixtures

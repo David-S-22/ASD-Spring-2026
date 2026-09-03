@@ -5,7 +5,7 @@ from flask import Flask, abort, jsonify, render_template, request
 
 from shared.backend import dto
 from .helpers import deserialise_or_abort, get_env
-from .services import anomalies_api, ollama_api, review_queue
+from .services import anomalies_api, ollama_api, review_queue, transaction_api
 
 
 app = Flask(__name__)
@@ -32,8 +32,9 @@ def get_fact():
 @app.get("/anomalies")
 def get_anomaly_rows():
     anomalies = anomalies_api.get_all_anomalies()
+    transactions = {t.id: t for t in transaction_api.get_all_transactions()}
 
-    return render_template("anomalies.jinja", anomalies=anomalies)
+    return render_template("anomalies.jinja", anomalies=anomalies, transactions=transactions)
 
 @app.post("/check-transaction")
 def check_transaction():
