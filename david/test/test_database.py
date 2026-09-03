@@ -343,7 +343,4 @@ def test_seed_database_if_empty():
     assert len(db.session.execute(db.select(Goal)).scalars().all()) == len(expected_goals)
     assert len(db.session.execute(db.select(Suggestion)).scalars().all()) == len(expected_suggestions)
     assert len(db.session.execute(db.select(Feedback)).scalars().all()) == len(expected_feedbacks)
-        
-
-
 

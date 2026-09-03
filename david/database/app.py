@@ -15,6 +15,10 @@ def setup_app(database_path) -> Flask:
     with app.app_context():
         db.create_all()
     
+    @app.route("/")
+    def home():
+        return "<p>Savings Database</p>", 200
+
     @app.route("/goals")
     def get_goals():
         goals = db.session.execute(db.select(Goal)).scalars().all()
