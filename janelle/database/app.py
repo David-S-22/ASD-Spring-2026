@@ -1,9 +1,10 @@
 import os
-from datetime import datetime, timezone
+from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import BadRequest, HTTPException
 
@@ -21,6 +22,7 @@ from .validation import (
 	parse_transaction_filters,
 	validate_category_payload,
 	validate_correction_payload,
+	validate_expected_transaction,
 	validate_path_identifier,
 	validate_transaction_payload,
 )
@@ -85,6 +87,36 @@ def apply_transaction_values(transaction, values):
 	transaction.updated_at = utc_datetime()
 
 
+def expected_transaction_conditions(expected):
+	return (
+		Transaction.id == expected["id"],
+		Transaction.updated_at == expected["version"],
+	)
+
+
+def require_matching_expected_id(transaction_id, expected):
+	if expected is not None and expected["id"] != transaction_id:
+		raise ApiError(
+			"transaction changed or no longer exists",
+			"stale_preview",
+			409,
+		)
+
+
+def transaction_response(transaction, include_version=False):
+	payload = asdict(transaction.to_dto())
+	if include_version:
+		payload["version"] = transaction.updated_at.isoformat()
+	return payload
+
+
+def conditional_update_time(expected):
+	now = utc_datetime()
+	if expected is not None and now <= expected["version"]:
+		return expected["version"] + timedelta(microseconds=1)
+	return now
+
+
 def register_error_handlers(application):
 	@application.errorhandler(ApiError)
 	def handle_api_error(error):
@@ -124,40 +156,119 @@ def register_routes(application):
 		transactions = filtered_transactions(
 			parse_transaction_filters(request.args)
 		)
-		return jsonify([transaction.to_dto() for transaction in transactions])
+		include_version = request.args.get("_include_version") == "true"
+		return jsonify([
+			transaction_response(transaction, include_version)
+			for transaction in transactions
+		])
 
 	@application.post("/transactions")
 	def post_transaction():
 		values = validate_transaction_payload(json_body())
 		now = utc_datetime()
+		category = require_category(values["category_id"])
+		suggested_category_id = values.get("suggested_category_id")
+		suggested_category = (
+			require_category(suggested_category_id)
+			if suggested_category_id is not None
+			else None
+		)
 		transaction = Transaction(
 			date=values["date"],
 			merchant=values["merchant"],
 			description=values["description"],
 			amount=values["amount"],
-			category=require_category(values["category_id"]),
+			category=category,
 			created_at=now,
 			updated_at=now,
 		)
 		db.session.add(transaction)
+		db.session.flush()
+		if (
+			suggested_category is not None
+			and suggested_category.id != category.id
+		):
+			db.session.add(CategoryCorrection(
+				transaction=transaction,
+				previous_category=suggested_category,
+				user_category=category,
+				corrected_at=now.isoformat(),
+			))
 		db.session.commit()
-		return jsonify(transaction.to_dto()), 201
+		return jsonify(transaction_response(transaction)), 201
 
 	@application.get("/transactions/<transaction_id>")
 	def get_transaction(transaction_id):
 		transaction = resolve_transaction(transaction_id)
-		return jsonify(transaction.to_dto())
+		return jsonify(transaction_response(
+			transaction,
+			request.args.get("_include_version") == "true",
+		))
 
 	@application.patch("/transactions/<transaction_id>")
 	def patch_transaction(transaction_id):
-		transaction = resolve_transaction(transaction_id)
+		transaction_id = validate_path_identifier(
+			transaction_id,
+			"transaction",
+		)
 		values = validate_transaction_payload(json_body(), partial=True)
+		expected = validate_expected_transaction(
+			request.headers.get("X-Expected-Transaction")
+		)
+		require_matching_expected_id(transaction_id, expected)
+		if expected is not None:
+			if "category_id" in values:
+				require_category(values["category_id"])
+			update_values = {
+				**values,
+				"updated_at": conditional_update_time(expected),
+			}
+			result = db.session.execute(
+				sql_update(Transaction)
+				.where(*expected_transaction_conditions(expected))
+				.values(**update_values)
+				.execution_options(synchronize_session=False)
+			)
+			if result.rowcount != 1:
+				raise ApiError(
+					"transaction changed or no longer exists",
+					"stale_preview",
+					409,
+				)
+			db.session.commit()
+			transaction = db.session.get(Transaction, transaction_id)
+			return jsonify(transaction_response(transaction))
+
+		transaction = resolve_transaction(transaction_id)
 		apply_transaction_values(transaction, values)
 		db.session.commit()
-		return jsonify(transaction.to_dto())
+		return jsonify(transaction_response(transaction))
 
 	@application.delete("/transactions/<transaction_id>")
 	def delete_transaction(transaction_id):
+		transaction_id = validate_path_identifier(
+			transaction_id,
+			"transaction",
+		)
+		expected = validate_expected_transaction(
+			request.headers.get("X-Expected-Transaction")
+		)
+		require_matching_expected_id(transaction_id, expected)
+		if expected is not None:
+			result = db.session.execute(
+				sql_delete(Transaction)
+				.where(*expected_transaction_conditions(expected))
+				.execution_options(synchronize_session=False)
+			)
+			if result.rowcount != 1:
+				raise ApiError(
+					"transaction changed or no longer exists",
+					"stale_preview",
+					409,
+				)
+			db.session.commit()
+			return "", 204
+
 		db.session.delete(resolve_transaction(transaction_id))
 		db.session.commit()
 		return "", 204
@@ -179,7 +290,7 @@ def register_routes(application):
 		db.session.add(correction)
 		db.session.commit()
 		return jsonify(
-			transaction=transaction.to_dto(),
+			transaction=transaction_response(transaction),
 			correction=correction.to_dict(),
 		), 201
 

@@ -51,7 +51,9 @@ services:
     depends_on:
       - transactions-backend
   transactions-backend:
-    build: ./janelle/backend
+    build:
+      context: .
+      dockerfile: janelle/backend/Dockerfile
     container_name: transactions-backend
     ports:
       - "5001:5001"
@@ -62,6 +64,9 @@ services:
       DATABASE_TIMEOUT_SECONDS: 20
       OLLAMA_URL: http://ollama:11434
       CHAT_MODEL: qwen2.5:3b
+      AGENT_MAX_ITERATIONS: 2
+      AGENT_TRACE_ENABLED: "true"
+      AGENT_REQUEST_TTL_SECONDS: 900
       AI_TIMEOUT_SECONDS: 90
     depends_on:
       transactions-db:

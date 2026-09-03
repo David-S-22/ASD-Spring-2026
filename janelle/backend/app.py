@@ -16,7 +16,13 @@ from .Helpers import (
     render_transaction_page,
     render_transaction_table,
 )
-from .services.chat_service import ChatError, apply_preview, handle_message
+from .services.chat_service import ChatError
+from .services.transaction_orchestrator import (
+    get_preview_request_context,
+    orchestrate_transaction_request,
+    run_category_selection,
+    run_confirmed_transaction,
+)
 
 
 def setup_app(db_url: str) -> Flask:
@@ -196,9 +202,17 @@ def setup_app(db_url: str) -> Flask:
 
     @application.route("/transactions", methods=["POST"])
     def create_transaction():
+        payload = json_object()
+        if "suggested_category_id" in payload:
+            raise ChatError(
+                "suggested_category_id is only accepted from a confirmed "
+                "agent category override",
+                "unsupported_fields",
+                422,
+            )
         response = requests.post(
             f"{db_url}/transactions",
-            json=request.get_json(silent=True),
+            json=payload,
             timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
         return json_response(response)
@@ -292,11 +306,18 @@ def setup_app(db_url: str) -> Flask:
                 "unsupported_fields",
                 422,
             )
-        return jsonify(handle_message(payload.get("message"), db_url))
+        return jsonify(orchestrate_transaction_request(
+            payload.get("message"),
+            db_url,
+        ))
+
+    @application.post("/chat/category")
+    def select_chat_category():
+        return jsonify(run_category_selection(json_object(), db_url))
 
     @application.post("/chat/apply")
     def apply_chat_preview():
-        return jsonify(apply_preview(json_object(), db_url))
+        return jsonify(run_confirmed_transaction(json_object(), db_url))
 
     @application.get("/ui/chat")
     def get_chat_panel():
@@ -305,13 +326,61 @@ def setup_app(db_url: str) -> Flask:
     @application.post("/ui/chat")
     def post_ui_chat():
         try:
-            result = handle_message(request.form.get("message"), db_url)
-            return render_template(
+            if "clarification" in request.form:
+                original_message = request.form.get("original_message", "").strip()
+                clarification = request.form.get("clarification", "").strip()
+                if not original_message:
+                    raise ChatError(
+                        "The original request is missing. Start a new request.",
+                        "invalid_message",
+                        422,
+                    )
+                if not clarification:
+                    raise ChatError(
+                        "Enter an answer before continuing.",
+                        "invalid_message",
+                        422,
+                    )
+                separator = (
+                    ""
+                    if original_message[-1] in ".!?"
+                    else "."
+                )
+                message = (
+                    f"{original_message}{separator}\n"
+                    f"Additional details: {clarification}"
+                )
+            elif "adjustment" in request.form:
+                adjustment = request.form.get("adjustment", "").strip()
+                if not adjustment:
+                    raise ChatError(
+                        "Enter what you want to change before continuing.",
+                        "invalid_message",
+                        422,
+                    )
+                original_message = get_preview_request_context(
+                    request.form.get("request_id")
+                )
+                message = (
+                    f"{original_message}\n"
+                    f"Requested change: {adjustment}"
+                )
+            else:
+                message = request.form.get("message")
+            result = orchestrate_transaction_request(
+                message,
+                db_url,
+            )
+            response = make_response(render_template(
                 "chat_result.jinja",
                 result=result,
                 error=None,
                 success=None,
-            )
+                request_context=message,
+            ))
+            if result.get("agent", {}).get("status") == "complete":
+                response.headers["HX-Trigger"] = "transaction-completed"
+            return response
         except ChatError as error:
             return render_template(
                 "chat_result.jinja",
@@ -331,11 +400,54 @@ def setup_app(db_url: str) -> Flask:
                 success=None,
             ), 503
 
+    @application.post("/ui/chat/category")
+    def select_ui_chat_category():
+        try:
+            result = run_category_selection(
+                {
+                    "request_id": request.form.get("request_id"),
+                    "category_id": int(
+                        request.form.get("category_id", "")
+                    ),
+                },
+                db_url,
+            )
+            return render_template(
+                "chat_result.jinja",
+                result=result,
+                error=None,
+                success=None,
+                request_context=request.form.get("request_context"),
+            )
+        except (TypeError, ValueError):
+            error = ChatError(
+                "Choose a valid category.",
+                "invalid_category",
+                422,
+            )
+            return render_template(
+                "chat_result.jinja",
+                result=None,
+                error=error.message,
+                success=None,
+            ), error.status
+        except ChatError as error:
+            return render_template(
+                "chat_result.jinja",
+                result=None,
+                error=error.message,
+                success=None,
+            ), error.status
+
     @application.post("/ui/chat/apply")
     def apply_ui_chat_preview():
         try:
             preview = json.loads(request.form.get("preview", ""))
-            result = apply_preview(preview, db_url)
+            payload = {"preview": preview}
+            request_id = request.form.get("request_id")
+            if request_id:
+                payload["request_id"] = request_id
+            result = run_confirmed_transaction(payload, db_url)
         except (json.JSONDecodeError, TypeError):
             error = ChatError(
                 "The confirmation preview is invalid.",
@@ -367,16 +479,20 @@ def setup_app(db_url: str) -> Flask:
                 success=None,
             ), 503
 
-        operation = result["operation"]
         response = make_response(render_template(
             "chat_result.jinja",
-            result=None,
+            result=result,
             error=None,
-            success=(
-                f"The confirmed {operation} operation was saved."
-            ),
+            success=result["reply"],
         ))
-        response.headers["HX-Trigger"] = "transactionsChanged"
+        triggers = ["transactionsChanged"]
+        if (
+            result.get("saved") is True
+            and result.get("verified") is True
+            and result.get("agent", {}).get("status") == "complete"
+        ):
+            triggers.append("transaction-completed")
+        response.headers["HX-Trigger"] = ", ".join(triggers)
         return response
 
     @application.get("/ui/chat/clear")

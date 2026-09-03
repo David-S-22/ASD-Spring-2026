@@ -290,7 +290,8 @@
     }
 
     .transaction-chat-summary,
-    .transaction-chat-actions {
+    .transaction-chat-actions,
+    .transaction-chat-category {
         display: flex;
         flex-wrap: wrap;
         gap: 0.65rem;
@@ -298,7 +299,7 @@
     }
 
     .transaction-chat-metric,
-    .transaction-chat-operation {
+    .transaction-chat-state {
         display: inline-flex;
         border-radius: 999px;
         padding: 0.3rem 0.65rem;
@@ -306,6 +307,86 @@
         color: var(--color-text, #0f172a);
         font-size: 0.82rem;
         font-weight: 600;
+    }
+
+    .transaction-chat-state {
+        background: color-mix(
+            in srgb,
+            var(--color-primary, #0f766e) 12%,
+            var(--color-surface, #ffffff)
+        );
+        color: var(--color-primary, #0f766e);
+    }
+
+    .transaction-chat-category {
+        align-items: end;
+        padding: 1rem;
+        border: 1px solid var(--color-border, #cbd5e1);
+        border-radius: var(--radius, 10px);
+        background: var(--color-surface-alt, #f8fafc);
+    }
+
+    .transaction-chat-category h3,
+    .transaction-chat-category p {
+        flex-basis: 100%;
+        margin: 0;
+    }
+
+    .transaction-chat-category-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.5rem;
+        margin: 0;
+    }
+
+    .transaction-chat-category-form label {
+        flex-basis: 100%;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-category-form select {
+        min-width: 11rem;
+    }
+
+    .transaction-chat-clarification-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-clarification-form label {
+        flex-basis: 100%;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-clarification-form input[type="text"] {
+        flex: 1 1 18rem;
+    }
+
+    .transaction-chat-adjustment-form {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .transaction-chat-adjustment-form label {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .transaction-chat-adjustment-form textarea {
+        width: 100%;
+        min-height: 4.5rem;
+        resize: vertical;
+    }
+
+    .transaction-chat-adjustment-form button {
+        justify-self: start;
     }
 
     .transaction-chat-preview-grid {
@@ -345,6 +426,21 @@
         min-width: 0;
         margin: 0;
         overflow-wrap: anywhere;
+    }
+
+    .transaction-chat-preview .changed {
+        border-radius: 0.3rem;
+        background: color-mix(
+            in srgb,
+            var(--color-primary, #0f766e) 12%,
+            transparent
+        );
+    }
+
+    .transaction-chat-warning {
+        margin: 0;
+        color: var(--color-danger, #dc2626);
+        font-weight: 600;
     }
 
     .transaction-chat-cancel {
@@ -393,7 +489,8 @@
         .transaction-form-grid,
         .transaction-chat-heading,
         .transaction-chat-form,
-        .transaction-chat-preview-grid {
+        .transaction-chat-preview-grid,
+        .transaction-chat-category-form {
             display: grid;
             grid-template-columns: 1fr;
         }

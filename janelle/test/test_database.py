@@ -6,11 +6,12 @@ from pathlib import Path
 from flask.testing import FlaskClient
 from pytest import fixture, mark, raises
 from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import janelle.database.seed as database_seed
+from janelle.backend.services.chat_service import expected_transaction_header
 from janelle.database.app import setup_app
-from janelle.database.models import Category, Transaction, db
+from janelle.database.models import Category, CategoryCorrection, Transaction, db
 from shared.backend import dto
 
 
@@ -317,6 +318,233 @@ def test_transaction_datetime_uses_shared_dto_serialization(database_client):
 		15,
 		30,
 	)
+
+
+def test_conditional_transaction_update_is_atomic(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(
+			date="2026-09-01T10:15:30.123456",
+			merchant="Conditional update",
+		),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	header = expected_transaction_header(versioned)
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 30},
+		headers={"X-Expected-Transaction": header},
+	)
+
+	assert response.status_code == 200
+	assert response.get_json()["amount"] == 30
+
+
+def test_conditional_update_rejects_raced_transaction(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Raced update"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	stale_header = expected_transaction_header(versioned)
+	assert client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 30},
+	).status_code == 200
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"amount": 40},
+		headers={"X-Expected-Transaction": stale_header},
+	)
+
+	assert response.status_code == 409
+	assert response.get_json()["code"] == "stale_preview"
+	assert client.get(
+		f"/transactions/{created['id']}"
+	).get_json()["amount"] == 30
+
+
+def test_conditional_delete_rejects_raced_transaction(database_client):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Raced delete"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	stale_header = expected_transaction_header(versioned)
+	assert client.patch(
+		f"/transactions/{created['id']}",
+		json={"description": "Changed after preview"},
+	).status_code == 200
+
+	response = client.delete(
+		f"/transactions/{created['id']}",
+		headers={"X-Expected-Transaction": stale_header},
+	)
+
+	assert response.status_code == 409
+	assert response.get_json()["code"] == "stale_preview"
+	assert client.get(f"/transactions/{created['id']}").status_code == 200
+
+
+def test_transaction_create_records_ai_category_override_atomically(
+	database_client,
+):
+	client, database_path = database_client
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="AI category override",
+			category_id=81,
+			suggested_category_id=80,
+		),
+	)
+
+	assert response.status_code == 201
+	created = response.get_json()
+	assert created["category_id"] == 81
+	assert "suggested_category_id" not in created
+
+	connection = get_connection(database_path)
+	try:
+		correction = connection.execute(
+			"""
+			SELECT previous_category_id, user_category_id
+			FROM category_corrections
+			WHERE transaction_id = ?
+			""",
+			(created["id"],),
+		).fetchone()
+		assert dict(correction) == {
+			"previous_category_id": 80,
+			"user_category_id": 81,
+		}
+	finally:
+		connection.close()
+
+
+def test_transaction_create_does_not_record_accepted_ai_suggestion(
+	database_client,
+):
+	client, database_path = database_client
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(suggested_category_id=80),
+	)
+
+	assert response.status_code == 201
+	created = response.get_json()
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"""
+			SELECT COUNT(*)
+			FROM category_corrections
+			WHERE transaction_id = ?
+			""",
+			(created["id"],),
+		).fetchone()[0] == 0
+	finally:
+		connection.close()
+
+
+def test_transaction_create_rejects_invalid_ai_suggestion_without_insert(
+	database_client,
+):
+	client, database_path = database_client
+	connection = get_connection(database_path)
+	try:
+		before = connection.execute(
+			"SELECT COUNT(*) FROM transactions"
+		).fetchone()[0]
+	finally:
+		connection.close()
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="Invalid AI suggestion",
+			suggested_category_id=MISSING_CATEGORY_ID,
+		),
+	)
+
+	assert response.status_code == 422
+	assert response.get_json()["code"] == "category_not_found"
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"SELECT COUNT(*) FROM transactions"
+		).fetchone()[0] == before
+	finally:
+		connection.close()
+
+
+def test_transaction_update_rejects_create_only_ai_suggestion(
+	database_client,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(),
+	).get_json()
+
+	response = client.patch(
+		f"/transactions/{created['id']}",
+		json={"suggested_category_id": 81},
+	)
+
+	assert response.status_code == 422
+	assert response.get_json()["code"] == "unsupported_fields"
+
+
+def test_failed_ai_correction_insert_rolls_back_transaction(
+	database_client,
+	monkeypatch,
+):
+	client, database_path = database_client
+	original_add = db.session.add
+
+	def fail_correction_add(instance):
+		if isinstance(instance, CategoryCorrection):
+			raise SQLAlchemyError("correction insert failed")
+		return original_add(instance)
+
+	monkeypatch.setattr(db.session, "add", fail_correction_add)
+
+	response = client.post(
+		"/transactions",
+		json=transaction_payload(
+			merchant="Rolled back AI transaction",
+			category_id=81,
+			suggested_category_id=80,
+		),
+	)
+
+	assert response.status_code == 503
+	assert response.get_json()["code"] == "database_unavailable"
+	connection = get_connection(database_path)
+	try:
+		assert connection.execute(
+			"""
+			SELECT COUNT(*)
+			FROM transactions
+			WHERE merchant = 'Rolled back AI transaction'
+			"""
+		).fetchone()[0] == 0
+	finally:
+		connection.close()
 
 
 def test_transaction_model_uses_shared_transaction_dto(database_client):

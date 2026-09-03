@@ -246,6 +246,17 @@ def test_shared_shell_proxies_transactions_backend_through_frontend():
     assert "proxy_pass ${TRANSACTIONS_FRONTEND_URL};" in transactions_location
 
 
+def test_transaction_frontend_allows_bounded_agent_workflow():
+    frontend_nginx = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "nginx.conf"
+    ).read_text(encoding="utf-8")
+
+    assert "proxy_read_timeout 200s;" in frontend_nginx
+    assert "proxy_connect_timeout" not in frontend_nginx
+    assert "proxy_send_timeout" not in frontend_nginx
+    assert "send_timeout" not in frontend_nginx
+
+
 def test_compose_sets_twenty_second_database_timeout():
     compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
@@ -259,8 +270,58 @@ def test_compose_configures_pr4_chat_services():
         "\n  transactions-db:",
         1,
     )[0]
+    assert "context: ." in transactions_backend
+    assert "dockerfile: janelle/backend/Dockerfile" in transactions_backend
     assert "OLLAMA_URL: http://ollama:11434" in transactions_backend
     assert "CHAT_MODEL: qwen2.5:3b" in transactions_backend
+    assert "CHAT_REVIEW_MODEL" not in transactions_backend
+    assert "AGENT_MAX_ITERATIONS: 2" in transactions_backend
+    assert 'AGENT_TRACE_ENABLED: "true"' in transactions_backend
+    assert "AGENT_REQUEST_TTL_SECONDS: 900" in transactions_backend
     assert "AI_TIMEOUT_SECONDS: 90" in transactions_backend
     assert "ollama:" in transactions_backend
     assert "condition: service_healthy" in transactions_backend
+
+
+def test_transactions_backend_image_uses_janelle_backend_source():
+    dockerfile = (
+        REPOSITORY_ROOT / "janelle" / "backend" / "Dockerfile"
+    ).read_text(encoding="utf-8")
+
+    assert "COPY janelle/backend ./backend" in dockerfile
+    assert "COPY agentic_loop" not in dockerfile
+    assert "COPY . ./backend" not in dockerfile
+
+
+def test_chat_result_supports_category_selection_and_safe_apply():
+    result = (
+        REPOSITORY_ROOT
+        / "janelle"
+        / "backend"
+        / "templates"
+        / "chat_result.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert "Suggested category" in result
+    assert "looks like the best fit" in result
+    assert "Nothing will be saved until you confirm" in result
+    assert "The transaction has not been created" not in result
+    assert 'hx-post="/transactions-backend/ui/chat/category"' in result
+    assert "Accept suggestion" in result
+    assert "Use selected category" in result
+    assert "AI suggested:" not in result
+    assert "Your category:" not in result
+    assert "Saved and verified" in result
+    assert "How Tally handled this" not in result
+    assert "Ready for your review" in result
+    assert "transaction-chat-operation" not in result
+    assert "Your answer" in result
+    assert 'name="clarification"' in result
+    assert 'name="original_message"' in result
+    assert "Want to change something?" in result
+    assert 'id="transaction-chat-adjustment"' in result
+    assert 'name="adjustment"' in result
+    assert "Describe what you want to change" in result
+    assert "Update preview" in result
+    assert 'hx-disabled-elt="button"' in result
+    assert 'name="request_id"' in result
