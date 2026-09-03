@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anomalies</title>
+</head>
+<body>
     <style>
         .modal-overlay {
             position: fixed;
@@ -36,13 +38,13 @@
             border: 1px solid transparent;
             font-size: 0.86rem;
             font-weight: 600;
-            color: #ffffff;
+            color: #ffffff !important;
             transition: background-color 0.15s ease;
         }
-        button.btn-accept { background-color: #198754; }
-        button.btn-accept:hover { background-color: #157347; }
-        button.btn-cancel { background-color: #475569; }
-        button.btn-cancel:hover { background-color: #334155; }
+        button.btn-accept { background-color: #198754 !important; }
+        button.btn-accept:hover { background-color: #157347 !important; }
+        button.btn-cancel { background-color: #475569 !important; }
+        button.btn-cancel:hover { background-color: #334155 !important; }
         button.review-btn {
             padding: 4px 12px;
             cursor: pointer;
@@ -50,11 +52,11 @@
             border: 1px solid transparent;
             font-size: 0.86rem;
             font-weight: 600;
-            color: #ffffff;
-            background-color: #0284c7;
+            color: #ffffff !important;
+            background-color: #0284c7 !important;
             transition: background-color 0.15s ease;
         }
-        button.review-btn:hover { background-color: #0369a1; }
+        button.review-btn:hover { background-color: #0369a1 !important; }
 
         /* Status badges (mirrors the savings accepted/rejected styling). */
         .status-badge {
@@ -81,8 +83,6 @@
             border: 1px solid rgba(148, 163, 184, 0.3);
         }
     </style>
-</head>
-<body>
     <h1>Anomalies</h1>
     <button type="button"
             hx-post="/anomalies-backend/dummy-anomaly"
