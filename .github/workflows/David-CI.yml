@@ -41,9 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build Containers
-        - run: docker compose build savings-frontend savings-backend savings-db
+        run: docker compose build savings-frontend savings-backend savings-db
       - name: Run Savings Service
-        - run: docker compose up --no-deps --detach savings-frontend savings-backend savings-db
+        run: docker compose up --no-deps --detach savings-frontend savings-backend savings-db
       - name: Check frontend availability
         run: |
           for i in $(seq 1 8); do
