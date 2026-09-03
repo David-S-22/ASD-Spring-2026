@@ -19,6 +19,7 @@ You have these fields:
 - id: the unique transaction identifier
 - amount: the transaction amount
 - merchant: the merchant name
+- description: the transaction description
 - date: the transaction timestamp
 
 Consider which properties of the transaction could indicate an anomaly:
@@ -152,6 +153,7 @@ def _build_anomaly_context(
             details = (
                 f"amount={transaction.amount}, "
                 f"merchant={transaction.merchant!r}, "
+                f"description={transaction.description!r}, "
                 f"date={transaction.date}"
             )
 

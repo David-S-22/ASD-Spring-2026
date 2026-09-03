@@ -3,22 +3,14 @@
   <td>{{ anomaly.id }}</td>
   <td>{{ anomaly.transaction_id }}</td>
   <td>{{ anomaly.agent_reason_suspected }}</td>
-  <td>{% if anomaly.is_confirmed_by_user is none %}Unreviewed{% elif anomaly.is_confirmed_by_user %}Confirmed{% else %}Dismissed{% endif %}</td>
+  <td>{% if anomaly.is_confirmed_by_user is none %}<span class="status-badge status-unreviewed">Unreviewed</span>{% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>{% else %}<span class="status-badge status-rejected">Dismissed</span>{% endif %}</td>
   <td>
     {% if anomaly.is_confirmed_by_user is none %}
     <button type="button"
-            hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/confirm"
-            hx-target="#anomalies"
-            hx-swap="innerHTML"
-            hx-confirm="Your feedback will be used to better predict future anomalies. Confirm this anomaly?">
-      Confirm
-    </button>
-    <button type="button"
-            hx-post="/anomalies-backend/anomalies/{{ anomaly.id }}/dismiss"
-            hx-target="#anomalies"
-            hx-swap="innerHTML"
-            hx-confirm="Your feedback will be used to better predict future anomalies. Reject this anomaly?">
-      Reject
+            class="review-btn"
+            data-anomaly-id="{{ anomaly.id }}"
+            onclick="openReviewModal({{ anomaly.id }})">
+      Review
     </button>
     {% endif %}
   </td>

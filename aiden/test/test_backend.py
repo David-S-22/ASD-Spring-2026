@@ -356,20 +356,18 @@ def test_dismiss_anomaly_sets_status(client: FlaskClient):
         assert anomalies_api.get_anomaly_by_transaction_id(2002).is_confirmed_by_user is False
 
 
-def test_review_buttons_only_render_when_unreviewed(client: FlaskClient):
+def test_review_button_only_renders_when_unreviewed(client: FlaskClient):
     with app.app_context():
         unreviewed = anomalies_api.create_anomaly(
             dto.Anomaly(id=0, transaction_id=2003, agent_reason_suspected="pending", is_confirmed_by_user=None))
 
     rows = client.get("/anomalies").text
-    assert f"/anomalies/{unreviewed.id}/confirm" in rows
-    assert f"/anomalies/{unreviewed.id}/dismiss" in rows
+    assert f'openReviewModal({unreviewed.id})' in rows
 
     client.post(f"/anomalies/{unreviewed.id}/confirm")
 
     rows = client.get("/anomalies").text
-    assert f"/anomalies/{unreviewed.id}/confirm" not in rows
-    assert f"/anomalies/{unreviewed.id}/dismiss" not in rows
+    assert f'openReviewModal({unreviewed.id})' not in rows
 
 
 def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
