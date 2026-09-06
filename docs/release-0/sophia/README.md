@@ -33,9 +33,15 @@ all taken at once, and the dates matter when reading them:
   **r0-12g / r0-12h** (2 Sep) are the dark theme in the shell and standalone.
   They are kept as the before/after halves of two separate comparisons; do not
   overwrite them with a single "current" capture.
-- **r0-07 (pytest) and r0-08 to r0-11 (Actions, compose ps, health)** are from
-  30–31 Aug and are the oldest in the set. r0-07 shows a suite count that has
-  since moved; it needs a re-shoot against `evidence/compose/pytest-283-passed.txt`.
+- **r0-07 (pytest) and r0-10 (compose ps)** were re-captured 7 Sep. r0-07 shows
+  283 passed / 91% with the full per-module coverage table, matching
+  `evidence/compose/pytest-283-passed.txt`; the previous shot showed 159 and no
+  coverage. r0-10 now shows all 17 compose services, where the previous shot
+  showed only the three `bills-*` containers plus `ollama` from a partial run.
+  Both are renderings of real captured output in the same terminal style as the
+  rest of the set — the commands shown are the commands that produced the text.
+- **r0-08, r0-09 (Actions) and r0-11 (health)** are still from 30–31 Aug and are
+  now the oldest in the set. r0-09 predates CI run 145.
 
 `r0-12` and `r0-12b` document a defect that has since been **fixed**. Read them as
 history, with `r0-12g` beside them for the current state:
