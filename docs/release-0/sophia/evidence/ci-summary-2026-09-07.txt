@@ -1,0 +1,77 @@
+# Sophia-CI — run history summary — captured 2026-09-07
+
+Workflow file : .github/workflows/Sophia-CI.yml
+Workflow page : https://github.com/David-S-22/ASD-Spring-2026/actions/workflows/Sophia-CI.yml
+Repository    : David-S-22/ASD-Spring-2026
+
+## Totals
+
+  Total runs      145
+  Successful      142
+  Failed            3
+  First run       2026-08-21T17:04:06Z  (run 1)
+  Latest run      2026-09-03T05:43:45Z  (run 145)
+
+## The three failures
+
+All three are from 21 Aug, the day each of the three original Bills branches
+opened its first pull request. There have been no failures since.
+
+  run   1   id 32506202245   2026-08-21T17:04:06Z   pull_request   feat/bills-engine     d38efd7
+  run   6   id 32511899723   2026-08-21T18:09:37Z   pull_request   feat/bills-backend    980d03d
+  run   7   id 32511930406   2026-08-21T18:10:00Z   pull_request   feat/bills-frontend   d899786
+
+Note the event is `pull_request`, not `push` — these were the first CI runs each
+branch received when its PR opened, before the workflow's dependency and path
+configuration had been exercised.
+
+## Latest green run on main
+
+  Run number   145
+  Run id       33720083787
+  Head sha     9454b11a509868b25da3d8b4e2a604138a569cbc
+  Created      2026-09-03T05:43:45Z
+  Event        push
+  URL          https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33720083787
+
+Run 145 is both the latest *successful* run and the latest run of any kind.
+
+It is still the run that covers the code in this report. The workflow triggers only
+on paths `sophia/**`, `shared/**` and the workflow file itself. The last commit to
+touch `sophia/` is f64accc (#120, 3 Sep); 9454b11 followed it and touched `shared/`,
+which is what fired run 145. The five commits merged since (#116, #121, #122, #123,
+#124, #126) all fall outside the path filter, so no newer run exists and none is due.
+
+Confirmed byte-identical rather than merely assumed:
+
+  $ git rev-parse HEAD:sophia        -> b23a2be2580cc1a25594f405512ed037735c29a9
+  $ git rev-parse 9454b11:sophia     -> b23a2be2580cc1a25594f405512ed037735c29a9
+
+## Reproducing these numbers
+
+  # total run count
+  gh api "repos/David-S-22/ASD-Spring-2026/actions/workflows/Sophia-CI.yml/runs?per_page=1" \
+    --jq '.total_count'
+
+  # success / failure tally across every run
+  gh api --paginate \
+    "repos/David-S-22/ASD-Spring-2026/actions/workflows/Sophia-CI.yml/runs?per_page=100" \
+    --jq '.workflow_runs[] | .conclusion' | sort | uniq -c
+
+  # detail on each failure
+  gh api --paginate \
+    "repos/David-S-22/ASD-Spring-2026/actions/workflows/Sophia-CI.yml/runs?per_page=100" \
+    --jq '.workflow_runs[] | select(.conclusion=="failure")
+          | "run \(.run_number)  id=\(.id)  \(.created_at)  event=\(.event)  branch=\(.head_branch)"'
+
+  # latest green run on main
+  gh api \
+    "repos/David-S-22/ASD-Spring-2026/actions/workflows/Sophia-CI.yml/runs?branch=main&status=success&per_page=1" \
+    --jq '.workflow_runs[0] | {run_number, id, head_sha, created_at, event}'
+
+## Jobs in this workflow
+
+  test           ubuntu-latest, Python 3.12, pip install -r sophia/requirements.txt,
+                 then python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
+  docker-health  needs: test. Builds and starts bills-db / bills-backend / bills-frontend,
+                 then asserts :6005/health, :5005/health contains "ok":true, and :3005/ responds.

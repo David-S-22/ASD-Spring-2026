@@ -21,9 +21,12 @@ Base URL in compose: `http://bills-backend:5005`. Locally: `http://localhost:500
 | GET/PUT/DELETE | `/api/disputes/<id>` | PUT `{status}`. |
 | GET | `/api/disputes/<id>/drafts` | |
 | POST | `/api/disputes/<id>/regenerate` | `{edited_letter?, feedback?}`, stores version N + 1. |
-| POST | `/api/chat` | `{message}` -> `{reply, op, preview, fallback}`. Writes only `chat_messages`; never touches bills/payments/disputes directly. |
-| POST | `/api/chat/apply` | `{op, entity, id, fields}` -> executes through the normal CRUD routes. |
+| POST | `/api/chat` | `{message}` -> `{reply, op, preview, fallback}`. When the turn produces a proposal, `preview` also carries `message_id` and `suggestion_id`, and a `pending` row is written to `suggestions`. Writes `chat_messages` and `suggestions` only; never touches bills/payments/disputes directly. |
+| POST | `/api/chat/apply` | `{op, entity, id, fields, message_id?}` -> executes through the services layer, so an applied proposal gets the same validation and status recompute a manual edit does. |
 | GET | `/api/chat/history` | |
+| GET | `/api/chat/suggestions` | Query `status` (`pending`/`applied`/`rejected`/`failed`). Lists AI proposals awaiting a decision. |
+| POST | `/api/chat/suggestions/<id>/approve` | Claims the row atomically (`pending` -> `applied`), then applies it; on failure the row becomes `failed` with `error` set and nothing is changed. |
+| POST | `/api/chat/suggestions/<id>/reject` | Rejects a pending proposal, or dismisses a failed one. Recorded in the chat transcript so the model can adapt. |
 | POST | `/api/handoff/recurring` | See `contracts-inbound.md`. |
 | POST | `/api/suggestions` | See `contracts-inbound.md`. |
 | GET | `/health` | `{ok, today, db_api, transactions_api, ollama}`. |
@@ -36,7 +39,13 @@ Stored bill rows come from the database API: `GET :6005/bills`. Projections (nex
 
 ## HTML fragments (`/ui/*`)
 
-Jinja fragments rendered for HTMX: `GET /ui/bills`, `GET /ui/calendar`, `GET /ui/timeline?days=`, `GET /ui/disputes?bill_id=`, `GET /ui/chat`, `GET /ui/modal`, `GET /ui/toast?text=`. These render the same engine output as the JSON routes above; the frontend build (a later PR) wires the interactive bits (row action buttons, modal confirm/cancel) that are currently inert placeholders in the templates.
+Thirty Jinja fragment routes — 15 GET and 15 POST — all under the `/ui` prefix. They render the same engine output as the JSON routes above.
+
+**GET (render a fragment):** `/ui/bills`, `/ui/calendar`, `/ui/timeline?days=`, `/ui/disputes?bill_id=`, `/ui/disputes-tab`, `/ui/chat`, `/ui/suggestions`, `/ui/modal`, `/ui/toast?text=`, `/ui/handoff/subscription`, and five form fragments: `/ui/bills/new-form`, `/ui/bills/<id>/edit`, `/ui/bills/<id>/cancel-form`, `/ui/bills/<id>/dispute-form`, `/ui/bills/<id>/payment-form`.
+
+**POST (write, then return the refreshed fragment):** `/ui/bills`, `/ui/bills/<id>/edit`, `/ui/bills/<id>/confirm`, `/ui/bills/<id>/cancel`, `/ui/bills/<id>/delete`, `/ui/payments`, `/ui/disputes`, `/ui/disputes/<id>/status`, `/ui/disputes/<id>/regenerate`, `/ui/disputes/<id>/delete`, `/ui/chat`, `/ui/chat/apply`, `/ui/suggestions/<id>/approve`, `/ui/suggestions/<id>/reject`, `/ui/suggestions/<id>/suggest`.
+
+The frontend is built and these are fully wired. Row actions are a disclosure menu rather than four inline buttons (PR #103), and modal confirm/cancel posts over HTMX. `/ui/calendar` and `/ui/timeline` remain callable and tested but are no longer rendered by the single-page layout (PR #109). A write route returns 422 with an error fragment on invalid input, never a 500.
 
 ## AI calls
 
