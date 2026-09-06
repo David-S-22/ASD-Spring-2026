@@ -18,7 +18,9 @@ spec's repository layout keeps documentation under `docs/`.
 | `evidence/compose/ui-write-routes.txt`, `four-cases.txt` | Local testing evidence (post) | curl transcripts of every `/ui/*` write route and the four former 500s |
 | `evidence/ai/README.md` | Local testing evidence, AI-Mode | What each call tested, the 3/3 and 4/4 results, and the bug the live run found |
 | `evidence/ai/*.json` | Local testing evidence, AI-Mode | Seven raw responses from real local Ollama calls (3/3 dispute, 4/4 chat) |
-| `evidence/pytest-159-passed.txt` | Local testing evidence | `pytest sophia/test -q` at ed9c5ac |
+| `evidence/compose/pytest-283-passed.txt` | Local testing evidence | `pytest sophia/test -q --cov=sophia/backend --cov-report=term` at ffb625f — 283 passed, 91% coverage, 7 Sep |
+| `evidence/ci-summary-2026-09-07.txt` | Continuous integration evidence | Sophia-CI run history: 145 runs, 142 green, the three 21 Aug failures, and the `gh api` calls that reproduce them |
+| `evidence/compose/compose-ps-2026-09-07.txt` | Docker Compose execution evidence | All 17 services up, plus the five frontends and five backends probed through the shared shell on `:3000`, 7 Sep |
 | `screenshots/r0-NN-*.png` | Screenshots of the integrated application | Numbered to the report's `[SCREENSHOT n]` markers |
 
 Screenshots were captured from `main` at 8ebbf12 (30 Aug) with

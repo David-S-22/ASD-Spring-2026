@@ -1,0 +1,128 @@
+# Docker Compose verification — captured 2026-09-07
+#
+# Repo state : main @ ffb625f (in sync with origin/main), clean tree
+# Command    : docker compose up -d --build      (no -v; the ollama_data volume is preserved)
+# Result     : all 17 services built and started, exit 0
+#
+# Docker version 29.5.3 / Docker Compose v5.1.4
+
+$ docker compose ps
+NAME                    IMAGE                                   STATUS                   PORTS
+anomalies-backend       asd-spring-2026-anomalies-backend       Up About a minute        0.0.0.0:5004->5004/tcp, [::]:5004->5004/tcp
+anomalies-db            asd-spring-2026-anomalies-db            Up About a minute        0.0.0.0:6004->6004/tcp, [::]:6004->6004/tcp
+anomalies-frontend      asd-spring-2026-anomalies-frontend      Up About a minute        0.0.0.0:3004->3004/tcp, [::]:3004->3004/tcp
+bills-backend           asd-spring-2026-bills-backend           Up About a minute        0.0.0.0:5005->5005/tcp, [::]:5005->5005/tcp
+bills-db                asd-spring-2026-bills-db                Up About a minute        0.0.0.0:6005->6005/tcp, [::]:6005->6005/tcp
+bills-frontend          asd-spring-2026-bills-frontend          Up About a minute        0.0.0.0:3005->80/tcp, [::]:3005->80/tcp
+budgets-backend         asd-spring-2026-budgets-backend         Up About a minute        0.0.0.0:5006->5006/tcp, [::]:5006->5006/tcp
+budgets-db              asd-spring-2026-budgets-db              Up About a minute        0.0.0.0:6006->6006/tcp, [::]:6006->6006/tcp
+budgets-frontend        asd-spring-2026-budgets-frontend        Up About a minute        0.0.0.0:3006->3006/tcp, [::]:3006->3006/tcp
+ollama                  ollama/ollama:latest                    Up 2 minutes (healthy)   0.0.0.0:11434->11434/tcp, [::]:11434->11434/tcp
+savings-backend         asd-spring-2026-savings-backend         Up About a minute        0.0.0.0:5002->5002/tcp, [::]:5002->5002/tcp
+savings-db              asd-spring-2026-savings-db              Up About a minute        0.0.0.0:6002->6002/tcp, [::]:6002->6002/tcp
+savings-frontend        asd-spring-2026-savings-frontend        Up About a minute        0.0.0.0:3002->3002/tcp, [::]:3002->3002/tcp
+shared-frontend         asd-spring-2026-shared-frontend         Up About a minute        0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+transactions-backend    asd-spring-2026-transactions-backend    Up About a minute        0.0.0.0:5001->5001/tcp, [::]:5001->5001/tcp
+transactions-db         asd-spring-2026-transactions-db         Up About a minute        0.0.0.0:6001->6001/tcp, [::]:6001->6001/tcp
+transactions-frontend   asd-spring-2026-transactions-frontend   Up About a minute        0.0.0.0:3001->3001/tcp, [::]:3001->3001/tcp
+
+================================================================================
+Frontends through the shared shell on :3000
+================================================================================
+
+$ for f in bills transactions anomalies budgets savings; do
+    curl -s -o /dev/null -w "%{http_code} %{url_effective}\n" "http://localhost:3000/${f}-frontend/"
+  done
+200 http://localhost:3000/bills-frontend/
+200 http://localhost:3000/transactions-frontend/
+200 http://localhost:3000/anomalies-frontend/
+200 http://localhost:3000/budgets-frontend/
+200 http://localhost:3000/savings-frontend/
+
+All five 200. This is the check that matters for the integrated demo: every
+feature is reachable from the shared home page.
+
+================================================================================
+Backends through the shared shell on :3000
+================================================================================
+
+$ for f in bills transactions anomalies budgets savings; do
+    curl -s -o /dev/null -w "%{http_code} %{url_effective}\n" "http://localhost:3000/${f}-backend/"
+  done
+404 http://localhost:3000/bills-backend/
+200 http://localhost:3000/transactions-backend/
+200 http://localhost:3000/anomalies-backend/
+200 http://localhost:3000/budgets-backend/
+200 http://localhost:3000/savings-backend/
+
+Nine of ten are 200. The one 404 is NOT a proxy failure, and this was checked
+rather than assumed. The Bills Flask app registers no route at `/` — it serves
+`/health`, `/api/*` and `/ui/*` only — so a bare root request 404s at the
+application, identically whether it arrives through the shell or directly:
+
+$ curl -s -o /dev/null -w "%{http_code} %{url_effective}\n" http://localhost:5005/
+404 http://localhost:5005/
+
+The `/bills-backend/` proxy mapping itself is sound. Any real route behind it
+returns 200 through the shell:
+
+$ curl -s -o /dev/null -w "%{http_code} %{url_effective}\n" http://localhost:3000/bills-backend/health
+200 http://localhost:3000/bills-backend/health
+$ curl -s -o /dev/null -w "%{http_code} %{url_effective}\n" http://localhost:3000/bills-backend/api/bills
+200 http://localhost:3000/bills-backend/api/bills
+
+The other four backends do define a `/` route, which is the only reason they
+answer 200 at their root. The difference is an API-surface convention, not a
+deployment fault, and it is left as-is: adding a root route would be a product
+change, and this pass is evidence-only.
+
+================================================================================
+/health across the five backends
+================================================================================
+
+$ for f in bills transactions anomalies budgets savings; do
+    curl -s -o /dev/null -w "%{http_code} /${f}-backend/health\n" "http://localhost:3000/${f}-backend/health"
+  done
+200 /bills-backend/health
+404 /transactions-backend/health
+404 /anomalies-backend/health
+200 /budgets-backend/health
+404 /savings-backend/health
+
+Same result probing each backend directly on its own port, so again this is the
+application surface and not the proxy:
+
+  200 bills        :5005/health
+  404 transactions :5001/health
+  404 anomalies    :5004/health
+  200 budgets      :5006/health
+  404 savings      :5002/health
+
+Three of the five backends still expose no `/health` endpoint. Recorded as an
+observation about the shared stack; these are other students' services and are
+outside this feature's scope. Note that #123 ("adding health check for savings
+service", 3 Sep) added a health *step to a CI workflow*, not a `/health` route
+to the savings backend — the endpoint is still absent.
+
+================================================================================
+Bills' own three services — the assertions Sophia-CI's docker-health job makes
+================================================================================
+
+$ curl -s -o /dev/null -w "%{http_code} :6005/health\n" http://localhost:6005/health
+200 :6005/health
+$ curl -s -o /dev/null -w "%{http_code} :5005/health\n" http://localhost:5005/health
+200 :5005/health
+$ curl -s -o /dev/null -w "%{http_code} :3005/\n" http://localhost:3005/
+200 :3005/
+
+$ curl -s http://localhost:5005/health
+{"db_api":"up","ok":true,"ollama":"up","today":"2026-08-20","transactions_api":"stub"}
+
+`"ok":true` is the string the CI job greps for. `"ollama":"up"` confirms the
+backend reaches the composed `ollama` service (compose sets
+OLLAMA_URL: http://ollama:11434, overriding config.py's host.docker.internal
+default). `"today":"2026-08-20"` is the pinned DEMO_TODAY fixture, not a clock
+reading. `"transactions_api":"stub"` is expected: TRANSACTIONS_DB_API_URL is
+deliberately unset for Bills.
+
+The stack was left running after this capture.
