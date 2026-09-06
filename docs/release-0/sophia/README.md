@@ -40,8 +40,22 @@ all taken at once, and the dates matter when reading them:
   showed only the three `bills-*` containers plus `ollama` from a partial run.
   Both are renderings of real captured output in the same terminal style as the
   rest of the set — the commands shown are the commands that produced the text.
-- **r0-08, r0-09 (Actions) and r0-11 (health)** are still from 30–31 Aug and are
-  now the oldest in the set. r0-09 predates CI run 145.
+- **r0-09 (Actions run summary)** was re-captured 7 Sep and now shows run **#145**
+  — the run the report cites — with `test` and `docker-health` both green (26s and
+  37s, 1m 10s total) at sha `9454b11`. The previous shot was run #66 from 30 Aug.
+  Captured signed-out on the public repository, which is why the page shows Sign
+  in / Sign up and "Sign in to view logs"; that matches how the image it replaces
+  was taken.
+
+  The run's title reads "Automatically check anomalies of new transactions (#99)"
+  and was pushed by a teammate, not by me. That is expected rather than a mix-up:
+  Sophia-CI triggers on `sophia/**` **and** `shared/**`, and #99 touched `shared/`.
+  It is still the run that covers this feature's code — `git rev-parse HEAD:sophia`
+  and `git rev-parse 9454b11:sophia` both return `b23a2be`, so the Bills tree it
+  tested is byte-identical to the submitted one. See
+  `evidence/ci-summary-2026-09-07.txt`.
+- **r0-08 (Actions list) and r0-11 (health)** are still from 30–31 Aug and are now
+  the oldest images in the set.
 
 `r0-12` and `r0-12b` document a defect that has since been **fixed**. Read them as
 history, with `r0-12g` beside them for the current state:
