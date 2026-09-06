@@ -25,7 +25,7 @@ This endpoint deliberately stays a `POST` (decision D2): it returns a preview pl
 
 ## 3. Bill suggestions from alerts (Feature 4)
 
-Link handoff: `GET http://localhost:3005/handoff/subscription?...` with the parameters below. Bills opens its normal add-bill form prefilled from the parameters; nothing is created until the user saves it. Saved bills carry `source="f4_handoff"` and `confirmed_at=NULL`, so they show a "Confirm this?" prompt in the bills table until confirmed.
+Link handoff: `GET http://localhost:3005/handoff/subscription?...` with the parameters below. Bills opens its normal add-bill form prefilled from the parameters; nothing is created until the user saves it. Saved bills carry `source="f4_handoff"` and `confirmed_at=NULL`, so they show an "Added from Spending Alerts — keep it?" prompt in the bills table until confirmed. (The copy was "Confirm this?" until 2 Sep; it was reworded because it never said where the row had come from.)
 
 | Param | Required | Type | Notes |
 |---|---|---|---|
@@ -42,5 +42,16 @@ Link handoff: `GET http://localhost:3005/handoff/subscription?...` with the para
 | `return_url` | no | url | back to his alerts |
 
 `next_billing_date` is deliberately not a parameter — he sends what he observed, Bills computes what happens next.
+
+**Verified 7 Sep** against the running stack, with the full required set
+(`source=f4&alert_id=77&merchant=GymCo&amount=24.99&cadence=monthly&first_seen=2026-05-19&last_seen=2026-08-19&occurrences=4`):
+200 from all three entry points — `:5005/ui/handoff/subscription`,
+`:3005/handoff/subscription` and `:3000/bills-frontend/handoff/subscription`.
+The form comes back prefilled with `source=f4_handoff`, `name`/`merchant` GymCo,
+`amount` 24.99, and `next_billing_date` **2026-09-19** — computed from `last_seen`
+plus the cadence, not sent by the caller — above an evidence banner reading
+"based on 4 charges from 2026-05-19 to 2026-08-19". Omitting any required
+parameter returns 422 with the error fragment, which is the behaviour
+`screenshots/r0-15-handoff-422.png` captures.
 
 The earlier `POST /api/suggestions` — body `{source: "alerts", alert_id, merchant, amount, cadence, last_seen, occurrences}`, returning `201 {bill_id, status, confirm_url: "http://localhost:3005/?confirm=<id>#bills"}` — still exists and creates the bill immediately; the link above is the preferred handoff because nothing is written until the user saves the prefilled form.
