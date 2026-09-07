@@ -241,8 +241,8 @@ def main():
     )
 
     print("AGENTIC LOOP - Bills extended review (Plan -> Act -> Observe -> Adapt)")
-    print(f"Repository: {REPO_ROOT}")
-    print(f"Run record: {REPORTS_DIR}")
+    print(f"Repository: {REPO_ROOT.name}")
+    print(f"Run record: {REPORTS_DIR.relative_to(REPO_ROOT).as_posix()}")
     for field, value in record.environment.items():
         print(f"{field.replace('_', ' ').capitalize()}: {value}")
     while True:
