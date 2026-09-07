@@ -1,0 +1,132 @@
+PROMPT — B2: Bills reads stop writing, plus test-suite consolidation
+Stage: ACT · Run: 29 Aug 2026 · Tool: Claude Code, from the repo root
+Purpose: make every GET side-effect-free (decision D3) and, separately,
+         assess whether the test suite can be condensed without losing
+         coverage.
+Outcome: #56 "Bills: reads no longer write derived status". The
+         consolidation was assessed and deferred as polish.
+Condensed for readability; verification-then-STOP and the "go" / "go
+tests" gates are summarised.
+
+---
+
+## Context
+
+I am Sophia Nguyen, Student 5, Bills List & Dispute Assistant: `sophia/**`,
+services `bills-frontend` :3005 / `bills-backend` :5005 / `bills-db` :6005,
+workflow `Sophia-CI.yml`, docs `docs/release-0/sophia/`. Tier A merged this
+morning (#47, #49, #50, #51). PRs open as drafts.
+
+**What B2 is.** `status` (paid / due / overdue) is *derived* by
+`engine/status.derive_status()` from cadence, dates and payments. The DB
+column is only a cache — yet today the read paths keep it fresh by writing:
+`services/bills.list_bills()` issues a PUT to :6005 for every row whose
+stored status drifted, on every page load, and `get_bill()` does the same.
+GETs with side effects, N extra round-trips, and the reason
+`services/bills.py` sits at 76 % coverage. After B2: **reads compute and
+never write; the cached column is refreshed only where a write already
+happens.** This is the last planned code change before the freeze.
+
+## Hard scope rules
+
+1. Modify ONLY `sophia/**` and `docs/release-0/sophia/**`. This change needs
+   no compose or workflow edits; if you think it does, stop and say why.
+2. Nothing in my stack may come to depend on the root requirements file.
+3. `git diff --stat main` before every commit; abort on any path outside
+   rule 1.
+4. No new dependencies. No `Co-Authored-By`. No push without my "push"; no
+   merging.
+5. Do not change the JSON shapes any route returns; do not touch the engine
+   package.
+6. **Concurrent-work rule — group members are actively pushing.** Pull
+   again immediately before creating any branch and diff against the SHA
+   the plan was verified on; re-run any verification a new merge could
+   invalidate. If a new merge touches `sophia/**`, `shared/`,
+   `docker-compose.yml` or workflows, stop and report before proceeding.
+   Rebase right before push, re-run the suite after the rebase, never
+   force-push over a rejected push.
+
+## Phase 0 — verify, then show the diff plan
+
+1. Head SHA; confirm the Tier A merges; note anything newer.
+2. Run the suite: expect 147 passed / 86 %, `services/bills.py` 76 % with
+   the missing lines being the status-drift writes. Report exact numbers.
+3. Confirm the write-on-read sites: the drift PUT inside `list_bills()`'s
+   loop; the same in `get_bill()`; `update_bill()` (a write path — stays);
+   `payments._refresh_bill_status()` on payment create/update/delete (the
+   keep path); the existing test that pins payment refresh.
+4. Confirm readers never depend on the *stored* column: fragments derive
+   status themselves, `enrich_bill()` overwrites it with the derived value,
+   templates render the enriched value.
+5. Check `seed.py`: do the seeded `status` values equal the derived status
+   at `DEMO_TODAY=2026-08-20`? After B2 nothing heals stale seeds on read;
+   fixing seed values is in scope if needed.
+6. Confirm `sophia/README.md` still carries the stale "108 passed; 81%".
+
+Show the verification results and a file-by-file summary of the intended
+diff before touching anything.
+
+## Phase 1 — apply
+
+Branch `refactor/bills-pure-reads`.
+
+1. **`services/bills.py`** — `list_bills()` and `get_bill()`: delete the
+   drift PUT. `update_bill()`: keep refreshing the cache, but at most one
+   status PUT after the payload write. `cancel_bill()`: an end date changes
+   projections, so refresh the cached status after the write — one shared
+   helper, `_persist_status_if_drifted`, that `payments` can delegate to if
+   that removes duplication cleanly. `create_bill()`: derive and persist
+   status for the new row, so a bill created with a past date is cached
+   `overdue` immediately. `confirm_bill()`: unchanged; verify against
+   `engine/status.py` that `confirmed_at` does not feed derivation, and say
+   so in the PR body.
+2. **Tests** (`test_pure_reads.py`, same `store` fixture): a bill whose
+   stored status is wrong → both GETs return the derived status **and** the
+   fake store received zero `update_bill` calls; PUT on a drifted bill →
+   exactly one status write beyond the payload; create with a past date →
+   cached `overdue`; cancel refreshes the cache; the existing
+   payment-refresh test passes unmodified.
+3. **Docs** — `api.md`: reads are pure and always return the derived
+   status; the stored column on :6005 is a write-time cache; other features
+   reading `:6005/bills` should treat it as last-written and read
+   `:5005/api/bills` when they need it current. `sophia/README.md`: the new
+   pass count and coverage, and one sentence on the status bullet.
+4. **Verify:** suite green; then start the three services, load the bills
+   page once, and confirm from `bills-db`'s access log that the page load
+   produced **GETs only — no PUT**. Report the log lines.
+5. Scope check, commit, show me the diff stat and test summary, then one
+   draft PR "Bills: reads no longer write derived status" — body: what
+   changed, why reads must be idempotent, the coverage delta.
+
+## Phase 2 — test-suite consolidation (separate branch, separate approval)
+
+**Goal:** fewer files and fewer test functions, identical coverage.
+Coverage is the hard constraint, count the soft one.
+
+Read-only assessment first: map tests per file and the overlaps (three
+route files drive the same fake store; the four engine files plus
+`test_money` are case tables in prose form). Save the baseline — total %,
+per-file %, the exact `term-missing` line sets. **No line covered today may
+become uncovered.** Only true duplicates (two tests that cannot fail
+independently) may be removed; everything else is merged or parametrised.
+Know the counting quirk: pytest counts each parametrised case as one test,
+so the reported count only falls by removing duplicates and folding one
+scenario's multi-step sequence into one test — never by bundling unrelated
+behaviours.
+
+If meaningful reduction is possible, restructure into three modules:
+`test_engine.py` (classes per engine module, parametrised tables),
+`test_db_api.py` (CRUD, child tables parametrised over the symmetric
+endpoints, validation), `test_backend.py` (JSON API, fragments, AI and
+contracts). Shared fixtures stay in `conftest.py`; tests cited elsewhere by
+name keep their names. Acceptance: suite green · coverage ≥ baseline ·
+missing-line sets identical or smaller, diffed mechanically · honest
+before/after counts in the PR body so a marker sees the reduction was
+lossless. Run it only after B2 merges and only if time remains before the
+freeze — it is polish, not showcase-critical.
+
+## Closing report
+
+Head SHA · PR URLs · tests and coverage before → after (total and
+`services/bills.py`) · seed-drift findings · the access-log evidence · the
+consolidation assessment · anything noticed outside scope (list only).

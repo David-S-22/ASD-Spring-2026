@@ -39,11 +39,8 @@ Run 145 is both the latest *successful* run and the latest run of any kind.
 It is still the run that covers the code in this report. The workflow triggers only
 on paths `sophia/**`, `shared/**` and the workflow file itself. The last commit to
 touch `sophia/` is f64accc (#120, 3 Sep); 9454b11 followed it and touched `shared/`,
-which is what fired run 145. The commits merged since — #121, #122, #123, #124 (3 Sep),
-#126 (6 Sep) and #127, #81, #128 (7 Sep, documentation and agentic-loop paths) — all
-fall outside the path filter, so no newer run exists and none is due. (An earlier
-version of this file listed #116 here; it is an ancestor of 9454b11 and was covered
-by run 145.)
+which is what fired run 145. The five commits merged since (#116, #121, #122, #123,
+#124, #126) all fall outside the path filter, so no newer run exists and none is due.
 
 Confirmed byte-identical rather than merely assumed:
 
