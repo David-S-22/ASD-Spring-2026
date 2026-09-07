@@ -13,7 +13,7 @@
 > :6005), L2 (`/api/chat/history` has no client), L3 (`toast.html` lacks
 > `aria-live`).
 
-Reviewer: Claude (Cowork session for Soph), 2026-09-02, against `main` @ `3164ce8`.
+Reviewer: Claude (AI-assisted review session), 2026-09-02, against `main` @ `3164ce8`.
 Scope: the Bills feature only — `sophia/frontend`, `sophia/backend`, `sophia/database` — with
 emphasis on the Ask Tally chat seam, per the handover plan. Findings marked **[verified]** were
 reproduced against a running stack (backend + database + frontend, Ollama stubbed) rather than
