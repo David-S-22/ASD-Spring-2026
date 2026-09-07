@@ -115,6 +115,29 @@ contains a near-identical "I've drafted a dispute letter for GymCo…" assistant
 which is the likeliest reason it reproduces the phrasing. Kept as recorded; a tense
 check on `say` is an R1 item.
 
+### Why `06` gets the month wrong — context, measured 7 Sep
+
+Probed during the screenshot re-shoot by sending the exact `chat_prompt.build()`
+messages the backend sends straight to `qwen2.5:3b` (`/api/chat`, `format: json`),
+varying only the bill list and the history, on the Spotify sentence:
+
+| Bills in the prompt | History | Target `id` | `end_date` |
+|---|---|---|---|
+| 13 (seed + one added bill) | 10 seeded turns | **12, Cloud storage** — 7 of 7, incl. temperature 0 | 2026-09-16 |
+| 12 (seed) | 10 seeded turns | 3, Spotify — 4 of 4 | wrong month in 3 of 4 (1 Oct, 16 Oct, 3 Oct, 15 Sep) |
+| 12 (seed) | none | 3, Spotify — 3 of 3 | 2026-09-16 — 3 of 3 |
+
+Two separate degradations, then. The seeded chat history is what costs the date
+(its assistant turn on Spotify talks about "October's estimate"), and one extra
+bill row is enough to move the target to the wrong subscription — with the reply
+sometimes still saying "ending Spotify" while the proposal card says "Update Cloud
+storage". The vetting in `services/chat.py` catches a *new-bill* sentence over an
+update, not a wrong target on a cancel, so that proposal reaches the Approve
+button. The 7 Sep `06` was captured on 12 bills with the seeded history, which is
+the middle row. Terminal-only, not saved as files; R1 items: trim or summarise
+history before the parse, and vet the proposal's target against any bill named in
+`say`.
+
 ### What tuning changed this
 
 `chat_prompt.py` was rewritten from a bare instruction line to a compact
