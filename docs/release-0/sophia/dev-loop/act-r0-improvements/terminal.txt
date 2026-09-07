@@ -1,0 +1,444 @@
+DEVELOPMENT-LOOP RUN RECORD — ACT — Verify the 26 Aug plan, then Tier A (#47, #49, #50, #51)
+Session id      : cb34a49a-e240-4bc6-a5f4-7b1d2c1e5b2c
+Session start   : 2026-08-26T06:40:03.983Z  (UTC; Sydney is +10:00)
+Session end     : 2026-08-29T02:41:37.330Z
+Prompt issued   : 2026-08-26T06:40:05.044Z
+main at start   : 73178a4 Add anomalies backend (#41)  (inferred: newest main commit before the prompt timestamp)
+Condensed from the session transcript: the prompt as issued, each tool call as one line, each
+phase gate as it occurred, and the closing summary. Tool outputs over ten lines are elided.
+Machine paths are shown as ~/… or repo-relative; other people's names are replaced.
+Note            : The session opened on 26 Aug; the four PRs were opened and merged on 28 Aug, the run date the prompt index records.
+==============================================================================
+[06:40Z] USER PROMPT (verbatim):
+Context — read before touching anything
+
+You are working in the shared team repo for UTS 41026 Release 0 (github.com/David-S-22/ASD-Spring-2026). I am Sophia Nguyen, Student 5: my feature is Bills List & Dispute Assistant, my folder is sophia/, my services are bills-frontend (:3005), bills-backend (:5005), bills-db (:6005), my workflow is .github/workflows/Sophia-CI.yml, my docs live in docs/release-0/sophia/.
+
+What this session is for. On 26 Aug a plan was written from a fresh clone of main at 73178a4. It makes factual claims about the repo and proposes four "Tier A" work items to finish before the code freeze on Wed 2 Sep (showcase Fri 4 Sep, report Sun 6 Sep). Your job is to (a) check every claim against the repo as it is right now — teammates may have pushed since — and (b) once I say go, implement Tier A exactly as specified, one branch and one PR per item.
+
+Decisions already made — do not reopen them:
+
+D1: bills-db stays on raw sqlite3 + schema.sql for R0. No Flask-SQLAlchemy migration. Not even "while you're in there".
+D2: POST /api/handoff/recurring (contract A, Feature 3 → Bills) stays a POST until the transactions feature exists. Contract B (Feature 4 → Bills) becomes a link: GET /handoff/subscription?… — that is item A1.
+D3 (stop list_bills() writing during reads) is still open: it is item B2 and stays locked unless I say "go B2".
+Shared DTO adoption (shared/backend/dto.py) is gated on PR #39 merging with a date field on Transaction. If shared/ exists on main when you pull, report what is in it and stop — do not adopt it in this session.
+Hard scope rules — these override anything else you infer
+You may modify ONLY: sophia/**, the three bills-* service blocks in docker-compose.yml, .github/workflows/Sophia-CI.yml, and docs/release-0/sophia/**.
+Root requirements.txt, david/, aiden/, janelle/, student-3/, ai-services/, scripts/, shared/, other students' compose blocks, other workflow files, docs/architecture/: read-only. Problems you notice there get LISTED in your report, never fixed — a Discord heads-up covering the ones I already know about went out 26 Aug.
+Before every commit run git diff --stat main and abort if any path outside rule 1 appears.
+Commit style: no Co-Authored-By trailers, no inline code comments explaining the change (docstrings are fine), repo-local identity is my UTS address. Small commits, meaningful messages.
+Never git push without showing me git diff --stat and the test summary first, and waiting for "push". Never merge — I squash-merge after review.
+No new Python dependencies. Tests fake HTTP with monkeypatch, the way sophia/test/test_backend_routes.py already does.
+Environment: python on PATH here is msys64 and has no pytest — use python. Docker Desktop must be running for docker compose build; if it is not, say so and skip the build step rather than failing silently.
+Phase 0 — verify (read-only; ends with a report and a STOP)
+
+git checkout main && git pull, record the head SHA. Then check each claim below and produce a table: claim · verified / changed / wrong · evidence (command + one line of output). Do not fix anything in this phase.
+
+Repo state
+
+main was 73178a4 (#41, 23 Aug) on 26 Aug. What is it now, and which PRs merged since? For every new merge, git show --stat and say whether it touches shared/, docker-compose.yml, or .github/workflows/.
+shared/ does not exist on main. (If it now does: list its files and whether Transaction has a date field.)
+Sophia has 22 merged PRs on main: git log --format='%an %s' | grep -i "sophia" | grep -c "(#" and list the numbers.
+
+Test suite 4. python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term → 108 passed, 81 % total. Report the exact numbers now, plus per-file coverage for routes/handoff.py (claimed 37 %), clients/transactions.py (28 %), services/bills.py (62 %), services/payments.py (64 %). 5. Sophia-CI.yml has two jobs, test (pytest with --cov=sophia/backend/engine) and build (docker compose build of three images), and no job that starts containers.
+
+The six open gaps 6. No route serves GET /handoff/subscription — check sophia/backend/routes/*.py and sophia/frontend/nginx.conf. Only POST /api/handoff/recurring and POST /api/suggestions exist in routes/handoff.py. 7. sophia/frontend/js/app.js does not read location.pathname, location.hash or location.search on load, so the #bills?confirm= and #chat?handoff= URLs that routes/handoff.py emits do nothing. 8. docs/release-0/sophia/contracts-inbound.md §1 heading says :6001 for [teammate]'s transactions service (correct is :6003, student 3). 9. sophia/README.md has a "## Merge status" section (around line 152) saying the six original PRs are not merged and blaming a David-CI ruleset. Also check what test count / coverage the "Testing and evidence" section states. 10. routes/handoff.py hard-codes FRONTEND_ORIGIN = "http://localhost:3005" instead of reading it from sophia/backend/config.py. 11. services/bills.py::list_bills() and get_bill() call bills_db.update_bill(row["id"], {"status": status}) when the stored status differs from the derived one — i.e. a GET issues PUTs to :6005. Also confirm test_payment_post_refreshes_owning_bill_status exists in sophia/test/test_backend_routes.py.
+
+Things the plan relies on 12. sophia/backend/engine/projection.py::project(bill, start, end) returns a list of Occurrence with a .date; services/bills.enrich_bill uses it with a 400-day horizon. 13. sophia/backend/templates/bill_form.html is rendered by fragments.bill_new_form() with bill=None, action="/ui/bills" and by bill_edit_form() with a bill dict — note which fields it renders so A1 can prefill them. 14. frontend/nginx.conf: location / uses try_files $uri $uri/     /index.html, and /api/ + /ui/ proxy to bills-backend:5005. So /handoff/subscription will serve the shell without an nginx change. 15. GET /health on the backend returns ok: true when :6005 is up regardless of Ollama; GET /health on the DB API returns {"ok": true}.
+
+Teammates' conventions (read-only, for the report only) 16. .github/workflows/aiden-ci.yml has a docker-health job that builds, up -d, sleeps, curls both service roots, dumps logs on failure and removes containers — quote it; A3 copies the pattern.
+
+End Phase 0 with: the table, a list of anything in the plan that is now wrong or changed, anything you noticed outside scope (for the team), and STOP. If claims 6–11 have all been fixed by someone else already, say so and stop; do not redo them.
+
+Phase 1 — A2, documentation truth pass (unlocked by "go")
+
+Branch docs/bills-readme-and-contracts-truth-pass off fresh main.
+
+sophia/README.md: replace the "## Merge status" section with "## Pull requests" — one paragraph stating that all Bills PRs are merged, then the list of my merged PR numbers from Phase 0 claim 3 grouped as scaffold + engine + DB + backend + frontend + AI / defect fixes / docs, layout, polish / reqs split, and the Sophia-CI run-on-main URL https://github.com/David-S-22/ASD-Spring-2026/actions/runs/32573962576 labelled as the Actions evidence. Delete the ruleset paragraph entirely. Update "## Testing and evidence" to the Phase 0 test count and coverage figure. Under "## Run it", link the four PNGs in docs/architecture/ by relative path. Keep every other section as-is.
+docs/release-0/sophia/contracts-inbound.md: §1 → :6003; add one sentence that the field shape is [teammate]'s call as data owner and that sophia/backend/fixtures/transactions_stub.json is the worked example Bills currently codes against. §2 (Feature 4) → rewrite for the link handoff that A1 builds: GET http://localhost:3005/handoff/subscription with the parameter table below (copy it verbatim). Say explicitly that §1's POST /api/handoff/recurring remains a POST by decision D2 and why (it returns a preview + apply_url; nothing writes until the confirmed preview is applied).
+Param	Required	Type	Notes
+source	yes	f4	
+alert_id	yes	int	shown on the preview; lets him mark the alert handled
+merchant	yes	string	
+amount	yes	decimal dollars	the typical amount observed; Bills converts to cents
+cadence	yes	weekly / fortnightly / monthly	if unsure send monthly + confidence=low
+first_seen	yes	YYYY-MM-DD	first occurrence in the evidence
+last_seen	yes	YYYY-MM-DD	most recent; Bills projects next_billing_date from this + cadence
+occurrences	yes	int	how many charges the pattern rests on; shown on the preview
+confidence	no	high / low	wording only
+evidence	no	comma-separated ints	his transaction refs, shown as "based on N charges"
+return_url	no	url	back to his alerts
+Note under the table: next_billing_date is deliberately not a parameter — he sends what he observed, Bills computes what happens next.
+docs/release-0/sophia/api.md: add a short "Reading projected bills" section — stored rows via GET :6005/bills; projections via GET :5005/api/upcoming because the date engine lives in the backend; the earlier :6005/upcoming passthrough was removed in PR #31 so the database container does not depend on the backend; this is the one declared exception to reading other features through their DB API.
+Run the suite (docs-only change, but the PR should show a green run), scope check, commit, show me, wait for "push", open PR titled "Bills docs: README merge status, contracts ports, projected-bills read". PR body names the three docs and says "no code change".
+Phase 2 — A1 + B1, contract B link handoff (after Phase 1 PR is open)
+
+Branch feat/bills-f4-link-handoff off fresh main (rebase on Phase 1 if it merged; otherwise branch from main — the two do not overlap in files except contracts-inbound.md, which Phase 1 already wrote for this).
+
+B1 first (tiny): in sophia/backend/config.py add FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3005"); in routes/handoff.py delete the module constant and use config.FRONTEND_ORIGIN; in docker-compose.yml bills-backend environment add FRONTEND_ORIGIN: http://localhost:3005. One test asserting handoff.py has no localhost literal (grep the source) or that the emitted confirm_url starts with config.FRONTEND_ORIGIN.
+
+A1 — backend fragment route, in sophia/backend/routes/fragments.py (same blueprint as the other /ui/* routes):
+
+GET /ui/handoff/subscription
+
+Read the params from the table above. Validate: source == "f4"; merchant non-empty; amount parses as a decimal ≥ 0 → amount_cents = round(amount × 100); cadence ∈ the engine's three values; first_seen, last_seen parse with date.fromisoformat and first_seen <= last_seen; occurrences is an int ≥ 1. On any failure render the existing error_fragment.html with a plain-English message and status 400 — the same shape the other fragment routes use for bad input (check fragments.py for the current helper and reuse it).
+Compute next_billing_date with the engine: build a Bill (from sophia.backend.engine) with next_billing_date=last_seen, the given cadence, type="subscription", and take the first occurrence of project(bill, config.DEMO_TODAY, config.DEMO_TODAY + timedelta(days=400)) that is strictly after last_seen; if last_seen is itself in the future relative to DEMO_TODAY, use last_seen. Do not write your own date arithmetic — if the engine has a helper for "next occurrence after date", use it.
+Render bill_form.html with action="/ui/bills" and a bill dict prefilled: name=merchant, merchant, amount_cents, cadence, next_billing_date, type="subscription", payment_method=None, plus source="f4_handoff". Add to the template: a hidden source input (default manual when absent, so existing forms are unaffected) and an optional evidence block rendered only when an evidence context variable is passed — one sentence: "Suggested by Spending Alerts — based on {occurrences} charges from {first_seen} to {last_seen}" plus "(low confidence — please check the amount and cadence)" when confidence == "low", and a "Back to alerts" link when return_url is present. The modal's existing Save button is the user's click; saving goes through the existing POST /ui/bills path unchanged, so nothing is written until the user saves — keep it that way.
+POST /ui/bills (existing): confirm _form_to_bill_payload passes source through if present; if it drops it, add it (and only it).
+
+A1 — frontend deep links, in sophia/frontend/js/app.js, on DOMContentLoaded (or wherever the existing init runs):
+
+If location.pathname starts with /handoff/, call htmx.ajax('GET', '/ui' + location.pathname + location.search, {target: '#modal-root', swap: 'innerHTML'}) then history.replaceState(null, '', '/'). Match how the existing code opens modals (check what the "Add bill" button does and do the same).
+If location.hash starts with #bills?confirm=, switch to the Bills tab and, after the bills table fragment loads, trigger the existing confirm prompt for that bill id if one exists; if the table has no such affordance, just switch to the Bills tab and scroll the row into view — do not invent new UI.
+If location.hash starts with #chat?handoff=, switch to the Chat tab.
+Keep it under ~30 lines; no framework, no new files.
+
+Tests in sophia/test/test_frontend_fragments.py (use its existing client/fixtures):
+
+happy path: all required params → 200, response contains the merchant, 12.99 or 1299 per the template's convention, subscription selected, the computed next_billing_date, the evidence sentence with the occurrence count;
+missing merchant → 400 and the error fragment;
+cadence=yearly → 400;
+first_seen > last_seen → 400;
+confidence=low adds the low-confidence wording;
+next_billing_date for last_seen=2026-08-01, monthly, DEMO_TODAY 2026-08-20 is 2026-09-01; for last_seen=2026-08-19, weekly it is 2026-08-26.
+
+Docs: contracts-inbound.md §2 was written in Phase 1 for this route; re-read it and correct anything the implementation does differently.
+
+Run suite, docker compose build bills-backend bills-frontend, then docker compose up -d bills-db bills-backend bills-frontend and tell me to open http://localhost:3005/handoff/subscription?source=f4&alert_id=7&merchant=Spotify&amount=12.99&cadence=monthly&first_seen=2026-05-20&last_seen=2026-08-20&occurrences=4&confidence=high in Chrome — I will confirm the prefilled modal appears. Then scope check, commit(s), show me, wait for "push", PR titled "Bills: Feature 4 link handoff (GET /handoff/subscription) and deep links".
+
+Phase 3 — A4, tests on the integration edges (after Phase 2 PR is open)
+
+Branch test/bills-integration-edges off fresh main.
+
+sophia/test/test_handoff_routes.py (new): using the same fake DB client pattern as test_backend_routes.py:
+POST /api/handoff/recurring with intent=end for a known merchant → preview op is update with end_date = effective_from if given, else DEMO_TODAY;
+intent=change_amount → update with amount_cents;
+unknown merchant → create op with merchant/name/amount_cents;
+response has apply_url == "/api/chat/apply" and ui_url starting with config.FRONTEND_ORIGIN;
+POST /api/suggestions → 201, DB client received source="f4_handoff", confirmed_at=None, type="subscription"; confirm_url starts with config.FRONTEND_ORIGIN.
+sophia/test/test_contract_transactions.py (new):
+every row of fixtures/transactions_stub.json through _normalise() has date matching ^\d{4}-\d{2}-\d{2}$, numeric amount, non-empty merchant;
+with config.TRANSACTIONS_DB_API_URL monkeypatched to a URL and requests.get monkeypatched to return an object with .json() → a list and .raise_for_status() no-op → source == "up" and rows are normalised; with requests.get raising requests.RequestException → falls back, source == "stub";
+merchant= and since= filters apply to the stub path.
+Parametrised validation tests for the uncovered branches in services/bills.py (amount_cents non-numeric, bad next_billing_date, bad end_date, missing required fields, cancel_bill without end_date, cancel_bill bad date) and services/payments.py (read its uncovered lines from the coverage report and cover each branch once).
+
+Target: handoff.py and transactions.py ≥ 85 %, total ≥ 85 %. Report the before/after per-file numbers — they go in the R0 report. Scope check, commit, show me, wait for "push", PR titled "Bills tests: handoff routes, transactions contract, service validation branches".
+
+Phase 4 — A3, Sophia-CI docker-health job (after Phase 3 PR is open)
+
+Branch ci/sophia-docker-health off fresh main. Edit only .github/workflows/Sophia-CI.yml:
+
+In test, change --cov=sophia/backend/engine to --cov=sophia/backend so CI reports the same number as the README.
+Replace the build job with docker-health (needs: test), modelled on [teammate]'s job but for my three services: build bills-db bills-backend bills-frontend → up -d the three → sleep 5 → curl --fail http://127.0.0.1:6005/health → curl --fail http://127.0.0.1:5005/health → curl --fail -o /dev/null http://127.0.0.1:3005/ → docker logs of the three if: failure() → docker compose down -v if: always(). Pin the action versions the file already uses.
+Note in the PR body that :5005/health reports "ollama": "down" in CI by design and still returns 200.
+
+Scope check, commit, show me, wait for "push", PR titled "Sophia-CI: container health smoke test after build". After I merge, fetch the run-on-main URL for the workflow and give it to me — it replaces the 22 Aug URL as the Actions evidence in the R0 report.
+
+Phase B2 — pure reads (locked; only on "go B2")
+
+Branch refactor/bills-pure-reads. In services/bills.py, list_bills() and get_bill() stop calling bills_db.update_bill(..., {"status": ...}); they return the derived status in the enriched dict as they already do. Persist status only where a write already happens: update_bill(), cancel_bill(), and services/payments.py on payment create/update/delete (these already refresh the owning bill — verify with test_payment_post_refreshes_owning_bill_status). Add a test that GET /api/bills results in zero update_bill calls on the fake client. Confirm no fragment renders the stored status column directly instead of the enriched one (grep templates for status). Suite, scope check, PR titled "Bills: reads no longer write derived status".
+
+Closing report (after Phase 4, or wherever you stop)
+
+Give me, in one message: head SHA at start and end · the four (or five) PR URLs · test count and coverage before/after · the per-file numbers for the four thin modules · anything from Phase 0 that was wrong in the plan · anything outside my scope worth telling the team that the 26 Aug heads-up did not already cover · the exact Discord line to send [teammate] for the new link (GET http://localhost:3005/handoff/subscription?… with the required params). Then write a session note to ~/notes/sessions\2026-MM-DD_bills-tier-a.md from the session template — decisions and state changes, under a page.
+
+Standing rules to keep in memory
+Everything outside sophia/**, my three compose blocks, Sophia-CI.yml and docs/release-0/sophia/** is read-only; stop and tell me instead of editing.
+No push without my "push"; no merge ever; PR status proves nothing in this repo — cite the run-on-main URL.
+D1/D2 are decided; shared/ adoption is gated on #39 + date.
+------------------------------------------------------------------------------
+[06:40Z]  [Glob] *.md
+    [… 32 lines …]
+[06:40Z]  [PowerShell] git checkout main; git pull; git rev-parse HEAD
+    Your branch is up to date with 'origin/main'.
+    Already on 'main'
+    Already up to date.
+    73178a4d03d4eea25794fdf41a46c15cbb3d626e
+[06:40Z]  [Read] ~/notes/sessions\2026-08-26_bills-r0-improvement-plan.md
+    [… 49 lines …]
+[06:40Z]  [Read] ~/notes/sessions\2026-08-26_asd-branch-cleanup.md
+    [… 30 lines …]
+[06:40Z]  [PowerShell] & "python" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
+[06:40Z]  [PowerShell] git log --format='%an|%s' | Select-String -Pattern 'sophia' | Select-String -Pattern '\(#\d+\)'; Write-Output '---'; Test-Path shared; Write-Output...
+    [… 44 lines …]
+    [… 33 lines …]
+[06:41Z]  [PowerShell] (git log --format='%an|%s' | Where-Object { $_ -match '^Sophia Nguyen\|' -and $_ -match '\(#\d+\)' }).Count; git log --format='%an|%s' | Select-Str...
+[06:41Z]  [Read] .\.github\workflows\Sophia-CI.yml
+[06:41Z]  [Read] .\sophia\backend\routes\handoff.py
+    21
+    22
+    [… 69 lines …]
+    [… 38 lines …]
+[06:41Z]  [Read] .\sophia\frontend\nginx.conf
+    [… 20 lines …]
+[06:41Z]  [Grep] location\.(pathname|hash|search)
+    No matches found
+[06:41Z]  [Grep] handoff|subscription
+    Found 2 files
+    sophia\backend\routes\fragments.py
+    sophia\backend\routes\handoff.py
+[06:41Z]  [Grep] 6001|6003
+    5:## 1. Transactions service ([teammate], :6001)
+[06:41Z]  [Grep] handoff|subscription
+    125:                "needs_confirmation": bill.source == "f4_handoff" and bill.confirmed_at is None,
+[06:41Z]  [Grep] Merge status|ruleset|passed|coverage|%
+    130:108 passed in 3.00s
+    152:## Merge status
+    157:branch. None are merged yet: `main`'s branch ruleset requires the
+[06:41Z]  [Grep] update_bill|def list_bills|def get_bill|derive|status
+    [… 23 lines …]
+[06:41Z]  [Read] .\sophia\README.md
+    [… 57 lines …]
+[06:41Z]  [Grep] test_payment_post_refreshes_owning_bill_status
+    sophia\test\test_backend_routes.py:218:def test_payment_post_refreshes_owning_bill_status(client, store):
+[06:41Z]  [Grep] def project|Occurrence|\.date
+    [… 11 lines …]
+[06:41Z]  [Grep] project\(|timedelta|400
+    2:from datetime import date, timedelta
+    21:    occurrences = project(bill, today, today + timedelta(days=400))
+[06:41Z]  [Grep] bill_form|bill_new_form|bill_edit_form|error_fragment
+    38:    return render_template("error_fragment.html", message=error.message), 422
+    45:    return render_template("error_fragment.html", message="Something went wrong — try again."), 500
+    214:def bill_new_form():
+    215:    return render_template("bill_form.html", bill=None, action="/ui/bills")
+    219:def bill_edit_form(bill_id):
+    221:    return render_template("bill_form.html", bill=bill, action=f"/ui/bills/{bill_id}/edit")
+[06:41Z]  [Grep] /health|ok.*true|def health
+    sophia\backend\app.py:39:    @app.get("/health")
+    sophia\backend\app.py:40:    def health():
+    sophia\backend\clients\bills_db.py:189:def health():
+    sophia\backend\clients\bills_db.py:190:    response = requests.get(_url("/health"), timeout=5)
+    sophia\test\conftest.py:88:            requests.get(f"{base_url}/health", timeout=1)
+    sophia\test\test_backend_routes.py:163:    def health(self):
+    sophia\test\test_db_api.py:36:    response = client.get("/health")
+    sophia\database\app.py:104:    @app.get("/health")
+    sophia\database\app.py:105:    def health():
+    sophia\frontend\js\htmx-2.0.4.min.js:1:[Omitted long matching line]
+[06:41Z]  [Read] .\sophia\backend\app.py
+    [… 15 lines …]
+[06:41Z]  [Read] .\sophia\database\app.py
+    100	    @app.errorhandler(ApiError)
+    101	    def handle_api_error(error):
+    102	        return jsonify({"error": error.message}), error.status
+    103	
+    104	    @app.get("/health")
+    105	    def health():
+    106	        return jsonify({"ok": True})
+    107	
+    108	    @app.get("/bills")
+    109	    def list_bills():
+[06:41Z]  [Read] .\sophia\backend\templates\bill_form.html
+    [… 52 lines …]
+[06:41Z]  [Read] .\.github\workflows\aiden-ci.yml
+    [… 39 lines …]
+[06:41Z]  [Read] .\sophia\backend\app.py
+    [… 14 lines …]
+[06:41Z]  [Read] .\sophia\backend\routes\fragments.py
+    [… 22 lines …]
+[06:42Z]  [Read] .\sophia\backend\services\errors.py
+    [… 14 lines …]
+[06:42Z]  [PowerShell] git branch -r; git log --oneline origin/main -1
+      origin/HEAD -> origin/main
+      origin/adding-database-tests
+      origin/aiden/feat/add-shared-models
+      origin/chore/JLY/rename-folder
+      origin/main
+    73178a4 Add anomalies backend (#41)
+
+--- session stopped; assistant's message before the reply ---
+  # Phase 0 report — verification complete, STOP
+  
+  Head SHA at start: **`73178a4d03d4eea25794fdf41a46c15cbb3d626e`** (#41, 23 Aug). `git pull` returned "Already up to date" — **nothing has merged since the plan was written**, so no new-merge audit was needed. `shared/` is still absent from main; `aiden/feat/add-shared-models` is still just an unmerged remote branch.
+  
+  ## Claim table
+  
+  | # | Claim | Verdict | Evidence |
+  |---|---|---|---|
+  | 1 | main = 73178a4, no merges since 26 Aug | **verified** | `git pull` → "Already up to date"; `git rev-parse HEAD` → `73178a4d...` |
+  | 2 | `shared/` absent from main | **verified** | `Test-Path shared` → `False`; only exists as branch `origin/aiden/feat/add-shared-models` |
+  [… 48 more lines …]
+[06:44Z] USER: go — 21 PRs no footnote, 422 is fine
+------------------------------------------------------------------------------
+[06:44Z]  [Read] .\sophia\README.md
+    [… 171 lines …]
+[06:44Z]  [Read] .\docs\release-0\sophia\contracts-inbound.md
+    [… 18 lines …]
+[06:44Z]  [Glob] docs/architecture/*.png
+    docs\architecture\r0-d3-paoa-dispute-loop.png
+    docs\architecture\r0-d4-paoa-chat-loop.png
+    docs\architecture\r0-d1-individual-architecture.png
+    docs\architecture\r0-d2-docker-compose-architecture.png
+[06:44Z]  [Read] .\docs\release-0\sophia\api.md
+    [… 38 lines …]
+[06:45Z]  [PowerShell] git checkout -b docs/bills-readme-and-contracts-truth-pass
+    Switched to a new branch 'docs/bills-readme-and-contracts-truth-pass'
+[06:45Z]  [Edit] .\sophia\README.md
+    The file .\sophia\README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:45Z]  [Edit] .\sophia\README.md
+    The file .\sophia\README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:45Z]  [Edit] .\sophia\README.md
+    The file .\sophia\README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:46Z]  [Edit] .\docs\release-0\sophia\contracts-inbound.md
+    The file .\docs\release-0\sophia\contracts-inbound.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:46Z]  [Edit] .\docs\release-0\sophia\contracts-inbound.md
+    The file .\docs\release-0\sophia\contracts-inbound.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:46Z]  [Edit] .\docs\release-0\sophia\api.md
+    The file .\docs\release-0\sophia\api.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[06:46Z]  [PowerShell] & "python" -m pytest sophia/test -q 2>$null | Select-Object -Last 3; git diff --stat main
+    ........................................................................ [ 66%]
+    ....................................                                     [100%]
+    108 passed in 3.52s
+     docs/release-0/sophia/api.md               | 10 ++++++++
+     docs/release-0/sophia/contracts-inbound.md | 30 ++++++++++++++++++++----
+     sophia/README.md                           | 37 ++++++++++++++++++------------
+     3 files changed, 58 insertions(+), 19 deletions(-)
+[06:46Z]  [PowerShell] git config user.name; git config user.email
+    Sophia Nguyen
+    [email]
+[06:46Z]  [PowerShell] git add sophia/README.md docs/release-0/sophia/api.md docs/release-0/sophia/contracts-inbound.md; git commit -m "docs: correct merge status, transa...
+    [docs/bills-readme-and-contracts-truth-pass 15fbd20] docs: correct merge status, transactions port, and Feature 4 link-handoff contract
+     3 files changed, 58 insertions(+), 19 deletions(-)
+    15fbd20 docs: correct merge status, transactions port, and Feature 4 link-handoff contract
+
+--- session stopped; assistant's message before the reply ---
+  Phase 1 is committed locally and waiting for your "push". Here's the review:
+  
+  ## Diff summary (`git diff --stat main`)
+  
+  ```
+  docs/release-0/sophia/api.md               | 10 ++++++++
+  docs/release-0/sophia/contracts-inbound.md | 30 ++++++++++++++++++++----
+  sophia/README.md                           | 37 ++++++++++++++++++------------
+  3 files changed, 58 insertions(+), 19 deletions(-)
+  ```
+  [… 20 more lines …]
+[23:13Z] USER: open the PR As a draft, and then tell me the  status of B gate
+------------------------------------------------------------------------------
+[23:13Z]  [PowerShell] git push -u origin docs/bills-readme-and-contracts-truth-pass
+    Exit code 1
+    To https://github.com/David-S-22/ASD-Spring-2026.git
+     ! [rejected]        docs/bills-readme-and-contracts-truth-pass -> docs/bills-readme-and-contracts-truth-pass (fetch first)
+    error: failed to push some refs to 'https://github.com/David-S-22/ASD-Spring-2026.git'
+    hint: Updates were rejected because the remote contains work that you do not
+    hint: have locally. This is usually caused by another repository pushing to
+    hint: the same ref. If you want to integrate the remote changes, use
+    hint: 'git pull' before pushing again.
+    hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+[23:13Z]  [PowerShell] git fetch origin; git log --oneline -5 origin/docs/bills-readme-and-contracts-truth-pass; Write-Output '---'; git log --oneline -3 HEAD; Write-Outp...
+    [… 44 lines …]
+[23:13Z]  [PowerShell] git log --oneline 73178a4..origin/main; Write-Output '---AUTHORS---'; git log --format='%h %an %ae %ad' --date=format:'%d %b %H:%M' origin/docs/bil...
+[23:13Z]  [PowerShell] gh pr list --state open --json number,title,headRefName,author,isDraft,createdAt --limit 30 | ConvertFrom-Json | Format-Table number,title,headRefN...
+    [… 18 lines …]
+    number title                            headRefName                 isDraft createdAt           
+    ------ -----                            -----------                 ------- ---------           
+        52 Bills: review-readiness cleanups chore/bills-review-cleanups    True 2026-08-28T17:32:18Z
+[23:14Z]  [PowerShell] git show origin/main:shared/backend/dto.py
+    [… 41 lines …]
+[23:14Z]  [PowerShell] git show origin/main:sophia/backend/routes/handoff.py | Select-String -Pattern 'FRONTEND_ORIGIN|localhost' ; Write-Output '---BILLS---'; git show o...
+    [… 23 lines …]
+[23:14Z]  [PowerShell] git diff origin/main HEAD -- sophia/README.md docs/release-0/sophia/api.md docs/release-0/sophia/contracts-inbound.md --stat; Write-Output '---'; g...
+    [… 217 lines …]
+[23:15Z]  [PowerShell] git checkout main; git pull; git log --oneline -1
+    [… 81 lines …]
+
+--- session stopped; assistant's message before the reply ---
+  Stopping before any push — **the PR would be a duplicate: Phase 1 (and all of Tier A) already merged to main yesterday.** Nothing was pushed or opened from this session; local `main` is now synced to `5ccfc5d`.
+  
+  ## What the fetch revealed
+  
+  The push was rejected because `origin` already had this branch — and a lot more. Eleven commits landed on main since `73178a4`, all dated 28 Aug, including **the four Tier A PRs, authored under your UTS identity**:
+  
+  - [#47](https://github.com/David-S-22/ASD-Spring-2026/pull/47) Bills docs: README merge status, contracts ports, projected-bills read — **Phase 1, merged**
+  - [#49](https://github.com/David-S-22/ASD-Spring-2026/pull/49) Bills: Feature 4 link handoff (GET /handoff/subscription) and deep links — **Phase 2 (A1 + B1), merged**
+  - [#50](https://github.com/David-S-22/ASD-Spring-2026/pull/50) Bills tests: handoff routes, transactions contract, service validation branches — **Phase 3, merged**
+  - [#51](https://github.com/David-S-22/ASD-Spring-2026/pull/51) Sophia-CI: container health smoke test after build — **Phase 4, merged**
+  [… 16 more lines …]
+[23:22Z] USER: read the lastest session note ~/notes/sessions\2026-08-28_bills-tier-a.md, pull latest master and remote zfere branches and verify.
+------------------------------------------------------------------------------
+[23:22Z]  [Read] ~/notes/sessions\2026-08-28_bills-tier-a.md
+    [… 27 lines …]
+[23:22Z]  [PowerShell] git fetch origin --prune; git pull; git log --oneline -3; Write-Output '---'; git log --format='%h %an %ae %ad %s' --date=format:'%d %b %H:%M' orig...
+    [… 14 lines …]
+[23:23Z]  [PowerShell] git checkout chore/bills-review-cleanups 2>$null; git status -sb | Select-Object -First 1; git diff --stat main
+    [… 15 lines …]
+[23:23Z]  [PowerShell] git diff main -- .github/workflows/Sophia-CI.yml sophia/backend/routes/fragments.py sophia/backend/templates/bills_table.html sophia/backend/templa...
+    [… 120 lines …]
+[23:23Z]  [PowerShell] git diff main -- sophia/test/ sophia/backend/.dockerignore sophia/database/.dockerignore
+[23:23Z]  [Grep] init_db
+    [… 98 lines …]
+    No matches found
+[23:23Z]  [PowerShell] git show HEAD:sophia/database/app.py | Select-String -Pattern 'load_schema|seed|init' ; Write-Output '---COMPOSE---'; Select-String -Path docker-co...
+[23:23Z]  [Grep] next_occurrence
+    [… 25 lines …]
+    sophia\test\test_engine_status.py:70:def test_next_occurrence_for_31st_anchor_does_not_drift():
+    sophia\backend\templates\cancel_form.html:4:  <p>Last payment lands on {{ bill.next_occurrence }}.</p>
+    sophia\backend\templates\cancel_form.html:7:      <input name="end_date" type="date" value="{{ bill.next_occurrence }}" required>
+    sophia\backend\engine\status.py:67:        next_occurrence = add_cadence(bill.next_billing_date, bill.cadence, n + 1)
+    sophia\backend\engine\status.py:68:        if today <= next_occurrence and (next_occurrence - today).days <= 7:
+    sophia\backend\engine\status.py:69:            label = f"Due {_day_month(next_occurrence)}"
+    sophia\backend\services\bills.py:18:    """Return bill_row plus status, status_label, next_occurrence, usual_range, monthly_equivalent_cents."""
+    sophia\backend\services\bills.py:22:    next_occurrence = occurrences[0].date.isoformat() if occurrences else None
+    sophia\backend\services\bills.py:27:    enriched["next_occurrence"] = next_occurrence
+[23:24Z]  [PowerShell] Select-String -Path docker-compose.yml -Pattern 'bills' -Context 0,8 | Out-String -Width 200
+    [… 41 lines …]
+[23:24Z]  [PowerShell] & "python" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term 2>$null | Sele...
+    [… 45 lines …]
+
+--- session stopped; assistant's message before the reply ---
+  Verified — everything checks out. Here's the full picture:
+  
+  ## Session note (28 Aug)
+  
+  Explains the mystery completely: you ran the Tier A plan on your work machine (`~\…`), it opened #47/#49/#50/#51 as drafts, and you've since merged all four. **`zfere` is your own GitHub account** — the `chore/bills-review-cleanups` commits are authored by your UTS identity, timestamped 29 Aug 03:31. The note also records: 147 tests / 86%, the 422 decision made independently there too, a real bug found (relative asset paths broke the `/handoff/…` shell — fixed in #49), and a pending **Phase 5** decision (chat tab vs bottom panel) since `#chat?` deep links currently just scroll to a side card.
+  
+  ## main
+  
+  Up to date at `5ccfc5d` (#51). Pruned three stale remote branches deleted after merge (including `aiden/feat/add-shared-models` — #39's branch, now merged and cleaned up).
+  
+  [… 17 more lines …]
+[23:29Z] USER: look at read "~/notes/sessions"  and view recent merges to master by group members.
+------------------------------------------------------------------------------
+
+[23:29Z] USER: [Request interrupted by user]
+------------------------------------------------------------------------------
+
+[23:30Z] USER: read recent session notes in "~/notes/sessions"  and view recent merges to master by group members.
+------------------------------------------------------------------------------
+[23:30Z]  [Glob] 2026-08-2*.md
+    [… 11 lines …]
+[23:30Z]  [PowerShell] git log origin/main --format='%h|%an|%ad|%s' --date=format:'%d %b' -20 | Out-String -Width 250
+    [… 20 lines …]
+[23:30Z]  [PowerShell] foreach ($c in 'bcf5048','60866d9','227dd62','419a332','1658bf4','b39ea2a','170721c') { git show --stat --format='=== %h %an %ad %s' --date=format:...
+    [… 79 lines …]
+[23:30Z]  [PowerShell] git show --stat --format='=== %h %an %ad %s' --date=format:'%d %b' b39ae2a | Out-String -Width 200; Write-Output '---SOPHIA-CI DIFF IN #39---'; git...
+    [… 60 lines …]
+
+--- session stopped; assistant's message before the reply ---
+  Here's the full picture. The three relevant recent session notes ([2026-08-28_bills-tier-a](../../~/notes/sessions/2026-08-28_bills-tier-a.md), and the two 26 Aug notes) were read earlier this session — nothing newer exists in the folder. Recap of what they establish: the 26 Aug session wrote the plan and cleaned up branches; the 28 Aug session (work machine) executed all of Tier A as four draft PRs, landed at 147 tests / 86%, and left B2 + Phase 5 (chat placement) open.
+  
+  ## Teammate merges to main since the 26 Aug snapshot
+  
+  Seven new merges, all 27–29 Aug. By person:
+  
+  **[teammate] (3):**
+  
+  | PR | What | Outside `aiden/**` |
+  |---|---|---|
+  [… 22 more lines …]
+[23:31Z] USER: ignore the savings db bugs,release 0 marks the features independently of each other
+------------------------------------------------------------------------------
+[23:32Z]  [Write] ~\.claude\projects\<project-dir>\memory\asd-r0-independent-marking.md
+    File created successfully at: ~\.claude\projects\<project-dir>\memory\asd-r0-independent-marking.md
+[23:32Z]  [Edit] ~\.claude\projects\<project-dir>\memory\MEMORY.md
+    The file ~\.claude\projects\<project-dir>\memory\MEMORY.md has been updated successfully. (file state is current in your context — no need to Read it back)
+
+==============================================================================
+CLOSING SUMMARY (assistant, verbatim):
+Done. With cross-feature concerns off the table, what's actually left on the Bills side before Wednesday's freeze:
+
+1. **Merge #52** — verified sound this session, CI green; un-draft and squash-merge whenever you're ready.
+2. **Discord line to [teammate]** — the 28 Aug note says to send it once #49 merged, which has happened. The line from that session's plan: `GET http://localhost:3005/handoff/subscription?source=f4&alert_id=<id>&merchant=<name>&amount=<dollars>&cadence=weekly|fortnightly|monthly&first_seen=YYYY-MM-DD&last_seen=YYYY-MM-DD&occurrences=<n>` — required params only, full table in `docs/release-0/sophia/contracts-inbound.md` §3.
+3. **B2** (pure reads) — still locked on your "go B2"; it's also the remaining coverage gap (`services/bills.py` at 76%).
+4. **Phase 5** — chat tab vs bottom panel pick, branch `ui/bills-chat-placement`.
+5. **R0 report numbers** — update to 147 tests / 86%, per-file: handoff 100, transactions 100, payments 100, bills 76; new Actions evidence URL is the run-on-main from #51 (or #52's once merged).
+6. Housekeeping: my redundant local `docs/bills-readme-and-contracts-truth-pass` branch — say the word and I'll delete it.
