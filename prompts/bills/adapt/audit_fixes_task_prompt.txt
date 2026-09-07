@@ -1,0 +1,145 @@
+PROMPT — Verify the 29 Aug audit findings, then implement the fixes
+Stage: ADAPT · Run: 30 Aug 2026 · Tool: Claude Code, from the repo root
+Purpose: re-verify each audit finding against the current head, then fix
+         the ones that survive, in dependency order, with gated phases
+         that skip rather than force.
+Outcome: #68 (non-finite amounts rejected in handoff links), #69 (Bills on
+         the shared ollama service), #71 (evidence refreshed), #75
+         (final-build screenshot set).
+Condensed for readability; verification-then-STOP and the "go" / "push"
+gates are summarised.
+
+---
+
+## Context
+
+I am Sophia Nguyen (zfere), Student 5, Bills List & Dispute Assistant.
+Read your notes from earlier sessions first.
+
+The 29 Aug read-only audit (run against `b0751bc`) found four genuine gaps
+and drafted report sentences for five declared deviations. This session
+(1) re-verifies each finding against the repo as it is now — teammates
+merge many times a day and #56 may have landed — and (2) implements the
+fixes that survive verification. Deadlines: code freeze Wed 2 Sep, video
+Thu 3, showcase Fri 4, report Sun 6 Sep.
+
+## Hard scope rules
+
+1. Modify ONLY `sophia/**`, my three `bills-*` compose blocks,
+   `Sophia-CI.yml`, `docs/release-0/sophia/**`, and — for Phase 4 only —
+   the two report notes named there. Everything else read-only; problems
+   elsewhere get listed, never fixed.
+2. Concurrent-work rule: pull immediately before every branch; if new
+   merges touch `sophia/**`, `shared/`, `docker-compose.yml` or workflows,
+   stop and tell me. Rebase before every push; re-run the suite after
+   rebasing; never force-push.
+3. No push without my "push". No merging — ever; PRs open as drafts. No
+   `Co-Authored-By`; meaningful messages. No new dependencies.
+4. David's #53 already bumped `setup-python` and tightened my backend health
+   check in Sophia-CI — verified fine; do not revert or "fix" it.
+
+## Phase 0 — verify the audit
+
+Pull `main`, record head, then for each finding report still true /
+changed / already fixed, with evidence:
+
+1. **#56 (B2 pure reads).** Merged or still a draft? If merged, confirm
+   `services/bills.py` no longer writes during reads and note the post-B2
+   test count and coverage from a fresh run. If still a draft, rebase it
+   onto current `main`, re-run the suite, push so it is green and
+   mergeable, and tell me it's waiting on my review. **You do not merge it;
+   I do.**
+2. **The nan/inf defect.** Write the failing test FIRST:
+   `GET /ui/handoff/subscription?…&amount=nan` (and `inf`, `-inf`) —
+   confirm on current code it produces a 500, not the 422 error fragment.
+3. **Stale evidence.** Which run the Actions URL in `sophia/README.md`
+   points to, and whether a newer run on `main` including docker-health
+   exists; the old `pytest-108-passed.txt` and every reference to it; any
+   other committed number that disagrees with the fresh suite run.
+4. **Screenshot inventory.** List `docs/release-0/sophia/screenshots/` with
+   dates against the shot list: which of the 13 exist, which predate #49,
+   which are missing. Confirm headless Chrome against the running
+   containers is available on this machine.
+5. **Report-text corrections.** Which lines of my drafted report sections
+   and known-issues note still carry old numbers, cite the registration
+   form for ports, presume a rubric exists, or describe items 5/6 in their
+   pre-#49 wording. Quote each line you intend to change.
+
+Output: the verification table and the surviving work plan with time
+estimates.
+
+## Phase 1 — nan/inf guard (independent; first)
+
+Branch `fix/bills-handoff-amount-guard`. In
+`routes/fragments.py::_parse_handoff_subscription`, reject non-finite
+amounts — parse, then `math.isfinite()`, and amount ≥ 0 — through the
+existing error-fragment path with status 422 and a plain-English message.
+Keep the Phase 0 tests plus one huge-but-finite value that must still pass.
+Draft PR "Bills: reject non-finite amounts in handoff links" — body: found
+in the 29 Aug self-audit; one guard, four tests.
+
+## Phase 1b — point Bills at the team Ollama container (independent)
+
+The team added an `ollama` compose service that pulls `qwen2.5:0.5b` and
+`llama3.1:8b`. Bills still calls the host's Ollama via the
+`host.docker.internal` default — at a showcase run from one machine with
+only the container, Bills' AI calls would fall back. Branch
+`chore/bills-ollama-container`:
+
+1. `docker-compose.yml`, bills-backend block only: `OLLAMA_URL:
+   http://ollama:11434` and `depends_on: ollama`. **No `/v1` suffix** —
+   Bills uses Ollama's native `/api/chat`; the `/v1` path in another
+   block is an OpenAI-compatible client, not ours. Keep `extra_hosts` and
+   the `config.py` default as the fallback for running without the service.
+2. `sophia/README.md`: in compose Bills uses the shared service; the first
+   `docker compose up ollama` downloads the models, so start it early on
+   demo day; bare local runs use `OLLAMA_URL=http://localhost:11434`.
+3. `contracts-inbound.md` §1: do not flip the port again — annotate that
+   the transactions service deployed on 3001/5001/6001, colliding with the
+   student-1 block; Bills addresses it by container name via
+   `TRANSACTIONS_DB_API_URL` whatever port wins.
+4. Verify with `docker compose config`; if the machine can spare it, bring
+   up `ollama`, `bills-db` and `bills-backend`, wait for the pulls, and
+   confirm `/health` reports `"ollama": "up"`; otherwise say the check was
+   skipped and why. Draft PR "Bills: use the shared ollama compose service".
+
+## Phase 2 — evidence truth pass (gated on #56 merged)
+
+If #56 is unmerged, stop here and remind me — no partial evidence pass
+against pre-B2 numbers. Branch `docs/bills-evidence-refresh`: run the
+suite, capture the real output to `evidence/pytest-<N>-passed.txt` with the
+real N, delete the old file, update every stale number and filename
+reference (README, api.md, evidence README) — one consistent set of numbers
+matching what a marker gets when they run pytest. Put the newest green
+run-on-main URL (including docker-health) in the README. Regenerate the
+r0-07 test-run capture. Draft PR "Bills docs: evidence refreshed to post-B2
+numbers".
+
+## Phase 3 — screenshot recapture (gated on Phases 1–2 and #56 all merged)
+
+This is the final-build capture; running it earlier would make the set
+stale again. Fresh seed with `DEMO_TODAY=2026-08-20`; recapture with the
+established headless-Chrome method: the missing shots, every shot that
+predates #49, and the new ones the report needs — the handoff prefilled
+form with its evidence banner, a deep-link landing, and the 422 error
+fragment from Phase 1. Same viewport as the earlier set. Update the shot
+list's status column. Anything that genuinely needs a human at a real
+browser, list for me rather than faking. Draft PR
+`docs/bills-screenshots-final`.
+
+## Phase 4 — report text (notes only; no repo changes)
+
+In my drafted report sections: update every test and coverage number to
+the final set, or leave clearly marked placeholders if Phases 2–3 haven't
+landed; paste the five declared-deviation sentences at the matching
+markers; remove any sentence citing the registration form for ports or
+presuming a rubric exists. In the known-issues note: rewrite items 5/6 for
+the post-#49 reality, add the D1 sentence (sqlite3 → Flask-SQLAlchemy in
+R1), and add or remove the nan/inf line per Phase 1's outcome. Numbers, the
+named corrections and the pasted sentences only — do not restructure.
+
+## Closing report
+
+Head at start and end · how many findings survived verification · PR URLs
+· final test and coverage numbers · screenshot set status · what remains
+gated and on whom · anything new noticed outside scope (list only).

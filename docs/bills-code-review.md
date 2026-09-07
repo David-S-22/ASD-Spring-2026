@@ -1,18 +1,5 @@
 # Bills feature — code review
 
-> **Status, 7 Sep 2026.** This is a point-in-time review against `3164ce8` (2 Sep),
-> kept unedited below as the record of what it found. Every C, H and M item was
-> fixed in #105, #106, #108, #109 and #120 within two days of writing: chat applies
-> through the services layer, proposals wait as pending suggestions and record
-> reject/fail outcomes, the schema rejects an op without an entity, the
-> missing-information backstop exists, a model-emitted `amount_cents` is
-> blocklisted, and `created_at` defaults to `DEMO_TODAY`. The suite is now
-> 283 passed / 91%, and the tests listed as missing at the end exist
-> (`test_chat_proposal_honesty.py`, `test_chat_apply_service_path.py`,
-> `test_suggestions.py`). Still open: L1 (unrestricted CORS, DB published on
-> :6005), L2 (`/api/chat/history` has no client), L3 (`toast.html` lacks
-> `aria-live`).
-
 Reviewer: Claude (Cowork session for Soph), 2026-09-02, against `main` @ `3164ce8`.
 Scope: the Bills feature only — `sophia/frontend`, `sophia/backend`, `sophia/database` — with
 emphasis on the Ask Tally chat seam, per the handover plan. Findings marked **[verified]** were

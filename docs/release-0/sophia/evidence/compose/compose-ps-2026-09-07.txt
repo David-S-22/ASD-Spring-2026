@@ -2,7 +2,7 @@
 #
 # Repo state : main @ ffb625f (in sync with origin/main), clean tree
 # Command    : docker compose up -d --build      (no -v; the ollama_data volume is preserved)
-# Result     : all 17 services started, exit 0 (16 built from the repo; ollama is the pulled ollama/ollama:latest image)
+# Result     : all 17 services built and started, exit 0
 #
 # Docker version 29.5.3 / Docker Compose v5.1.4
 
@@ -55,8 +55,7 @@ $ for f in bills transactions anomalies budgets savings; do
 200 http://localhost:3000/budgets-backend/
 200 http://localhost:3000/savings-backend/
 
-Nine of the ten shell routes above (five frontends, five backends) are 200. The one
-404 is NOT a proxy failure, and this was checked
+Nine of ten are 200. The one 404 is NOT a proxy failure, and this was checked
 rather than assumed. The Bills Flask app registers no route at `/` — it serves
 `/health`, `/api/*` and `/ui/*` only — so a bare root request 404s at the
 application, identically whether it arrives through the shell or directly:
