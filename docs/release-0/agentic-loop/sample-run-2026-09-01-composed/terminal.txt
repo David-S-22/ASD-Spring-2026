@@ -1,6 +1,6 @@
 AGENTIC LOOP - Bills extended review (Plan -> Act -> Observe -> Adapt)
-Repository: C:\Users\Sophia.Nguyen\OneDrive - WiseTech Global Pty Ltd\Documents\SPRING 2026\30-Projects\ASD-Spring-2026
-Run record: C:\Users\Sophia.Nguyen\OneDrive - WiseTech Global Pty Ltd\Documents\SPRING 2026\30-Projects\ASD-Spring-2026\sophia\agentic_loop\reports
+Repository: <repo root>
+Run record: <repo root>\sophia\agentic_loop\reports
 Endpoint: http://127.0.0.1:11434/v1
 Models served: llama3.1:8b, qwen2.5:0.5b, qwen2.5:3b
 Implementation model: qwen2.5:0.5b
