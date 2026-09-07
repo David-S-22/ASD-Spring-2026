@@ -36,18 +36,22 @@ all taken at once, and the dates matter when reading them:
   (#118) and the `?confirm=6#bills` deep-link shape (#119). Order of capture:
   chat, then dispute, then add-bill — the add-bill shot goes last because a
   13th bill in the prompt makes `qwen2.5:3b` target the wrong subscription (see
-  `evidence/ai/README.md`, "context, measured 7 Sep"). Three things in these
+  `evidence/ai/README.md`, "context, measured 7 Sep"). Two things in these
   images are defects, kept as recorded rather than staged around:
-  - r0-06b/r0-06c: the proposal reads **"Ends 2026-10-01"** — the model's
-    wrong-month answer on the seeded history, first take, not re-rolled. The
-    correct value is 16 Sep.
-  - r0-06b: "Tally is thinking…" is visible beside Approve/Reject/Suggest while
-    nothing is in flight. `.working` in `bills.css` has no idle-hide rule
-    (htmx only hides elements carrying the `htmx-indicator` class), so the
-    text shows on every pending card. One CSS line; R1.
+  - r0-06b/r0-06c: the proposal reads **"Ends 2026-10-16"** — the model's
+    wrong-month answer on the seeded history (the same value the committed
+    `evidence/ai/06` JSON records), first take, not re-rolled. The correct
+    value is 16 Sep.
   - r0-05/r0-06: the Ask Tally aside sits mid-page rather than at the top of
     its column once the Disputes panel is expanded — the grid centres it
     against the taller column.
+
+  A third defect was in the first 7 Sep take and is fixed in this same PR:
+  "Tally is thinking…" showed beside Approve/Reject/Suggest while nothing was
+  in flight, because `.working` in `bills.css` had no idle-hide rule (htmx
+  only hides elements carrying the `htmx-indicator` class). `.working` now
+  idles at opacity 0 and shows on `htmx-request`; r0-06b/r0-06c were re-shot
+  after the fix.
 - **r0-03 (Calendar) and r0-04 (Coming up)** are still the 2 Sep files
   (`0bd8150`). They cannot be re-shot: #109 removed both tabs from the page.
   `/ui/calendar` and `/ui/timeline` still exist and are tested, but nothing
