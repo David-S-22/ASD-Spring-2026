@@ -68,7 +68,8 @@ Compose sets `PORT`, `BILLS_DB_API_URL`, `FRONTEND_ORIGIN` and `OLLAMA_URL`
 for the backend — the model and demo-clock values are in-container defaults
 from `config.py`. In compose, Bills uses the team's shared `ollama` service
 (`OLLAMA_URL=http://ollama:11434`); the first `docker compose up ollama`
-downloads ~5 GB of models into its volume, so start it early on demo day.
+pulls three models into its volume (`llama3.1:8b` 4.9 GB, `qwen2.5:3b`
+1.9 GB, `qwen2.5:0.5b`), so start it early on demo day.
 The `config.py` default (`http://host.docker.internal:11434`) remains the
 fallback for running bills-backend without the ollama service, and anyone
 running the backend bare on a machine without Docker Desktop should set
@@ -91,10 +92,13 @@ second attempt also fails. Neither call ever raises out to the route.
    removing the payment authority; a card bill's steps must mention
    cancelling from the app's account page.
 2. **Chat** (`ai/chat_prompt.py`, `CHAT_MODEL`): given a compact bills list
-   (id, name, amount, cadence, next date, type) and four few-shot examples,
+   (id, name, amount, cadence, next date, type) and six few-shot examples
+   (two questions, a bill update, a dispute create, a bill create, and an
+   under-specified create that asks for the missing details instead),
    classifies the message into `{op, entity, id, fields, question, say}`.
    `question` resolves in code (`total`, `barely_using`, `upcoming`); `op`
-   becomes a preview card the user must confirm before anything is written.
+   becomes a pending suggestion the user must approve before anything is
+   written.
    Kept deliberately short — accuracy degrades with long context.
 
 ## Date engine rules
@@ -136,14 +140,17 @@ figure ("$379–415", or "$379" when lo == hi).
 
 ## Inbound contracts
 
-See `docs/release-0/sophia/contracts-inbound.md` (dated 22 Aug 2026) for the two inbound
+See `docs/release-0/sophia/contracts-inbound.md` (first written 22 Aug 2026,
+revised through 7 Sep 2026) for the two inbound
 handoff endpoints (`POST /api/handoff/recurring`, `POST /api/suggestions`)
 and the transactions-service contract this feature assumes.
 
 ## Schema adoption
 
-See `docs/release-0/sophia/schema-adoption.md` for the four additive schema items
-(`end_date`, `source`, `confirmed_at`, `chat_messages`) and why each exists.
+See `docs/release-0/sophia/schema-adoption.md` for the six additive schema items
+(`bills.end_date`, `bills.source`, `bills.confirmed_at`, `bills.exclude_from_plan`,
+the `chat_messages` table, and the `suggestions` table that holds each AI
+proposal until the user decides on it) and why each exists.
 
 ## Testing and evidence
 
@@ -151,33 +158,53 @@ See `docs/release-0/sophia/schema-adoption.md` for the four additive schema item
 python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
 ```
 
-159 passed; coverage 88% across `sophia/backend` (measured 30 Aug 2026).
+283 passed; coverage 91% across `sophia/backend` (1698 statements, 155 missed;
+measured 7 Sep 2026 on Python 3.13.2 at `aede425`). The same suite is green on
+Python 3.12 in Sophia-CI run 145, and the saved output is
+`docs/release-0/sophia/evidence/compose/pytest-283-passed.txt`.
 
 Covers the engine (dates, projection, calendar, status, money), the database
 API (temp SQLite per test, seed row counts, CRUD round-trips, cascade
-delete), the backend routes (monkeypatched
-`bills_db` client, no network), the AI guard and schemas (mocked HTTP,
-retry-then-fallback, direct-debit/card step injection, unreachable-Ollama
-fallback), and the `/ui/*` HTML fragments (a real `sophia/database` instance
-in a background thread against a temp seeded SQLite file, verbatim-copy and
+delete), the backend routes (monkeypatched `bills_db` client, no network),
+the inbound handoff routes and the transactions-service contract (stub
+shape, live-path normalisation, non-finite amounts → 422), the services
+layer's validation branches, the rule that GETs never write the cached
+status column, the AI guard and schemas (mocked HTTP, retry-then-fallback,
+direct-debit/card step injection, unreachable-Ollama fallback), the chat
+proposal path (a proposal may only promise what can happen; suggestions wait
+for approval and apply through the same services layer a manual edit uses),
+the agentic loop's collectors, run record and endpoint fingerprint, and the
+`/ui/*` HTML fragments and write routes (a real `sophia/database` instance in
+a background thread against a temp seeded SQLite file, verbatim-copy and
 `$`-formatting assertions).
 
 `docs/release-0/sophia/evidence/ai/` holds raw JSON from real local Ollama calls (not
-mocked) — dispute drafts for a direct-debit bill and a card bill plus a
-regenerate-with-feedback call (3/3 first-try schema pass), and all four
-chat chips (4/4 correct op), with an honest note on what tuning changed and
-what this small sample does and doesn't demonstrate.
+mocked), re-captured 7 Sep 2026 against the composed stack on the shipping
+models — dispute drafts for a direct-debit bill and a card bill plus a
+regenerate-with-feedback call (3/3 validated, no fallback), and all four
+chat chips (4/4 correct op, with two recorded defects: the Spotify cancel
+returns an `end_date` a month late in 5 of 6 repeats, and the GymCo dispute
+reply says the draft is done when it is only a pending suggestion — both kept
+as recorded),
+with an honest note on what tuning changed and what this small sample does
+and doesn't demonstrate.
 `docs/release-0/sophia/evidence/compose/` holds the `docker compose`
-verification run and the curl transcripts of the `/ui/*` write routes.
+verification runs (22 Aug and 7 Sep) and the curl transcripts of the `/ui/*`
+write routes; `docs/release-0/sophia/evidence/ci-summary-2026-09-07.txt`
+records the Sophia-CI run counts and the `gh api` commands that reproduce
+them.
 Diagrams are in `docs/architecture/` and app screenshots in
 `docs/release-0/sophia/screenshots/`, each described in
-`docs/release-0/sophia/README.md`. Per the spec's repository layout, nothing
-under `sophia/` is documentation.
+`docs/release-0/sophia/README.md`. Per the spec's repository layout, the
+report's evidence lives under `docs/`; this file and
+`sophia/agentic_loop/README.md` are the only documentation beside the code.
 
 ## Pull requests
 
-All Bills PRs are merged to `main` — 34 in total, each squash-merged after
-review:
+All 56 of this feature owner's PRs are merged to `main`, each squash-merged
+after review (verified 7 Sep 2026: every merge commit has one parent). Four
+are shared work rather than Bills — the team agentic loop #78, #81, #82 and
+the repo-structure chore #85. The other 52 are this feature:
 
 - Scaffold #6, #7 · engine #8 · DB API #13 · backend #10 · frontend #11 ·
   AI #12
@@ -185,10 +212,17 @@ review:
 - Docs, layout, polish: #19, #24, #25, #26, #27, #30, #33, #71, #75
 - Requirements split: #34
 - Release 0 hardening: #47, #49, #50, #51, #52, #56, #68, #69
-- Shared-shell integration: #85, #86
+- Shared-shell integration: #86, #89, #91, #93, #96, #119
+- Ask Tally on `qwen2.5:3b`, chat add-bill, suggestions and the reject → adapt
+  loop: #94, #100, #105, #106, #108, #120
+- Dark theme, row menu, one-page layout, polish: #101, #103, #109, #117, #118
+- Agentic loop, individual extension: #88
+- Release 0 evidence refresh: #127, #128
 
-Actions evidence — Sophia-CI run on `main`:
-<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33467437820>
+Actions evidence — Sophia-CI run 145 on `main` (3 Sep 2026, 145 runs, 142
+successful; the workflow's path filter is `sophia/**`, `shared/**` and the
+workflow file, so docs-only merges since then have not triggered it):
+<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33720083787>
 
 ## Workflow note
 

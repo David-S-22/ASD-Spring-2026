@@ -1,12 +1,20 @@
 # Docker Compose verification — 22 Aug 2026
 
 > **Dates.** The captures here are stamped 21 Aug **UTC** (`compose-ps.txt` says
-> so explicitly; the `Date:` headers in `ui-write-routes.txt` read "Fri, 21 Aug
-> 2026 18:58 GMT"). That is 22 Aug in Sydney, which is the date on this heading.
+> so explicitly; the `Date:` headers in `ui-write-routes.txt` run from "Fri, 21 Aug
+> 2026 18:56:52 GMT" to "18:58:29 GMT"). That is 22 Aug in Sydney, which is the date on this heading.
 > Both are correct; they are not two different runs.
 >
 > **Superseded in part.** `pytest-283-passed.txt` and `compose-ps-2026-09-07.txt`
 > in this directory, and `../ci-summary-2026-09-07.txt`, are the current numbers.
+> `pytest-283-passed.txt` is the full suite output — 283 passed, 91% coverage,
+> Python 3.13.2 at `ffb625f`, matching Sophia-CI run 145 on 3.12.
+> `compose-ps-2026-09-07.txt` is a fresh `docker compose up -d --build` of the whole
+> team stack: 17 services up (16 built, `ollama` pulled), all five frontends and
+> four of five backends 200 through the shared shell on `:3000`. The one 404 is
+> Bills' own backend root, which registers no `/` route (`/health` and `/api/bills`
+> are 200 through the same path); three non-Bills backends have no `/health`
+> endpoint, recorded as an observation outside this feature's scope.
 > Everything below is the 22 Aug record and is kept as history.
 
 `compose-down.txt`, `compose-ps.txt`, `curl-endpoints.txt` are the baseline
@@ -44,8 +52,9 @@ response" as `Plan for September` / `Set aside up to $697`, and that the
 timeline's top row read `Home internet` / `Overdue` / `$79.00`. Those strings
 appear in none of the four capture files. The transcript records status lines
 and headers only — the apply response is logged as `HTTP/1.1 200 OK` with
-`Content-Length: 13989` and `HX-Trigger: {"toast": "Done — change
-saved."}`, and the body itself was never saved. The underlying behaviour is
+`Content-Length: 13989` and `HX-Trigger: {"toast": "Done \u2014 change
+saved."}` (the em dash is JSON-escaped in the capture), and the body itself was
+never saved. The underlying behaviour is
 real and covered by the test suite; it was simply never evidenced *here*, so
 the claim has been withdrawn rather than restated.
 
