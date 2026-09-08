@@ -83,6 +83,50 @@ def test_budget_line_round_trip_and_unique_category_per_budget(client):
     assert updated.get_json()["hard_cap"] == 22500
 
 
+def test_deleting_budget_line_removes_matching_planned_events(client):
+    budget = client.post("/budgets", json={"month": "2026-10"}).get_json()
+    line = client.post(
+        f"/budgets/{budget['id']}/budget-lines",
+        json={"category_id": 81, "category": "Groceries", "warn_at": 15000, "hard_cap": 20000},
+    ).get_json()
+    matching_event = client.post(
+        f"/budgets/{budget['id']}/planned-events",
+        json={
+            "date": "2026-10-04",
+            "label": "Weekly shop",
+            "category": "Groceries",
+            "est_low": 4000,
+            "est_high": 6000,
+            "source": "user",
+            "status": "planned",
+        },
+    ).get_json()
+    other_line = client.post(
+        f"/budgets/{budget['id']}/budget-lines",
+        json={"category_id": 80, "category": "Dining", "warn_at": 12000, "hard_cap": 18000},
+    ).get_json()
+    other_event = client.post(
+        f"/budgets/{budget['id']}/planned-events",
+        json={
+            "date": "2026-10-10",
+            "label": "Dinner out",
+            "category": "Dining",
+            "est_low": 5000,
+            "est_high": 7000,
+            "source": "user",
+            "status": "planned",
+        },
+    ).get_json()
+
+    deleted = client.delete(f"/budget-lines/{line['id']}")
+
+    assert deleted.status_code == 204
+    assert client.get(f"/budget-lines/{line['id']}").status_code == 404
+    assert client.get(f"/planned-events/{matching_event['id']}").status_code == 404
+    assert client.get(f"/planned-events/{other_event['id']}").status_code == 200
+    assert client.get(f"/budget-lines/{other_line['id']}").status_code == 200
+
+
 def test_planned_event_requires_matching_budget_line_category(client):
     budget = client.post("/budgets", json={"month": "2026-11"}).get_json()
     client.post(
@@ -207,6 +251,47 @@ def test_coach_proposal_round_trip(client):
     assert updated.get_json()["decided_at"] is not None
 
 
+def test_chat_message_round_trip_and_reset(client):
+    budget = client.post("/budgets", json={"month": "2026-12"}).get_json()
+    proposal = client.post(
+        f"/budgets/{budget['id']}/coach-proposals",
+        json={"proposal_json": {"proposal_type": "chat_edit", "operations": []}},
+    ).get_json()
+
+    created_user = client.post(
+        f"/budgets/{budget['id']}/chat-messages",
+        json={"role": "user", "content": "How is Dining looking?"},
+    )
+    assert created_user.status_code == 201
+
+    created_assistant = client.post(
+        f"/budgets/{budget['id']}/chat-messages",
+        json={
+            "role": "assistant",
+            "content": "Dining is under pressure this month.",
+            "mode": "advice",
+            "response_source": "deterministic",
+            "plan_json": {"intent": "overspending"},
+            "observation_json": {"month": "2026-12"},
+            "stage_trace": ["observe", "plan", "act", "adapt"],
+            "proposal_id": proposal["id"],
+        },
+    )
+    assert created_assistant.status_code == 201
+
+    listed = client.get(f"/budgets/{budget['id']}/chat-messages")
+    assert listed.status_code == 200
+    messages = listed.get_json()
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[1]["proposal_id"] == proposal["id"]
+    assert messages[1]["response_source"] == "deterministic"
+    assert messages[1]["stage_trace"] == ["observe", "plan", "act", "adapt"]
+
+    deleted = client.delete(f"/budgets/{budget['id']}/chat-messages")
+    assert deleted.status_code == 204
+    assert client.get(f"/budgets/{budget['id']}/chat-messages").get_json() == []
+
+
 def test_deleting_budget_cascades_to_child_records(client):
     budget = client.post("/budgets", json={"month": "2027-01"}).get_json()
     line = client.post(
@@ -221,6 +306,10 @@ def test_deleting_budget_cascades_to_child_records(client):
         f"/budgets/{budget['id']}/coach-proposals",
         json={"proposal_json": {"proposal_type": "coach"}},
     ).get_json()
+    client.post(
+        f"/budgets/{budget['id']}/chat-messages",
+        json={"role": "assistant", "content": "Stored history", "mode": "advice"},
+    ).get_json()
 
     deleted = client.delete(f"/budgets/{budget['id']}")
     assert deleted.status_code == 204
@@ -229,6 +318,7 @@ def test_deleting_budget_cascades_to_child_records(client):
     assert client.get(f"/budget-lines/{line['id']}").status_code == 404
     assert client.get(f"/planned-events/{planned_event['id']}").status_code == 404
     assert client.get(f"/coach-proposals/{proposal['id']}").status_code == 404
+    assert client.get(f"/budgets/{budget['id']}/chat-messages").status_code == 404
 
 
 def test_startup_seeds_at_least_ten_rows_per_table(tmp_path):

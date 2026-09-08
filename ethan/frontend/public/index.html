@@ -199,20 +199,6 @@
             padding: 0.9rem 1rem;
         }
 
-        .summary-card-button {
-            width: 100%;
-            text-align: left;
-            cursor: pointer;
-            color: inherit;
-            background: var(--color-surface-alt, #273449);
-        }
-
-        .summary-card-button:hover,
-        .summary-card-button:focus-visible {
-            border-color: rgba(148, 163, 184, 0.5);
-            box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2);
-        }
-
         .summary-card .summary-label {
             display: block;
             margin-bottom: 0.25rem;
@@ -231,26 +217,6 @@
             margin-top: 0.3rem;
             color: var(--color-text-muted, #94a3b8);
             font-size: 0.85rem;
-        }
-
-        .summary-card-topline {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
-        }
-
-        .summary-card-edit-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 1.5rem;
-            min-height: 1.5rem;
-            border-radius: 999px;
-            background: rgba(148, 163, 184, 0.12);
-            color: var(--color-text-muted, #94a3b8);
-            font-size: 0.85rem;
-            line-height: 1;
         }
 
         .budget-lines {
@@ -289,10 +255,6 @@
             display: grid;
             gap: 0.75rem;
             padding: 14px 18px 18px;
-            max-height: 31rem;
-            min-height: 20rem;
-            overflow-y: auto;
-            align-content: start;
         }
 
         .planned-event-item {
@@ -657,198 +619,6 @@
             padding: 14px 18px 18px;
         }
 
-        .chat-panel {
-            display: grid;
-            gap: 1rem;
-        }
-
-        .coach-columns {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 1rem;
-        }
-
-        .coach-column {
-            display: grid;
-            gap: 1rem;
-            align-content: start;
-        }
-
-        .coach-column + .coach-column {
-            border-left: 1px solid rgba(148, 163, 184, 0.18);
-            padding-left: 1rem;
-        }
-
-        .chat-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .chat-chip-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.65rem;
-            flex: 1 1 34rem;
-        }
-
-        .chat-reset-button {
-            flex: 0 0 auto;
-            border-color: rgba(96, 165, 250, 0.4);
-            background: rgba(59, 130, 246, 0.14);
-            color: #dbeafe;
-        }
-
-        .chat-chip {
-            border: 1px solid rgba(148, 163, 184, 0.28) !important;
-            border-radius: 999px;
-            background: rgba(30, 41, 59, 0.92) !important;
-            color: #cbd5e1 !important;
-            padding: 0.45rem 0.8rem;
-            box-shadow: none;
-        }
-
-        .chat-chip:hover,
-        .chat-chip:focus-visible {
-            border-color: rgba(148, 163, 184, 0.42) !important;
-            background: rgba(39, 52, 73, 0.98) !important;
-            color: var(--color-text, #e2e8f0) !important;
-        }
-
-        .chat-history {
-            display: grid;
-            gap: 0.75rem;
-            max-height: 31rem;
-            min-height: 20rem;
-            overflow-y: auto;
-            align-content: start;
-            padding: 0.35rem 0.15rem 0.35rem 0;
-        }
-
-        .proposal-list {
-            display: grid;
-            gap: 0.75rem;
-        }
-
-        .proposal-panel {
-            display: grid;
-            gap: 1rem;
-        }
-
-        .proposal-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .proposal-toggle {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--color-text-muted, #94a3b8);
-            font-size: 0.9rem;
-        }
-
-        .proposal-history {
-            display: grid;
-            gap: 0.75rem;
-            max-height: 31rem;
-            min-height: 20rem;
-            overflow-y: auto;
-            align-content: start;
-            padding: 0.35rem 0.15rem 0.35rem 0;
-        }
-
-        .proposal-card {
-            border: 1px solid var(--color-border, #334155);
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.02);
-            padding: 0.9rem 1rem;
-            display: grid;
-            gap: 0.6rem;
-        }
-
-        .proposal-card.accepted {
-            border-color: rgba(52, 211, 153, 0.32);
-        }
-
-        .proposal-card.rejected {
-            border-color: rgba(248, 113, 113, 0.32);
-        }
-
-        .proposal-card-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-            flex-wrap: wrap;
-            align-items: baseline;
-        }
-
-        .proposal-card-title {
-            font-weight: 600;
-        }
-
-        .proposal-card-status {
-            color: var(--color-text-muted, #94a3b8);
-            text-transform: capitalize;
-        }
-
-        .proposal-card-body,
-        .proposal-card-ops {
-            margin: 0;
-            color: var(--color-text-muted, #cbd5e1);
-        }
-
-        .proposal-card-ops {
-            padding-left: 1.15rem;
-        }
-
-        .proposal-card-actions {
-            display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        .chat-message {
-            max-width: min(46rem, 100%);
-            padding: 0.85rem 1rem;
-            border: 1px solid var(--color-border, #334155);
-            border-radius: 10px;
-            line-height: 1.5;
-            white-space: normal;
-        }
-
-        .chat-message.user {
-            justify-self: end;
-            background: rgba(52, 211, 153, 0.1);
-            border-color: rgba(52, 211, 153, 0.26);
-        }
-
-        .chat-message.assistant {
-            justify-self: start;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .chat-form {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 0.75rem;
-            align-items: start;
-        }
-
-        .chat-form input {
-            min-width: 0;
-        }
-
-        .chat-status {
-            color: var(--color-text-muted, #94a3b8);
-            font-size: 0.9rem;
-        }
-
         @media (max-width: 700px) {
             .budget-line-head {
                 display: grid;
@@ -856,23 +626,6 @@
 
             .budget-line-amounts {
                 text-align: left;
-            }
-
-            .chat-form {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 980px) {
-            .coach-columns {
-                grid-template-columns: 1fr;
-            }
-
-            .coach-column + .coach-column {
-                border-left: none;
-                border-top: 1px solid rgba(148, 163, 184, 0.18);
-                padding-left: 0;
-                padding-top: 1rem;
             }
         }
 
@@ -943,24 +696,6 @@
                         <div class="budget-line-form-actions">
                             <button type="button" id="cancel-add-budget-line-button">Cancel</button>
                             <button type="submit" id="save-budget-line-button">Save budget line</button>
-                        </div>
-                    </form>
-                </dialog>
-
-                <dialog id="budget-income-dialog" class="budget-line-dialog">
-                    <div class="budget-line-dialog-header">
-                        <h3>Edit monthly income</h3>
-                        <p>Update the selected month's income to refresh the remaining budget totals.</p>
-                    </div>
-                    <form id="budget-income-form" class="budget-line-form">
-                        <div>
-                            <label for="budget-income-input">Income</label>
-                            <input id="budget-income-input" name="declared_income" type="number" min="0" step="0.01" placeholder="5000.00" required>
-                        </div>
-                        <p id="budget-income-form-error" class="budget-line-form-error hidden" role="alert"></p>
-                        <div class="budget-line-form-actions">
-                            <button type="button" id="cancel-budget-income-button">Cancel</button>
-                            <button type="submit" id="save-budget-income-button">Save income</button>
                         </div>
                     </form>
                 </dialog>
@@ -1066,49 +801,11 @@
             <section id="coach-panel" class="coach-panel">
                 <div class="panel-header-block">
                     <h2 class="panel-heading">Chat with Tally (AI)</h2>
-                    <p class="panel-subtext">Ask about the selected month's budget and get AI guidance based on the live budget summary.</p>
+                    <p class="panel-subtext">This area is reserved for the later coaching chat flow and now has its own wide section in the page layout.</p>
                 </div>
                 <div class="panel-body-block">
-                    <div class="coach-columns">
-                        <div class="coach-column">
-                            <div class="chat-panel">
-                                <div class="chat-header-row">
-                                    <div class="chat-chip-row">
-                                        <button type="button" class="chat-chip" data-chat-chip="Where am I overspending most?">Where am I overspending most?</button>
-                                        <button type="button" class="chat-chip" data-chat-chip="Which categories are closest to warning?">Which categories are closest to warning?</button>
-                                        <button type="button" class="chat-chip" data-chat-chip="Can I still afford to eat out this month?">Can I still afford to eat out this month?</button>
-                                    </div>
-                                    <button id="reset-chat-button" class="chat-reset-button" type="button">Restart chat</button>
-                                </div>
-                                <div id="chat-history" class="chat-history">
-                                    <div class="budget-empty">Select a budget month to start chatting with Tally.</div>
-                                </div>
-                                <form id="chat-form" class="chat-form">
-                                    <input id="chat-input" name="message" type="text" placeholder="Ask Tally about this month's budget" autocomplete="off">
-                                    <button id="send-chat-button" type="submit">Ask</button>
-                                </form>
-                                <p id="chat-status" class="chat-status">This first AI slice keeps chat context only while this page stays open.</p>
-                            </div>
-                        </div>
-                        <div class="coach-column">
-                            <div class="proposal-panel">
-                                <div class="proposal-header-row">
-                                    <div>
-                                        <h3 class="panel-heading">Coach proposals</h3>
-                                        <p class="panel-subtext">Review suggested changes for the selected month before applying them.</p>
-                                    </div>
-                                    <label class="proposal-toggle" for="show-rejected-proposals">
-                                        <input id="show-rejected-proposals" type="checkbox">
-                                        <span>Show rejected</span>
-                                    </label>
-                                </div>
-                                <div id="proposal-history" class="proposal-history">
-                                    <div id="coach-proposals-list" class="proposal-list">
-                                        <div class="budget-empty">No coach proposals for this month yet.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="budget-empty">
+                        <p class="placeholder-copy">This area now matches the simpler dashboard styling while staying independent from the overview and Week Ahead sections.</p>
                     </div>
                 </div>
             </section>
@@ -1133,9 +830,6 @@
             editingLineId: null,
             editingPlannedEventId: null,
             summary: null,
-            chatMessages: [],
-            chatMessagesByBudgetId: {},
-            showRejectedProposals: false,
         };
 
         function escapeHtml(value) {
@@ -1157,10 +851,6 @@
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
             }).format(value / 100);
-        }
-
-        function formatChatHtml(value) {
-            return escapeHtml(value).replaceAll('\n', '<br>');
         }
 
         function formatMoneyInputFromCents(value) {
@@ -1292,12 +982,6 @@
             errorElement.classList.toggle('hidden', !message);
         }
 
-        function setBudgetIncomeFormError(message) {
-            const errorElement = document.getElementById('budget-income-form-error');
-            errorElement.textContent = message;
-            errorElement.classList.toggle('hidden', !message);
-        }
-
         function setPlannedEventFormError(message) {
             const errorElement = document.getElementById('planned-event-form-error');
             errorElement.textContent = message;
@@ -1315,28 +999,6 @@
             const resultElement = document.getElementById('affordability-result');
             resultElement.innerHTML = message || 'Choose a budget line and enter an amount to preview the impact.';
             resultElement.className = 'affordability-result' + (tone ? ' ' + tone : '');
-        }
-
-        function setChatStatus(message) {
-            document.getElementById('chat-status').textContent = message;
-        }
-
-        async function readApiJson(response, requestMessage, unexpectedMessage) {
-            const text = await response.text();
-            if (!text) {
-                if (!response.ok) {
-                    throw new Error(requestMessage);
-                }
-                return null;
-            }
-            try {
-                return JSON.parse(text);
-            } catch (_error) {
-                if (!response.ok) {
-                    throw new Error(requestMessage);
-                }
-                throw new Error(unexpectedMessage);
-            }
         }
 
         function setBudgetLineFormVisible(isVisible) {
@@ -1382,21 +1044,6 @@
             }
         }
 
-        function setBudgetIncomeFormVisible(isVisible) {
-            const dialog = document.getElementById('budget-income-dialog');
-            if (isVisible) {
-                if (!dialog.open) {
-                    dialog.showModal();
-                }
-                return;
-            }
-            if (dialog.open) {
-                dialog.close();
-            }
-            document.getElementById('budget-income-form').reset();
-            setBudgetIncomeFormError('');
-        }
-
         function setBudgetLineActionsEnabled(isEnabled) {
             const addButton = document.getElementById('show-add-budget-line-button');
             addButton.disabled = !isEnabled;
@@ -1425,29 +1072,6 @@
                 form.reset();
                 setAffordabilityResult('No budget lines are available for the selected month yet.', '');
             }
-        }
-
-        function setChatActionsEnabled(isEnabled, message) {
-            const input = document.getElementById('chat-input');
-            const button = document.getElementById('send-chat-button');
-            const resetButton = document.getElementById('reset-chat-button');
-            const historyElement = document.getElementById('chat-history');
-            const chipButtons = document.querySelectorAll('[data-chat-chip]');
-            input.disabled = !isEnabled;
-            button.disabled = !isEnabled;
-            resetButton.disabled = !isEnabled;
-            chipButtons.forEach(function (chipButton) {
-                chipButton.disabled = !isEnabled;
-            });
-            if (!isEnabled) {
-                budgetState.chatMessages = [];
-                historyElement.innerHTML = '<div class="budget-empty">' + escapeHtml(message || 'Select a budget month to start chatting with Tally.') + '</div>';
-            }
-            setChatStatus(
-                isEnabled
-                    ? "This first AI slice keeps chat context only while this page stays open."
-                    : (message || 'Select a budget month to start chatting with Tally.')
-            );
         }
 
         function findBudgetLine(lineId) {
@@ -1577,7 +1201,6 @@
                     label: 'Income',
                     value: formatCurrencyFromCents(totals.declared_income),
                     hint: budget.status ? 'Status: ' + budget.status : '',
-                    editable: true,
                 },
                 {
                     label: 'Spent',
@@ -1597,14 +1220,8 @@
             ];
 
             strip.innerHTML = cards.map(function (card) {
-                const attributes = card.editable
-                    ? ' class="summary-card summary-card-button" data-edit-income-summary="true" role="button" tabindex="0" aria-label="Edit monthly income" title="Edit monthly income"'
-                    : ' class="summary-card"';
-                return '<div' + attributes + '>'
-                    + '<div class="summary-card-topline">'
+                return '<div class="summary-card">'
                     + '<span class="summary-label">' + escapeHtml(card.label) + '</span>'
-                    + (card.editable ? '<span class="summary-card-edit-icon" aria-hidden="true">&#9998;</span>' : '')
-                    + '</div>'
                     + '<div class="summary-value">' + escapeHtml(card.value) + '</div>'
                     + '<div class="summary-hint">' + escapeHtml(card.hint || '') + '</div>'
                     + '</div>';
@@ -1876,6 +1493,20 @@
             }).join('');
         }
 
+        function plannedEventsForBudgetLine(line) {
+            if (!line || !budgetState.summary || !Array.isArray(budgetState.summary.planned_events)) {
+                return [];
+            }
+            const category = typeof line.category === 'string' ? line.category.trim().toLowerCase() : '';
+            if (!category) {
+                return [];
+            }
+            return budgetState.summary.planned_events.filter(function (plannedEvent) {
+                return typeof plannedEvent.category === 'string'
+                    && plannedEvent.category.trim().toLowerCase() === category;
+            });
+        }
+
         function renderChatMessages(messages) {
             const historyElement = document.getElementById('chat-history');
             budgetState.chatMessages = Array.isArray(messages) ? messages : [];
@@ -2032,7 +1663,29 @@
                 return;
             }
             setChatActionsEnabled(true);
-            renderChatMessages(budgetState.chatMessagesByBudgetId[String(budgetId)] || []);
+            try {
+                const response = await fetch('/budgets-backend/api/budgets/' + encodeURIComponent(budgetId) + '/chat-messages');
+                const result = await readApiJson(
+                    response,
+                    'Tally is unavailable right now. Please try again.',
+                    'Tally returned an unexpected response.'
+                );
+                if (!isPageActive() || String(budgetState.activeBudgetId) !== String(budgetId)) {
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to load chat history.');
+                }
+                renderChatMessages(Array.isArray(result) ? result.map(function (message) {
+                    return { role: message.role, content: message.content };
+                }) : []);
+            } catch (error) {
+                if (!isPageActive()) {
+                    return;
+                }
+                renderChatMessages(budgetState.chatMessagesByBudgetId[String(budgetId)] || []);
+                setChatStatus(error.message || 'Unable to load chat history.');
+            }
         }
 
         async function resetChatHistory() {
@@ -2049,6 +1702,17 @@
             try {
                 if (!isPageActive()) {
                     return;
+                }
+                const response = await fetch('/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId) + '/chat-messages', {
+                    method: 'DELETE',
+                });
+                const result = await readApiJson(
+                    response,
+                    'Tally is unavailable right now. Please try again.',
+                    'Tally returned an unexpected response.'
+                );
+                if (!response.ok) {
+                    throw new Error(result && result.error ? result.error : 'Unable to restart chat history.');
                 }
                 budgetState.chatMessagesByBudgetId[String(budgetState.activeBudgetId)] = [];
                 document.getElementById('chat-input').value = '';
@@ -2112,7 +1776,9 @@
                 }
                 setChatStatus(result.fallback
                     ? 'Tally used a fallback reply because the AI service was unavailable or returned invalid data.'
-                    : 'Showing advice for the selected month while this page stays open.');
+                    : 'Completed ' + ((result.stage_trace || []).join(' -> ') || 'observe -> plan -> act -> adapt')
+                        + ' using '
+                        + (result.response_source === 'ollama' ? 'Ollama AI.' : 'grounded budget rules.'));
             } catch (error) {
                 if (!isPageActive()) {
                     return;
@@ -2124,7 +1790,6 @@
                 }
             }
         }
-
         function showEmptyMonthState(month) {
             budgetState.activeBudgetId = null;
             budgetState.summary = null;
@@ -2132,49 +1797,10 @@
             document.getElementById('budget-summary-strip').classList.add('hidden');
             document.getElementById('budget-lines').innerHTML = '<div class="budget-empty">No budget has been created for this month yet.</div>';
             document.getElementById('planned-events-list').innerHTML = '<div class="budget-empty">No budget has been created for this month yet.</div>';
-            document.getElementById('coach-proposals-list').innerHTML = '<div class="budget-empty">No coach proposals for this month yet.</div>';
             document.getElementById('other-expenses-panel').classList.add('hidden');
             setBudgetLineActionsEnabled(false);
             setPlannedEventActionsEnabled(false);
             setAffordabilityActionsEnabled(false);
-            setChatActionsEnabled(false, 'No budget has been created for this month yet, so chat is unavailable.');
-        }
-
-        async function applyCoachProposal(proposalId) {
-            const response = await fetch('/budgets-backend/api/coach-proposals/' + encodeURIComponent(proposalId) + '/apply', {
-                method: 'POST',
-            });
-            const result = await readApiJson(
-                response,
-                'Unable to apply coach proposal.',
-                'The coach proposal service returned an unexpected response.'
-            );
-            if (!response.ok) {
-                throw new Error(result && result.error ? result.error : 'Unable to apply coach proposal.');
-            }
-            await loadBudgetSummary(budgetState.activeBudgetId);
-            setChatStatus('Applied the selected coach proposal.');
-        }
-
-        async function rejectCoachProposal(proposalId) {
-            const response = await fetch('/budgets-backend/api/coach-proposals/' + encodeURIComponent(proposalId), {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    status: 'rejected',
-                    rejection_reason: 'Rejected from the chat proposal panel.',
-                }),
-            });
-            const result = await readApiJson(
-                response,
-                'Unable to reject coach proposal.',
-                'The coach proposal service returned an unexpected response.'
-            );
-            if (!response.ok) {
-                throw new Error(result && result.error ? result.error : 'Unable to reject coach proposal.');
-            }
-            await loadBudgetSummary(budgetState.activeBudgetId);
-            setChatStatus('Rejected the selected coach proposal.');
         }
 
         async function quickAddBudgetLine(categoryId, categoryName, button) {
@@ -2249,8 +1875,6 @@
                 renderPlannedEvents(summary);
                 renderAffordabilityOptions();
                 setAffordabilityActionsEnabled(budgetLineOptions().length > 0);
-                renderCoachProposals(summary);
-                await loadChatHistory(budgetId);
             } catch (error) {
                 if (!isPageActive()) {
                     return;
@@ -2259,12 +1883,10 @@
                 document.getElementById('budget-summary-strip').classList.add('hidden');
                 linesElement.innerHTML = '';
                 document.getElementById('planned-events-list').innerHTML = '';
-                document.getElementById('coach-proposals-list').innerHTML = '<div class="budget-empty">No coach proposals for this month yet.</div>';
                 document.getElementById('other-expenses-panel').classList.add('hidden');
                 setBudgetLineActionsEnabled(false);
                 setPlannedEventActionsEnabled(false);
                 setAffordabilityActionsEnabled(false);
-                setChatActionsEnabled(false, 'Chat is unavailable because the budget summary could not be loaded.');
                 setError(error.message || 'Unable to load the budget summary.');
             }
         }
@@ -2314,7 +1936,6 @@
                 document.getElementById('other-expenses-panel').classList.add('hidden');
                 budgetState.summary = null;
                 setBudgetLineActionsEnabled(false);
-                setChatActionsEnabled(false, 'Chat is unavailable because budgets could not be loaded.');
                 setError(error.message || 'Unable to load budgets.');
             }
         }
@@ -2333,23 +1954,27 @@
             document.getElementById('budget-line-hard-cap').value = formatMoneyInputFromCents(line.hard_cap);
         }
 
-        function startEditingBudgetIncome() {
-            if (!budgetState.summary || !budgetState.summary.budget) {
-                setError('Select a budget before editing income.');
-                return;
-            }
-            document.getElementById('budget-income-input').value = formatMoneyInputFromCents(budgetState.summary.budget.declared_income);
-            setBudgetIncomeFormError('');
-            setBudgetIncomeFormVisible(true);
-        }
-
         async function deleteBudgetLine(lineId) {
             const line = findBudgetLine(lineId);
             if (!line) {
                 setError('Unable to find that budget line.');
                 return;
             }
-            const confirmed = window.confirm('Remove the ' + (line.category || 'selected') + ' budget line?');
+            const linkedPlannedEvents = plannedEventsForBudgetLine(line);
+            let confirmationMessage = 'Remove the ' + (line.category || 'selected') + ' budget line?';
+            if (linkedPlannedEvents.length > 0) {
+                const eventLabels = linkedPlannedEvents.map(function (plannedEvent) {
+                    return plannedEvent.label || plannedEvent.category || 'Untitled planned event';
+                });
+                confirmationMessage += '\n\nThis will also remove '
+                    + linkedPlannedEvents.length
+                    + ' planned event'
+                    + (linkedPlannedEvents.length === 1 ? '' : 's')
+                    + ' attached to this budget line: '
+                    + eventLabels.join(', ')
+                    + '.';
+            }
+            const confirmed = window.confirm(confirmationMessage);
             if (!confirmed) {
                 return;
             }
@@ -2452,64 +2077,6 @@
                     return;
                 }
                 setBudgetLineFormError(error.message || 'Unable to save budget line.');
-            } finally {
-                if (isPageActive()) {
-                    saveButton.disabled = false;
-                }
-            }
-        }
-
-        async function saveBudgetIncome(event) {
-            event.preventDefault();
-            setBudgetIncomeFormError('');
-
-            if (!budgetState.activeBudgetId) {
-                setBudgetIncomeFormError('Select a budget before editing income.');
-                return;
-            }
-
-            let declaredIncome;
-            try {
-                declaredIncome = parseMoneyInputToCents(document.getElementById('budget-income-input').value.trim());
-            } catch (error) {
-                setBudgetIncomeFormError(error.message || 'Enter a valid income amount.');
-                return;
-            }
-            if (declaredIncome === null) {
-                setBudgetIncomeFormError('Income is required.');
-                return;
-            }
-
-            const saveButton = document.getElementById('save-budget-income-button');
-            saveButton.disabled = true;
-
-            try {
-                const response = await fetch(
-                    '/budgets-backend/api/budgets/' + encodeURIComponent(budgetState.activeBudgetId),
-                    {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ declared_income: declaredIncome }),
-                    }
-                );
-                const result = await readApiJson(
-                    response,
-                    'Unable to update budget income.',
-                    'The budget service returned an unexpected response.'
-                );
-                if (!isPageActive()) {
-                    return;
-                }
-                if (!response.ok) {
-                    throw new Error(result && result.error ? result.error : 'Unable to update budget income.');
-                }
-                setBudgetIncomeFormVisible(false);
-                await loadBudgetSummary(budgetState.activeBudgetId);
-            } catch (error) {
-                if (!isPageActive()) {
-                    return;
-                }
-                setBudgetIncomeFormError(error.message || 'Unable to update budget income.');
             } finally {
                 if (isPageActive()) {
                     saveButton.disabled = false;
@@ -2700,17 +2267,11 @@
         document.getElementById('cancel-add-budget-line-button').addEventListener('click', function () {
             setBudgetLineFormVisible(false);
         });
-        document.getElementById('cancel-budget-income-button').addEventListener('click', function () {
-            setBudgetIncomeFormVisible(false);
-        });
         document.getElementById('cancel-planned-event-button').addEventListener('click', function () {
             setPlannedEventFormVisible(false);
         });
         document.getElementById('budget-line-form').addEventListener('submit', saveBudgetLine);
-        document.getElementById('budget-income-form').addEventListener('submit', saveBudgetIncome);
         document.getElementById('planned-event-form').addEventListener('submit', savePlannedEvent);
-        document.getElementById('chat-form').addEventListener('submit', sendChatMessage);
-        document.getElementById('reset-chat-button').addEventListener('click', resetChatHistory);
         document.getElementById('affordability-form').addEventListener('submit', function (event) {
             event.preventDefault();
             updateAffordabilityPreview();
@@ -2743,19 +2304,6 @@
                 deleteBudgetLine(deleteButton.getAttribute('data-delete-budget-line'));
             }
         });
-        document.getElementById('budget-summary-strip').addEventListener('click', function (event) {
-            const editButton = event.target.closest('[data-edit-income-summary]');
-            if (editButton) {
-                startEditingBudgetIncome();
-            }
-        });
-        document.getElementById('budget-summary-strip').addEventListener('keydown', function (event) {
-            const editButton = event.target.closest('[data-edit-income-summary]');
-            if (editButton && (event.key === 'Enter' || event.key === ' ')) {
-                event.preventDefault();
-                startEditingBudgetIncome();
-            }
-        });
         document.getElementById('planned-events-list').addEventListener('click', function (event) {
             const editButton = event.target.closest('[data-edit-planned-event]');
             if (editButton) {
@@ -2778,33 +2326,7 @@
                 quickAddButton
             );
         });
-        document.getElementById('coach-panel').addEventListener('click', function (event) {
-            const chipButton = event.target.closest('[data-chat-chip]');
-            if (chipButton && !chipButton.disabled) {
-                document.getElementById('chat-input').value = chipButton.getAttribute('data-chat-chip') || '';
-                document.getElementById('chat-form').requestSubmit();
-                return;
-            }
-            const applyButton = event.target.closest('[data-apply-proposal]');
-            if (applyButton) {
-                applyCoachProposal(applyButton.getAttribute('data-apply-proposal')).catch(function (error) {
-                    setChatStatus(error.message || 'Unable to apply coach proposal.');
-                });
-                return;
-            }
-            const rejectButton = event.target.closest('[data-reject-proposal]');
-            if (rejectButton) {
-                rejectCoachProposal(rejectButton.getAttribute('data-reject-proposal')).catch(function (error) {
-                    setChatStatus(error.message || 'Unable to reject coach proposal.');
-                });
-            }
-        });
-        document.getElementById('show-rejected-proposals').addEventListener('change', function (event) {
-            budgetState.showRejectedProposals = Boolean(event.target.checked);
-            renderCoachProposals(budgetState.summary);
-        });
 
-        setChatActionsEnabled(false, 'Select a budget month to start chatting with Tally.');
         loadBudgetsOverview();
         })();
     </script>

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from . import db_api
+from . import db_api, summary_service
 from .db_api import ServiceError
 
 
@@ -33,6 +33,19 @@ def _apply_update_budget_line(proposal: dict, operation: dict) -> dict:
     return db_api.update_budget_line(str(line_id), _fields_payload(operation.get("fields")))
 
 
+def _summary_snapshot(summary: dict, proposal: dict) -> dict:
+    totals = summary.get("totals") if isinstance(summary.get("totals"), dict) else {}
+    lines = summary.get("budget_lines") if isinstance(summary.get("budget_lines"), list) else []
+    return {
+        "budget_id": proposal.get("budget_id"),
+        "month": summary.get("budget", {}).get("month") if isinstance(summary.get("budget"), dict) else None,
+        "budget_line_count": len([line for line in lines if isinstance(line, dict)]),
+        "actual_spend_total": totals.get("actual_spend_total"),
+        "projected_high_total": totals.get("projected_high_total"),
+        "remaining_income_high": totals.get("remaining_income_high"),
+    }
+
+
 def apply(proposal_id: object) -> dict:
     proposal = db_api.get_coach_proposal(_proposal_id_text(proposal_id))
     if proposal.get("status") != "proposed":
@@ -43,6 +56,7 @@ def apply(proposal_id: object) -> dict:
     operations = proposal_json.get("operations")
     if not isinstance(operations, list) or not operations:
         raise ServiceError("proposal must contain at least one operation", 422, "invalid_field")
+    before_summary = summary_service.build_budget_summary(str(proposal["budget_id"]))
 
     applied = []
     for operation in operations:
@@ -54,4 +68,31 @@ def apply(proposal_id: object) -> dict:
         applied.append(_apply_update_budget_line(proposal, operation))
 
     updated_proposal = db_api.update_coach_proposal(str(proposal["id"]), {"status": "accepted"})
-    return {"proposal": updated_proposal, "applied": applied}
+    after_summary = summary_service.build_budget_summary(str(proposal["budget_id"]))
+    return {
+        "proposal": updated_proposal,
+        "applied": applied,
+        "stage_trace": ["observe", "plan", "act", "observe", "adapt"],
+        "agentic_workflow": {
+            "observe_before": _summary_snapshot(before_summary, proposal),
+            "plan": {
+                "proposal_id": proposal.get("id"),
+                "budget_id": proposal.get("budget_id"),
+                "operation_count": len(operations),
+                "supported_actions": ["update_budget_line"],
+            },
+            "act": {
+                "applied_operation_count": len(applied),
+                "applied_budget_line_ids": [
+                    item.get("id")
+                    for item in applied
+                    if isinstance(item, dict) and isinstance(item.get("id"), int)
+                ],
+            },
+            "observe_after": _summary_snapshot(after_summary, proposal),
+            "adapt": {
+                "proposal_status": updated_proposal.get("status"),
+                "human_confirmation_required": True,
+            },
+        },
+    }
