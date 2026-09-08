@@ -5,6 +5,15 @@ containerised services (frontend, backend, database) with a dedicated test
 suite. Each service is a small Flask/nginx app that runs independently via
 Docker Compose.
 
+## Documentation
+
+- [Backend documentation](backend.md) — backend overview, agentic workflow,
+  services, and routes.
+- [Database documentation](database.md) — database overview, routes, and
+  conceptual, logical, and physical ERDs.
+- [Test documentation](tests.md) — backend and database testing, including
+  service integration with `responses`.
+
 ## Project structure
 
 ### `frontend/`
