@@ -1,4 +1,26 @@
-# Anomalies Database ERDs
+# Anomalies Database
+
+## Overview
+
+The anomalies database is a Flask and SQLAlchemy application that exposes a
+REST API for storing and managing anomaly records. It persists data in SQLite.
+Each anomaly references a transaction by ID, and the unique constraint on
+`anomalies.transaction_id` allows each transaction to have at most one anomaly.
+
+The `transactions` table and `anomalies` table are stored in separate databases. Therefore, the relationship between `anomalies.transaction_id` and `transactions.id` is a logical cross-database reference rather than an enforced database foreign key. The `UNIQUE` constraint on `anomalies.transaction_id` ensures that each transaction can have zero or one anomaly.
+
+## Routes
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Returns the database health response. |
+| `GET` | `/anomalies/` | Returns all anomaly records. |
+| `POST` | `/anomalies/` | Creates an anomaly record. |
+| `GET` | `/anomalies/<id>` | Returns one anomaly by ID. |
+| `GET` | `/anomalies/by-transaction/<id>` | Returns the anomaly for a transaction. |
+| `PATCH` | `/anomalies/<id>` | Updates the user's confirmation status. |
+| `DELETE` | `/anomalies/<id>` | Deletes an anomaly by ID. |
+| `DELETE` | `/anomalies/by-transaction/<id>` | Deletes the anomaly for a transaction. |
 
 ## Conceptual ERD
 
@@ -74,5 +96,3 @@ erDiagram
         BOOLEAN is_confirmed_by_user "NULLABLE"
     }
 ```
-
-The `transactions` table and `anomalies` table are stored in separate databases. Therefore, the relationship between `anomalies.transaction_id` and `transactions.id` is a logical cross-database reference rather than an enforced database foreign key. The `UNIQUE` constraint on `anomalies.transaction_id` ensures that each transaction can have zero or one anomaly.
