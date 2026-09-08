@@ -151,6 +151,10 @@ def register_routes(application):
 	def get_index():
 		return jsonify(container="transactions-db")
 
+	@application.get("/health")
+	def get_health():
+		return jsonify(ok=True, container="transactions-db")
+
 	@application.get("/transactions")
 	def get_transactions():
 		transactions = filtered_transactions(

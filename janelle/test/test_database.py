@@ -69,6 +69,18 @@ def test_index_identifies_database(database_client):
 	assert response.get_json() == {"container": "transactions-db"}
 
 
+def test_health_reports_database_liveness(database_client):
+	client, _database_path = database_client
+
+	response = client.get("/health")
+
+	assert response.status_code == 200
+	assert response.get_json() == {
+		"ok": True,
+		"container": "transactions-db",
+	}
+
+
 def test_setup_creates_schema_indexes_and_foreign_keys(database_client):
 	_client, database_path = database_client
 	connection = get_connection(database_path)

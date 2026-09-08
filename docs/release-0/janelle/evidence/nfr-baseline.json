@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-09-08T02:29:48.596250+00:00",
+  "parallel": {
+    "elapsed_ms": 133.885,
+    "error_count": 0,
+    "p95_ms": 29.284,
+    "requests": 40,
+    "requests_per_second": 298.76,
+    "workers": 8
+  },
+  "passed": true,
+  "probe": "janelle-database-nfr",
+  "sequential": {
+    "error_count": 0,
+    "max_ms": 2.146,
+    "p50_ms": 1.748,
+    "p95_ms": 2.022,
+    "requests": 100
+  },
+  "thresholds": {
+    "error_count": 0,
+    "parallel_elapsed_ms": 10000,
+    "sequential_p95_ms": 250
+  }
+}

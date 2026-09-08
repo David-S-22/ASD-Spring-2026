@@ -24,6 +24,16 @@ def test_cycle_runs_stages_in_plan_act_observe_adapt_order():
     assert result["status"] == "complete"
     assert result["result"] == {"ok": True}
     assert len(result["cycles"]) == 1
+    assert set(result["cycles"][0]["durations_ms"]) == {
+        "PLAN",
+        "ACT",
+        "OBSERVE",
+        "ADAPT",
+    }
+    assert all(
+        duration >= 0
+        for duration in result["cycles"][0]["durations_ms"].values()
+    )
 
 
 def test_cycle_replans_once_then_stops():
@@ -93,6 +103,7 @@ def test_cycle_converts_stage_exception_to_explicit_failure():
         "message": "boom",
     }
     assert result["cycles"][0]["plan"] == {"operation": "read"}
+    assert set(result["cycles"][0]["durations_ms"]) == {"PLAN", "ACT"}
     assert "action" not in result["cycles"][0]
 
 
