@@ -4,16 +4,24 @@
 
 ```mermaid
 erDiagram
-    TRANSACTION ||--o| ANOMALY : "may have"
+    TRANSACTIONS ||--o| ANOMALIES : "may have"
 
-    TRANSACTION {
-        int transaction_id
+    TRANSACTIONS {
+        int id
+        date date
+        string merchant
+        string description
+        decimal amount
+        int category_id
+        datetime created_at
+        datetime updated_at
     }
 
-    ANOMALY {
-        int anomaly_id
-        string reason
-        boolean confirmed
+    ANOMALIES {
+        int id
+        int transaction_id
+        string agent_reason_suspected
+        boolean is_confirmed_by_user
     }
 ```
 
@@ -21,9 +29,9 @@ erDiagram
 
 ```mermaid
 erDiagram
-    TRANSACTION ||--o| ANOMALY : "has at most one"
+    TRANSACTIONS ||--o| ANOMALIES : "has at most one"
 
-    TRANSACTION {
+    TRANSACTIONS {
         int id PK
         datetime date
         string merchant
@@ -34,7 +42,7 @@ erDiagram
         datetime updated_at
     }
 
-    ANOMALY {
+    ANOMALIES {
         int id PK
         int transaction_id UK
         string agent_reason_suspected
