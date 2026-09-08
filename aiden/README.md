@@ -1,107 +1,67 @@
 # Anomaly Detection Service
 
-An AI-assisted transaction anomaly-detection feature, split into three
-containerised services (frontend, backend, database) with a dedicated test
-suite. Each service is a small Flask/nginx app that runs independently via
-Docker Compose.
+An AI-assisted transaction anomaly-detection feature running through
+containerised frontend, backend, database, and model components.
 
 ## Documentation
 
 - [Backend documentation](backend.md) — backend overview, agentic workflow,
   services, and routes.
+- [Frontend documentation](frontend.md) — frontend overview, user interface,
+  backend communication, and nginx configuration.
 - [Database documentation](database.md) — database overview, routes, and
   conceptual, logical, and physical ERDs.
 - [Test documentation](tests.md) — backend and database testing, including
   service integration with `responses`.
 
-## Project structure
+## Directory overview
 
 ### `frontend/`
 
-The user-facing layer. An **nginx** container that serves a single-page
-`public/index.html` and reverse-proxies API calls under `/anomalies-backend/`
-to the backend service.
-
-- `public/index.html` — HTMX-driven UI listing anomalies, with buttons to create
-  a dummy anomaly and check a dummy transaction. Includes toast notifications.
-- `nginx.conf` — templated nginx config (`${PORT}`, `${ANOMALIES_BACKEND_URL}`)
-  that proxies backend requests.
-- `Dockerfile` — builds on `nginx:alpine`, exposes port `3004`.
+Contains the user-facing anomalies interface. The frontend runs in an nginx
+container and serves the static page used to display anomalies, transaction
+information, review controls, and status messages. HTMX requests refresh
+anomaly rows and submit actions without full page reloads. The interface also
+supports checking a transaction and creating a dummy anomaly during
+development. Nginx proxies `/anomalies-backend/` requests to the backend
+container, while environment variables provide the backend URL. The directory
+contains the HTML page, nginx configuration, and Dockerfile required to build
+and run the frontend container. Detailed frontend documentation is available in
+[`frontend.md`](frontend.md).
 
 ### `backend/`
 
-The application/logic layer. A **Flask** app exposing the anomaly-detection API
-and orchestrating the AI agent.
-
-- `app.py` — Flask routes: index, `/anomalies` (render list), `/check-transaction`
-  (enqueue a transaction for asynchronous review; a background worker runs it
-  through the agent and persists flagged anomalies), `/anomaly-alert` (wait for a
-  specific queued transaction — identified by its `key` (transaction id) — to
-  finish review and return the toast fragment if it was flagged, else `204`),
-  `/dummy-anomaly`, and `/fact`.
-- `services/` — external integrations:
-  - `agent_api.py` — the skeptical anomaly-detection agent; prompts the model,
-    parses/validates JSON findings, and builds context from prior user-reviewed
-    anomalies.
-  - `ollama_api.py` — thin OpenAI-compatible client wrapper (cached singleton)
-    for the Ollama model.
-  - `review_queue.py` — in-process queue and background worker that perform the
-    slow LLM review off the request thread and persist any anomaly. Tracks each
-    item by key (transaction id) so callers can wait for a specific result via
-    `wait_for_result(key, timeout)`.
-  - `anomalies_api.py` / `transaction_api.py` — HTTP clients for the database and
-    transaction services.
-- `templates/` — Jinja fragments (`anomalies.jinja` list rows, `alert.jinja` toast)
-  returned to HTMX.
-- `helpers.py` — (de)serialisation and env helpers.
-- `Dockerfile` / `requirements.txt` — service image and dependencies.
+Contains the main Flask application responsible for coordinating anomaly
+detection. It provides routes for listing anomalies, submitting transactions,
+receiving review results, and confirming or dismissing findings. HTTP clients
+connect the backend to the anomalies and transactions databases. Reviews run
+asynchronously so model requests do not block the original request. The
+directory includes the agent logic, review queue, Ollama client, templates,
+helpers, requirements, and Dockerfile. The agent uses transaction details and
+previous user decisions to produce structured findings. Detailed workflow,
+services, and routes are documented in
+[`backend.md`](backend.md).
 
 ### `database/`
 
-The persistence layer. A **Flask + SQLAlchemy** app exposing a REST CRUD API for
-anomalies backed by SQLite.
-
-- `models.py` — the `Anomaly` SQLAlchemy model and its `to_dto()` mapping.
-- `app.py` — `anomalies` blueprint with GET/POST/PATCH/DELETE routes (including
-  delete-by-transaction), JSON error handling, and `setup_database()`.
-- `helpers.py` — field-setting and parsing helpers.
-- `Dockerfile` / `requirements.txt` — service image and dependencies.
+Contains the anomalies persistence service. It is a Flask application backed by
+SQLAlchemy and SQLite, exposing a REST API for anomaly CRUD operations. Each
+record stores a transaction ID, the agent's reason, and the user's confirmation
+status. Transactions and anomalies are stored in separate databases, so the
+relationship is represented by ID rather than a database foreign key. A unique
+constraint allows at most one anomaly per transaction. The directory includes
+the model, routes, parsing helpers, requirements, and Dockerfile. Database
+design, routes, and ERDs are documented in [`database.md`](database.md).
 
 ### `test/`
 
-The automated test suite (pytest).
-
-- `test_backend.py` — exercises backend routes, mocking the database service by
-  redirecting `requests` to an in-memory test client via `responses`.
-- `test_database.py` — CRUD tests against an in-memory SQLite database.
-- `conftest.py` — shared fixtures. `requirements.txt` — test dependencies.
-
-## Development processes
-
-### Static type checking (mypy)
-
-Type checking is enforced with **mypy**, configured in `mypy.ini`
-(Python 3.13, `check_untyped_defs = True`, `mypy_path = ..` so the shared package
-resolves).
-
-### Testing (pytest)
-
-Unit tests run without any live services — the database uses an in-memory SQLite
-DB and the backend intercepts outbound HTTP.
-
-### CI/CD
-
-GitHub Actions workflow `.github/workflows/aiden-ci.yml` runs on pull requests to
-`main` (and manual dispatch) when `aiden/**` or `shared/**` change. It has two jobs:
-
-- **test** — installs the backend, database, and test requirements, runs mypy
-  (annotating issues inline), then runs pytest.
-- **build-health** — brings up the three containers via `docker compose`, then
-  curls each service's health endpoint (frontend `3004`, backend `5004`,
-  database `6004`) and tears the containers down afterwards.
-
-### Running locally
-
-The services are designed to run together via Docker Compose (see the repository
-root `docker-compose` configuration), which wires the frontend, backend, and
-database containers together along with the shared model package.
+Contains the automated pytest suite for the backend and database applications.
+Database tests use Flask's test client and an in-memory SQLite database to
+check persistence, validation, routes, and anomaly operations. Backend tests
+exercise the API, asynchronous review queue, agent behaviour, and service
+integration. Outbound HTTP requests are intercepted with `responses` and
+redirected to Flask test clients, avoiding running containers. Model responses
+are controlled with monkeypatching to test valid, invalid, suspicious, and
+retry scenarios deterministically. Shared pytest setup and test dependencies
+are also stored here. Additional testing details are available in
+[`tests.md`](tests.md).
