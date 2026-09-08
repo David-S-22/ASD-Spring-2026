@@ -40,6 +40,16 @@ def test_index_identifies_backend(client: FlaskClient):
     assert response.get_json() == {"container": "transactions-backend"}
 
 
+def test_health_reports_backend_liveness(client: FlaskClient):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "ok": True,
+        "container": "transactions-backend",
+    }
+
+
 def test_transaction_rows_are_loaded_from_database(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
@@ -477,8 +487,16 @@ def test_category_routes_forward_requests(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
 ):
+    categories = [
+        {"id": 80, "name": "Dining", "type": "want"},
+        {"id": 90, "name": "Education", "type": "saving"},
+    ]
     create_payload = {"name": "Education", "type": "saving"}
     update_payload = {"name": "Learning", "type": "want"}
+    get = Mock(side_effect=[
+        response_with_json(categories),
+        response_with_json(categories[1]),
+    ])
     post = Mock(return_value=response_with_json(
         {"id": 90, **create_payload},
         status=201,
@@ -488,10 +506,13 @@ def test_category_routes_forward_requests(
         **update_payload,
     }))
     delete = Mock(return_value=response_with_json(None, status=204))
+    monkeypatch.setattr(backend_app.requests, "get", get)
     monkeypatch.setattr(backend_app.requests, "post", post)
     monkeypatch.setattr(backend_app.requests, "patch", patch)
     monkeypatch.setattr(backend_app.requests, "delete", delete)
 
+    list_response = client.get("/categories")
+    get_response = client.get("/categories/90")
     create_response = client.post(
         "/categories",
         json=create_payload,
@@ -502,9 +523,23 @@ def test_category_routes_forward_requests(
     )
     delete_response = client.delete("/categories/90")
 
+    assert list_response.status_code == 200
+    assert list_response.get_json() == categories
+    assert get_response.status_code == 200
+    assert get_response.get_json() == categories[1]
     assert create_response.status_code == 201
     assert update_response.status_code == 200
     assert delete_response.status_code == 204
+    assert get.call_args_list == [
+        call(
+            f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+            timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+        ),
+        call(
+            f"{backend_app.config.TRANSACTIONS_DB_URL}/categories/90",
+            timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+        ),
+    ]
     post.assert_called_once_with(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
         json=create_payload,

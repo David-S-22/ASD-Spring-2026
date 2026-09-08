@@ -235,6 +235,16 @@ def test_frontend_proxies_only_to_backend():
     assert "transactions-db" not in nginx
 
 
+def test_frontend_exposes_json_health_endpoint():
+    nginx = (
+        REPOSITORY_ROOT / "janelle" / "frontend" / "nginx.conf"
+    ).read_text(encoding="utf-8")
+
+    assert "location = /health" in nginx
+    assert '"ok":true' in nginx
+    assert '"container":"transactions-frontend"' in nginx
+
+
 def test_shared_shell_proxies_transactions_backend_through_frontend():
     nginx = (
         REPOSITORY_ROOT / "shared" / "frontend" / "nginx.conf"
@@ -277,6 +287,7 @@ def test_compose_configures_pr4_chat_services():
     assert "CHAT_REVIEW_MODEL" not in transactions_backend
     assert "AGENT_MAX_ITERATIONS: 2" in transactions_backend
     assert 'AGENT_TRACE_ENABLED: "true"' in transactions_backend
+    assert 'AGENT_LOG_ENABLED: "true"' in transactions_backend
     assert "AGENT_REQUEST_TTL_SECONDS: 900" in transactions_backend
     assert "AI_TIMEOUT_SECONDS: 90" in transactions_backend
     assert "ollama:" in transactions_backend

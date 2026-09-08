@@ -1,3 +1,4 @@
+import logging
 import json
 from unittest.mock import Mock
 
@@ -179,6 +180,89 @@ def test_chat_create_previews_then_apply_performs_exactly_one_write(
         },
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )
+
+
+def test_chat_emits_redacted_structured_workflow_logs(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    caplog,
+):
+    private_message = "Count my private Release Evidence transactions"
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(CATEGORIES),
+            response_with_json(MERIVALE_TRANSACTIONS),
+        ]),
+    )
+    use_extraction(monkeypatch, extraction(calculation="count"))
+
+    with caplog.at_level(
+        logging.INFO,
+        logger=client.application.logger.name,
+    ):
+        response = client.post(
+            "/chat",
+            json={"message": private_message},
+        )
+
+    assert response.status_code == 200
+    records = [
+        json.loads(record.getMessage().split("AI_WORKFLOW ", 1)[1])
+        for record in caplog.records
+        if "AI_WORKFLOW " in record.getMessage()
+    ]
+    assert [record["event"] for record in records] == [
+        "ai_workflow_stage",
+        "ai_workflow_stage",
+        "ai_workflow_stage",
+        "ai_workflow_stage",
+        "ai_workflow_complete",
+    ]
+    assert [record["stage"] for record in records[:-1]] == [
+        "PLAN",
+        "ACT",
+        "OBSERVE",
+        "ADAPT",
+    ]
+    assert {record["request_id"] for record in records} == {
+        response.get_json()["agent"]["request_id"]
+    }
+    assert all(record["duration_ms"] >= 0 for record in records)
+    assert records[-1]["status"] == "complete"
+    assert records[-1]["model"] == "qwen2.5:3b"
+    assert private_message not in caplog.text
+
+
+def test_workflow_logging_failure_does_not_break_chat(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    capsys,
+):
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(CATEGORIES),
+            response_with_json(MERIVALE_TRANSACTIONS),
+        ]),
+    )
+    use_extraction(monkeypatch, extraction(calculation="count"))
+    monkeypatch.setattr(
+        client.application.logger,
+        "info",
+        Mock(side_effect=OSError("logging failed")),
+    )
+
+    response = client.post(
+        "/chat",
+        json={"message": "How many transactions are there?"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["analytics"]["count"] == 3
+    assert "AI_WORKFLOW_LOG_FAILURE OSError" in capsys.readouterr().err
 
 
 def test_delayed_category_selection_cannot_replace_applying_preview(
@@ -1635,6 +1719,13 @@ def test_ui_chat_panel_is_rendered_from_jinja(client: FlaskClient):
         in response.text
     )
     assert "hx-on:transaction-completed" in response.text
+
+
+def test_ui_chat_clear_returns_empty_fragment(client: FlaskClient):
+    response = client.get("/ui/chat/clear")
+
+    assert response.status_code == 200
+    assert response.text == ""
 
 
 def test_ui_chat_renders_deterministic_read_result(

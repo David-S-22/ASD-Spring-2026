@@ -1,4 +1,5 @@
 import json
+import logging
 
 import requests
 from flask import Flask, jsonify, make_response, render_template, request
@@ -27,6 +28,8 @@ from .services.transaction_orchestrator import (
 
 def setup_app(db_url: str) -> Flask:
     application = Flask(__name__)
+    if config.AGENT_LOG_ENABLED:
+        application.logger.setLevel(logging.INFO)
     db_url = db_url.rstrip("/")
     anomalies_backend_url = config.ANOMALIES_BACKEND_URL.rstrip("/")
 
@@ -83,6 +86,10 @@ def setup_app(db_url: str) -> Flask:
     @application.route("/")
     def get_index():
         return jsonify(container="transactions-backend")
+
+    @application.get("/health")
+    def get_health():
+        return jsonify(ok=True, container="transactions-backend")
 
     @application.route("/transactions")
     def get_transactions():

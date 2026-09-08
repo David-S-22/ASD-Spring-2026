@@ -35,6 +35,7 @@ AGENT_MAX_ITERATIONS = min(
     ),
 )
 AGENT_TRACE_ENABLED = _environment_flag("AGENT_TRACE_ENABLED", True)
+AGENT_LOG_ENABLED = _environment_flag("AGENT_LOG_ENABLED", True)
 AGENT_REQUEST_TTL_SECONDS = max(
     1,
     int(os.environ.get("AGENT_REQUEST_TTL_SECONDS", "900")),
