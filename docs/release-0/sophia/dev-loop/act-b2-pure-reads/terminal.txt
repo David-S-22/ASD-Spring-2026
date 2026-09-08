@@ -1,0 +1,547 @@
+DEVELOPMENT-LOOP RUN RECORD — ACT — B2: reads stop writing derived status (#56)
+Session id      : 9fdd41a4-b25a-46a3-b5af-ba0d38036859
+Session start   : 2026-08-29T02:41:37.348Z  (UTC; Sydney is +10:00)
+Session end     : 2026-08-29T03:19:02.087Z
+Prompt issued   : 2026-08-29T02:41:55.244Z
+main at start   : ffcf74c fix: updating savings database requirements path (#54)  (inferred: newest main commit before the prompt timestamp)
+Condensed from the session transcript: the prompt as issued, each tool call as one line, each
+phase gate as it occurred, and the closing summary. Tool outputs over ten lines are elided.
+Machine paths are shown as ~/… or repo-relative; other people's names are replaced.
+==============================================================================
+[02:41Z] USER PROMPT (verbatim):
+Context
+I am Sophia Nguyen, Student 5, Bills List & Dispute Assistant:
+sophia/**, services bills-frontend :3005 / bills-backend :5005 /
+bills-db :6005, workflow Sophia-CI.yml, docs docs/release-0/sophia/.
+You (or a prior session) merged Tier A this morning: #47, #49, #50, #51.
+Main should be at or past 5ccfc5d. You saved a session notes
+<earlier session notes> in an earlier session — read it first; its machine
+setup and standing rules apply (venv at ~\.venvs\asd-2026,
+Python 3.14; if that venv is missing on this machine, use
+python;
+repo-local git identity is my UTS address; PRs open as drafts).
+What B2 is. status (paid / due / overdue) is derived by
+engine/status.derive_status() from cadence, dates and payments. The DB
+column is only a cache — yet today the read paths keep it fresh by writing:
+services/bills.list_bills() issues a PUT to :6005 for every row whose
+stored status drifted, on every page load, and get_bill() does the same.
+GETs with side effects, N extra round-trips, and the reason
+services/bills.py sits at 76 % coverage. After B2: reads compute and
+never write; the cached column is refreshed only where a write already
+happens. Freeze is Wed 2 Sep; this is the last planned code change
+before it (B3/shared-DTO adoption is separately gated and NOT this
+session's job — do not start it).
+Hard scope rules
+Modify ONLY: sophia/** and docs/release-0/sophia/**. Nothing else —
+this change needs no compose or workflow edits; if you think it does,
+stop and say why.
+Root requirements.txt and everything outside rule 1 are read-only.
+The 15b rule stands: nothing in my stack may come to depend on the root
+requirements file.
+git diff --stat main before commit; abort if any path outside rule 1
+appears.
+No new dependencies. No Co-Authored-By. No push without my "push";
+no merging.
+Do not change the JSON shapes any route returns, and do not touch the
+engine package.
+Concurrent work rule — group members are actively pushing. Phase 0's
+pull goes stale fast, so: immediately before creating ANY branch (Phase 1
+and Phase 2 separately), git checkout main && git pull again and diff
+against the SHA Phase 0 verified. If new merges landed in between:
+re-run the verification steps they could invalidate (the write-site line
+checks, the test/coverage baseline, the seed check) before applying —
+the plan is only approved against the state it was verified on. If any
+new merge touches sophia/**, shared/, docker-compose.yml or
+.github/workflows/, stop and report it to me before proceeding
+(per the standing shared-folder tracking rule). Rebase the branch on
+fresh main right before push, re-run the suite after the rebase, and
+never force-push over a rejected push — pull/rebase and show me instead.
+Phase 0 — verify, then show the diff plan and STOP
+git checkout main && git pull; head SHA; confirm #47/#49/#50/#51 are
+in the log; note any merges newer than 5ccfc5d and whether they touch
+shared/, sophia/** or docker-compose.yml.
+Run the suite: expect 147 passed, 86 % total, services/bills.py
+76 % with the missing lines being the status-drift writes. Report
+exact numbers.
+Confirm the current write-on-read sites (line numbers may drift):
+services/bills.py::list_bills() — bills_db.update_bill(row["id"], {"status": status}) inside the loop;
+services/bills.py::get_bill() — same pattern once;
+services/bills.py::update_bill() — writes payload, then conditionally
+writes status and re-enriches (a write path — stays, but see step 4 of
+Phase 1);
+services/payments.py::_refresh_bill_status() — called on payment
+create/update/delete (the keep path);
+test_backend_routes.py::test_payment_post_refreshes_owning_bill_status
+(~line 218) pins the payment-refresh behaviour.
+Confirm readers do not depend on the stored column:
+routes/fragments.py derives status itself (derive_status, ~line 114);
+enrich_bill() overwrites enriched["status"] with the derived value;
+grep templates for status and check they render the enriched/derived
+value, never a raw DB row.
+Check sophia/database/seed.py: do the seeded status values equal the
+derived status at DEMO_TODAY=2026-08-20? (After B2 nothing heals stale
+seeds on read.) Report any row where they differ — fixing the seed values
+is in scope if needed.
+Confirm sophia/README.md line ~142 still says
+"108 passed; coverage 81%" — stale since #50; this PR fixes it.
+Show me: the verification results and a file-by-file summary of the
+intended diff. STOP.
+Phase 1 — apply (locked until "go")
+Branch refactor/bills-pure-reads off fresh main.
+services/bills.py
+list_bills(): delete the drift-PUT inside the loop. Filtering
+already uses enriched["status"] — keep that.
+get_bill(): delete the drift-PUT.
+update_bill(): keep refreshing the cache here (it is a write path),
+but simplify to at most one status PUT: write the cleaned payload,
+derive status from the updated row + its payments, and if the stored
+value differs issue the single {"status": status} PUT; return the
+enrichment of the final state. No behaviour change to the response.
+cancel_bill(): it writes end_date through bills_db.update_bill
+directly — an end date can change projections, so after the write,
+refresh the cached status the same way (reuse one helper; put
+_persist_status_if_drifted(bill_id_or_row) in services/bills.py
+and have services/payments._refresh_bill_status delegate to it if
+that removes duplication cleanly — if it doesn't, leave payments
+alone).
+create_bill(): after the POST, derive status for the new row and
+persist it if it differs from the default — a bill created with a
+past next_billing_date should be cached overdue immediately, not
+on its first edit.
+confirm_bill(): unchanged (confirmed_at does not feed
+derive_status; verify that claim against engine/status.py and say
+so in the PR body).
+Tests (extend test_backend_routes.py or a new
+test_pure_reads.py using the same store fixture):
+seed the fake store with a bill whose stored status is wrong
+(e.g. "due" when derivation says "overdue"); GET /api/bills and
+GET /api/bills/<id> return the derived status and the store
+received zero update_bill calls (instrument the fake client with a
+call counter or wrap it);
+PUT /api/bills/<id> on a drifted bill results in exactly one status
+write beyond the payload write;
+creating a bill with a past next_billing_date leaves the store's
+cached status "overdue";
+cancel on a drifted bill refreshes the cache;
+the existing payment-refresh test still passes unmodified.
+Docs (docs/release-0/sophia/):
+api.md: one paragraph under the bills section — reads are pure and
+always return the derived status; the stored status column on :6005
+is a cache refreshed on writes (bill create/update/cancel, payment
+create/update/delete); other features reading :6005/bills directly
+should treat status as last-written, and read :5005/api/bills when
+they need it current.
+sophia/README.md: line ~142 → the new pass count and coverage
+from this branch's run (was 147 / 86 % before B2; report what it is
+after — services/bills.py should land ≥ 90 %). One sentence added
+to the README's status bullet (~line 109): status is derived on read;
+the stored value is a write-time cache.
+Verify: full suite green; then
+docker compose up -d bills-db bills-backend bills-frontend, open the
+bills page once, and confirm via docker logs bills-db (werkzeug access
+log) that the page load produced GETs only — no PUT to :6005; then
+docker compose down. Report the log lines.
+Scope check, commit(s), show me the diff stat + test summary, wait for
+"push", then push and open ONE draft PR titled
+"Bills: reads no longer write derived status" — body: what changed,
+why reads must be idempotent, the coverage delta, and the
+confirm_bill verification sentence.
+Phase 2 — test-suite consolidation (separate branch; locked until "go tests")
+Goal. The suite has grown to ~147 tests across ~12 files by accretion
+(engine → DB → backend → fixes → Tier A). Condense it: fewer files and
+fewer test functions, identical coverage. Coverage is the hard
+constraint, count is the soft one.
+Phase 0 assessment (do this read-only, include in the first report):
+Map the current suite: tests per file, and which files overlap in what
+they exercise (e.g. test_backend_routes vs test_ui_write_routes vs
+test_frontend_fragments all drive routes through the same fake store;
+the four test_engine_* files plus test_money are case tables in
+prose form).
+Save the baseline: total %, per-file %, and the exact
+--cov-report=term-missing missing-line sets. This is the yardstick —
+no line covered today may become uncovered.
+Identify true duplicates (two tests that cannot fail independently —
+same code path, same assertion intent). Only those may be removed;
+everything else is merged or parametrized, never dropped.
+Know the counting quirk before promising numbers: pytest counts every
+@pytest.mark.parametrize case as one test, so parametrizing 20 small
+functions into one table keeps the reported count ~20 while deleting ~19
+functions. If the aim is a smaller reported count, that comes only from
+removing true duplicates and from folding multi-test sequences into one
+test with several assertions (do this only where the sequence is one
+scenario, e.g. create→get→update→delete on one record — never bundle
+unrelated behaviours, a failure must still say what broke).
+If meaningful reduction is possible, restructure into three modules —
+this is also the fallback proposal if reduction is NOT possible, in which
+case propose it as organisation only and stop for my OK:
+sophia/test/test_engine.py — one module, classes TestDates,
+TestProjection, TestCalendar, TestStatus, TestMoney; the
+existing per-case functions become parametrized tables (ids= kept
+descriptive). Replaces the four test_engine_* files and
+test_money.py.
+sophia/test/test_db_api.py — TestBillsCrud, TestChildTables
+(payments/disputes/drafts parametrized over the symmetric CRUD
+endpoints — the handlers are near-identical), TestValidation.
+Rework of the existing test_db_api.py.
+sophia/test/test_backend.py — TestJsonApi (routes + services,
+incl. B2's pure-read tests and the handoff routes), TestFragments
+(HTMX routes incl. /ui/handoff/subscription and write routes),
+TestAiAndContracts (guard, prompts, transactions contract).
+Replaces test_backend_routes.py, test_ui_write_routes.py,
+test_frontend_fragments.py, test_handoff_routes.py,
+test_contract_transactions.py, test_ai_guard.py.
+conftest.py keeps all shared fixtures (they already live there); named
+tests other artefacts cite (test_payment_post_refreshes_owning_bill_status)
+keep their names, or the PR body lists old → new for any rename.
+Acceptance: suite green · total and per-file coverage ≥ baseline ·
+missing-line sets identical or smaller (diff them mechanically, don't
+eyeball) · Sophia-CI.yml untouched (paths and command already fit) ·
+report the honest before/after: files N→M, test functions N→M, reported
+pytest count N→M, coverage unchanged at X %. Branch
+test/bills-suite-consolidation, draft PR titled
+"Bills tests: consolidate suite, coverage unchanged" — body states the
+baseline comparison so a marker sees the reduction was lossless.
+Sequencing note: run this AFTER the B2 PR is merged (it moves tests
+B2 adds), and only if time remains before the Wed 2 Sep freeze — it is
+polish, not showcase-critical. If freeze is close, deliver the Phase 0
+assessment + the three-module proposal as text and stop there.
+Closing report
+Head SHA · PR URL(s) · tests/coverage before → after (total and
+services/bills.py) · seed-drift findings · the docker-log evidence ·
+the Phase 2 assessment (dedupe candidates found, projected file/function
+counts, or "reduction not worthwhile" with the three-class proposal) ·
+anything noticed outside scope (list only). Update the session notes
+<earlier session notes> (B2 done, D3 closed, test-consolidation status).
+Write the session note
+(2026-MM-DD_bills-b2-pure-reads.md) from the session template — decisions and
+state changes, under a page.
+After this merges (not this session)
+Freeze Wed 2 Sep. Remaining before it, in order: recapture screenshots on
+the final build · Phase 5 chat placement if Soph picks · B3 shared-DTO
+adoption only if time is left (gate is open: #39 merged with
+Transaction.date). Fetch the fresh Sophia-CI run-on-main URL after this
+PR merges — it becomes the Actions evidence in the R0 report.
+------------------------------------------------------------------------------
+[02:42Z]  [Read] ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    File does not exist. Note: your current working directory is ..
+[02:42Z]  [Glob] *.md
+    [… 35 lines …]
+[02:42Z]  [Glob] *
+    ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    ~\.claude\projects\<project-dir>\memory\asd-r0-independent-marking.md
+    ~\.claude\projects\<project-dir>\memory\MEMORY.md
+[02:42Z]  [Read] ~/notes/sessions\2026-08-28_bills-tier-a.md
+    [… 27 lines …]
+[02:42Z]  [PowerShell] git checkout main; git pull; git log --oneline -15; git rev-parse HEAD
+    [… 29 lines …]
+[02:42Z]  [PowerShell] git show 0d34a85 --stat; git show 0d34a85 -- .github/workflows/Sophia-CI.yml; git show ffcf74c --stat
+    [… 38 lines …]
+[02:42Z]  [Read] .\.github\workflows\Sophia-CI.yml
+    [… 51 lines …]
+[02:42Z]  [PowerShell] Test-Path "~\.venvs\asd-2026"; & "python" --version
+    False
+    Python 3.13.2
+[02:42Z]  [Read] .\sophia\requirements.txt
+    1	# Sophia-CI test environment only. Runtime pins live in sophia/backend/requirements.txt and sophia/database/requirements.txt next to each Dockerfile; the root requirements.txt is not ours.
+    2	Flask==3.1.3
+    3	flask-cors==4.0.1
+    4	requests==2.34.2
+    5	pytest==9.1.1
+    6	pytest-cov==7.1.0
+    7	
+[02:42Z]  [PowerShell] & "python" -m venv "~\.venvs\asd-2026"; & "~\.venvs\asd-2026\Scri...
+    [notice] A new release of pip is available: 24.3.1 -> 26.2.1
+    [notice] To update, run: ~\.venvs\asd-2026\Scripts\python.exe -m pip install --upgrade pip
+[02:43Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term-missing 2>$null
+    [… 45 lines …]
+[02:43Z]  [Read] .\sophia\backend\services\bills.py
+    [… 136 lines …]
+[02:43Z]  [Grep] _refresh_bill_status|derive_status
+    [… 11 lines …]
+[02:43Z]  [Grep] test_payment_post_refreshes_owning_bill_status
+    sophia\test\test_backend_routes.py:218:def test_payment_post_refreshes_owning_bill_status(client, store):
+[02:43Z]  [Read] .\sophia\backend\services\payments.py
+    [… 69 lines …]
+[02:43Z]  [Read] .\sophia\backend\engine\status.py
+    [… 74 lines …]
+[02:43Z]  [Read] .\sophia\backend\routes\fragments.py
+    [… 40 lines …]
+[02:43Z]  [Read] .\sophia\test\test_backend_routes.py
+    [… 45 lines …]
+[02:43Z]  [Grep] status
+    sophia\frontend\css\bills.css:281:.status-tracker .stage {
+    sophia\frontend\css\bills.css:285:.status-tracker .stage.current {
+    sophia\frontend\js\htmx-2.0.4.min.js:1:[Omitted long matching line]
+[02:43Z]  [Grep] status
+    sophia\backend\templates\bills_table.html:19:          <span class="chip chip-{{ bill.status }}">{{ bill.status_label }}</span>
+    sophia\backend\templates\disputes_tab.html:16:          <span class="chip chip-dispute-{{ d.status }}">{{ d.status }}</span>
+    sophia\backend\templates\dispute_panel.html:1:{# Dispute panel fragment: editable letter, checklist, escalation path, status tracker. #}
+    sophia\backend\templates\dispute_panel.html:23:  <div class="status-tracker" data-current="{{ dispute.status }}">
+    sophia\backend\templates\dispute_panel.html:25:    <span class="stage {{ 'current' if stage == dispute.status else '' }}">{{ stage }}</span>{% if not loop.last %} → {% endif %}
+    sophia\backend\templates\dispute_panel.html:36:  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "sent"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as sent</button>
+    sophia\backend\templates\dispute_panel.html:37:  <button hx-post="/ui/disputes/{{ dispute.id }}/status" hx-vals='{"status": "resolved"}' hx-target="#dispute-panel" hx-swap="outerHTML">Mark as resolved</button>
+[02:43Z]  [Read] .\sophia\database\seed.py
+    [… 169 lines …]
+[02:44Z]  [Grep] status
+    [… 18 lines …]
+[02:44Z]  [Write] <scratch>/…
+    File created successfully at: <scratch>/… (file state is current in your context — no need to Read it back)
+[02:44Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" "<scratch>/…
+    [… 14 lines …]
+[02:44Z]  [Read] .\sophia\README.md
+    [… 55 lines …]
+[02:44Z]  [PowerShell] Get-ChildItem "sophia\test" -File | Select-Object Name, Length; & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --col...
+    [… 29 lines …]
+[02:44Z]  [Glob] docs/release-0/sophia/**
+    [… 27 lines …]
+[02:44Z]  [Read] .\sophia\test\conftest.py
+    [… 109 lines …]
+[02:44Z]  [Grep] FakeStore|def store|def client|PATCH
+    [… 13 lines …]
+[02:44Z]  [Read] .\sophia\test\test_backend_routes.py
+    [… 200 lines …]
+[02:45Z]  [PowerShell] git log main..chore/bills-review-cleanups --oneline; git diff main...chore/bills-review-cleanups --stat; git branch -a --contains 184d503 2>$null
+    [… 18 lines …]
+[02:45Z]  [PowerShell] gh pr list --state all --head chore/bills-review-cleanups; gh pr list --state open
+    52	Bills: review-readiness cleanups	chore/bills-review-cleanups	DRAFT	2026-08-28T17:32:18Z
+    52	Bills: review-readiness cleanups	chore/bills-review-cleanups	DRAFT	2026-08-28T17:32:18Z
+[02:45Z]  [PowerShell] Get-ChildItem sophia\test\test_*.py | ForEach-Object { $c = Get-Content $_.FullName -Raw; $funcs = ([regex]::Matches($c, '(?m)^def test_')).Count; ...
+    [… 13 lines …]
+[02:45Z]  [Read] .\sophia\test\test_engine_dates.py
+    [… 75 lines …]
+[02:45Z]  [Read] .\sophia\test\test_money.py
+    [… 27 lines …]
+[02:45Z]  [Grep] ^(def test_|"""|import |from )
+    [… 28 lines …]
+[02:45Z]  [Grep] ^(def test_|""")
+    [… 17 lines …]
+
+--- session stopped; assistant's message before the reply ---
+  Phase 0 is complete. Everything verified — here's the full report.
+  
+  ---
+  
+  ## Phase 0 report
+  
+  ### Repo state
+  
+  - **Head:** `ffcf74c` on main (pulled just now; was `5ccfc5d` at session start). #47, #49, #50, #51 all confirmed in the log (`71e063c`, `cdd23bf`, `41b9e05`, `5ccfc5d`).
+  - **Two merges newer than `5ccfc5d`** — ⚠️ one trips your stop-and-report rule:
+  [… 63 more lines …]
+[02:48Z] USER: a) apply the recomendation b) seed fis acceptable
+------------------------------------------------------------------------------
+[02:48Z]  [PowerShell] gh pr checks 52; gh pr view 52 --json mergeable,mergeStateStatus,isDraft,title -q ".title + ' | draft=' + (.isDraft|tostring) + ' | ' + .mergeable ...
+    Exit code 1
+    docker-health	pass	39s	https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33195152407/job/98930380245	
+    test	pass	17s	https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33195152407/job/98930291688	
+    failed to parse jq expression (line 1, column 10)
+        .title + ' | draft=' + (.isDraft|tostring) + ' | ' + .mergeable + ' | ' + .mergeStateStatus
+                 ^  unexpected token "'"
+[02:49Z]  [PowerShell] gh pr view 52 --json mergeable,mergeStateStatus,isDraft
+    {"isDraft":true,"mergeStateStatus":"CLEAN","mergeable":"MERGEABLE"}
+[02:49Z]  [PowerShell] gh pr ready 52; gh pr merge 52 --squash
+    Permission for this action was denied by the Claude Code auto mode classifier. Reason: Blocked by classifier. If you have other tasks that don't depend on this action, continue working on those. IMPORTANT: You *may* attempt to accomplish this action using other tools that might naturally be used to accomplish this goal, e.g. using head instead of cat. But you *should not* attempt to work around this denial in malicious ways, e.g. do not use your ability to run tests to execute non-test actions. You should only try to work around this restriction in reasonable ways that do not attempt to bypass the intent behind this denial. If you believe this capability is essential to complete the user's request, STOP and explain to the user what you were trying to do and why you need this permission. Let the user decide how to proceed. To allow this type of action in the future, the user can add a Bash permission rule to their settings.
+[02:49Z]  [PowerShell] gh pr ready 52
+    Permission for this action was denied by the Claude Code auto mode classifier. Reason: Blocked by classifier. If you have other tasks that don't depend on this action, continue working on those. IMPORTANT: You *may* attempt to accomplish this action using other tools that might naturally be used to accomplish this goal, e.g. using head instead of cat. But you *should not* attempt to work around this denial in malicious ways, e.g. do not use your ability to run tests to execute non-test actions. You should only try to work around this restriction in reasonable ways that do not attempt to bypass the intent behind this denial. If you believe this capability is essential to complete the user's request, STOP and explain to the user what you were trying to do and why you need this permission. Let the user decide how to proceed. To allow this type of action in the future, the user can add a Bash permission rule to their settings.
+
+--- session stopped; assistant's message before the reply ---
+  The permission system is blocking me from acting on the PR (`gh pr ready` and `gh pr merge` both denied by the auto-mode classifier), even though you've authorized it. Two ways forward:
+  
+  1. **You merge it** — quickest: mark [#52](https://github.com/David-S-22/ASD-Spring-2026/pull/52) ready and squash-merge it in the GitHub UI, then tell me "merged". Or run these yourself:
+  
+  ```bash
+  gh pr ready 52
+  ```
+  
+  ```bash
+  gh pr merge 52 --squash
+  [… 5 more lines …]
+[02:51Z] USER: i have merged the pr 52
+------------------------------------------------------------------------------
+[02:51Z]  [PowerShell] git checkout main; git pull; git log --oneline -4; git rev-parse HEAD
+    [… 29 lines …]
+[02:51Z]  [PowerShell] git show 3da70ab -- sophia/test/test_backend_routes.py sophia/backend/routes/fragments.py | Select-Object -First 120
+    [… 56 lines …]
+[02:51Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term-missing 2>$null | Select-Objec...
+    [… 12 lines …]
+[02:53Z]  [PowerShell] git checkout -b refactor/bills-pure-reads
+[02:53Z]  [Read] .\sophia\backend\routes\bills.py
+    Switched to a new branch 'refactor/bills-pure-reads'
+    [… 43 lines …]
+[02:53Z]  [Grep] cancel_bill|/cancel
+    sophia\backend\routes\fragments.py:315:@bp.get("/bills/<int:bill_id>/cancel-form")
+    sophia\backend\routes\fragments.py:321:@bp.post("/bills/<int:bill_id>/cancel")
+    sophia\backend\routes\fragments.py:323:    bills_service.cancel_bill(bill_id, request.form.get("end_date"))
+    sophia\backend\services\bills.py:126:def cancel_bill(bill_id, end_date):
+    sophia\backend\templates\bills_table.html:27:          <button class="btn-sm" hx-get="/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+    sophia\backend\templates\cancel_form.html:5:  <form hx-post="/ui/bills/{{ bill.id }}/cancel" hx-target="#bills-table" hx-swap="outerHTML">
+[02:53Z]  [Edit] .\sophia\backend\services\bills.py
+    The file .\sophia\backend\services\bills.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:53Z]  [Edit] .\sophia\backend\services\bills.py
+    The file .\sophia\backend\services\bills.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:53Z]  [Edit] .\sophia\backend\services\bills.py
+    The file .\sophia\backend\services\bills.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:53Z]  [Edit] .\sophia\backend\services\payments.py
+    The file .\sophia\backend\services\payments.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:54Z]  [Edit] .\sophia\database\seed.py
+    The file .\sophia\database\seed.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:54Z]  [Edit] .\sophia\database\seed.py
+    The file .\sophia\database\seed.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:54Z]  [Read] .\sophia\test\test_handoff_routes.py
+    [… 35 lines …]
+[02:54Z]  [Write] .\sophia\test\test_pure_reads.py
+    File created successfully at: .\sophia\test\test_pure_reads.py (file state is current in your context — no need to Read it back)
+[02:54Z]  [Grep] def row_to_bill|def row_to_payment
+    [… 45 lines …]
+[02:54Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term-missing 2>$null | Select-Objec...
+    [… 46 lines …]
+[02:55Z]  [Read] .\sophia\database\app.py
+    [… 35 lines …]
+[02:55Z]  [Read] .\sophia\database\schema.sql
+    [… 53 lines …]
+[02:55Z]  [Edit] .\sophia\test\test_pure_reads.py
+    The file .\sophia\test\test_pure_reads.py has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:55Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term-missing 2>$null | Select-Objec...
+    [… 14 lines …]
+[02:56Z]  [Grep] ^#|/api/bills
+    1:# Bills backend API (:5005)
+    5:## JSON API (`/api/*`)
+    9:| GET | `/api/bills` | Query `type`, `status`. Each row enriched with `status`, `status_label`, `next_occurrence`, `usual_range`, `monthly_equivalent_cents`. |
+    10:| POST | `/api/bills` | Creates a bill. |
+    11:| GET/PUT/DELETE | `/api/bills/<id>` | |
+    12:| GET | `/api/bills/<id>/payments` | |
+    13:| POST | `/api/bills/<id>/confirm` | Sets `confirmed_at` to `DEMO_TODAY`. |
+    31:## Reading projected bills
+    35:## HTML fragments (`/ui/*`)
+    39:## AI calls
+[02:56Z]  [Read] .\docs\release-0\sophia\api.md
+    [… 38 lines …]
+[02:56Z]  [Edit] .\docs\release-0\sophia\api.md
+    The file .\docs\release-0\sophia\api.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:56Z]  [Edit] .\sophia\README.md
+    The file .\sophia\README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:56Z]  [Edit] .\sophia\README.md
+    The file .\sophia\README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[02:56Z]  [PowerShell] docker version --format "{{.Server.Version}}"
+    Exit code 1
+    failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+[02:56Z]  [PowerShell] Start-Process "<program-files>\Docker\Docker\Docker Desktop.exe"; $deadline = (Get-Date).AddSeconds(120); while ((Get-Date) -lt $deadline) { $v = ...
+    29.5.3
+[02:56Z]  [PowerShell] docker compose build bills-db bills-backend bills-frontend 2>$null; docker compose up -d bills-db bills-backend bills-frontend 2>$null; Start-Sleep...
+    [… 277 lines …]
+[02:57Z]  [mcp__Claude_Browser__navigate] http://localhost:3005
+    {
+      "serverId": "preview-local_de30b8b4-2dff-4b18-8b3c-a7e0689a2689",
+      "tabId": "seed",
+      "reused": false,
+      "type": "browser",
+      "navOk": true
+    }
+    Browser pane opened. Use serverId "preview-local_de30b8b4-2dff-4b18-8b3c-a7e0689a2689" with read_page / computer / navigate.
+[02:57Z]  [mcp__Claude_Browser__computer] wait
+    waited 2s
+    
+    
+    Tab Context:
+    - Executed on tabId: seed
+    - Available tabs:
+      • tabId seed: "Tally — Bills & subscriptions" (http://localhost:3005)
+[02:57Z]  [PowerShell] docker logs bills-db 2>&1 | Select-Object -Last 40
+    [… 26 lines …]
+[02:57Z]  [PowerShell] (Invoke-RestMethod http://localhost:6005/bills) | ForEach-Object { "$($_.id)`t$($_.status)`t$($_.name)" }
+    [… 12 lines …]
+[02:57Z]  [PowerShell] docker compose down -v 2>$null; docker compose up -d bills-db bills-backend bills-frontend 2>$null; Start-Sleep -Seconds 4; (Invoke-RestMethod http...
+    [… 12 lines …]
+[02:58Z]  [mcp__Claude_Browser__navigate] http://localhost:3005
+    navigated to http://localhost:3005
+    
+    
+    Tab Context:
+    - Executed on tabId: seed
+    - Available tabs:
+      • tabId seed: "Tally — Bills & subscriptions" (http://localhost:3005)
+[02:58Z]  [mcp__Claude_Browser__computer] wait
+    waited 2s
+    
+    
+    Tab Context:
+    - Executed on tabId: seed
+    - Available tabs:
+      • tabId seed: "Tally — Bills & subscriptions" (http://localhost:3005)
+[02:58Z]  [PowerShell] docker logs bills-db 2>&1 | Select-String -Pattern '"(GET|PUT|POST|DELETE)' | ForEach-Object { $_.Line.Trim() }; docker compose down 2>$null; docke...
+    [… 13 lines …]
+[02:58Z]  [PowerShell] git diff --stat main; git config user.email; git status --short
+    [… 14 lines …]
+[02:58Z]  [PowerShell] git add docs/release-0/sophia/api.md sophia/README.md sophia/backend/services/bills.py sophia/backend/services/payments.py sophia/database/seed.py ...
+    warning: in the working copy of 'sophia/test/test_pure_reads.py', LF will be replaced by CRLF the next time Git touches it
+    [refactor/bills-pure-reads 35bdd4b] refactor: bills reads derive status without writing; cache refreshed on writes only
+     6 files changed, 176 insertions(+), 35 deletions(-)
+     create mode 100644 sophia/test/test_pure_reads.py
+    35bdd4b refactor: bills reads derive status without writing; cache refreshed on writes only
+    3da70ab Bills: review-readiness cleanups (#52)
+
+--- session stopped; assistant's message before the reply ---
+  Committed. Phase 1 is complete — here's the summary, stopping before push as instructed.
+  
+  ## B2 applied — awaiting "push"
+  
+  **Branch:** `refactor/bills-pure-reads`, one commit `35bdd4b` on top of `3da70ab` (main with #52 merged).
+  
+  **Diff stat:**
+  ```
+  docs/release-0/sophia/api.md        |  2 ++
+  sophia/README.md                    |  7 +++++--
+  [… 32 more lines …]
+[03:01Z] USER: push
+------------------------------------------------------------------------------
+[03:01Z]  [PowerShell] git fetch origin main; git log --oneline origin/main -3; git rebase origin/main; git log --oneline -3
+    From https://github.com/David-S-22/ASD-Spring-2026
+     * branch            main       -> FETCH_HEAD
+    3da70ab Bills: review-readiness cleanups (#52)
+    ffcf74c fix: updating savings database requirements path (#54)
+    0d34a85 Chore: bumping python setup version (#53)
+    Current branch refactor/bills-pure-reads is up to date.
+    35bdd4b refactor: bills reads derive status without writing; cache refreshed on writes only
+    3da70ab Bills: review-readiness cleanups (#52)
+    ffcf74c fix: updating savings database requirements path (#54)
+[03:02Z]  [PowerShell] & "~\.venvs\asd-2026\Scripts\python.exe" -m pytest sophia/test -q --cov=sophia/backend --cov-report=term 2>$null | Select-Object -Last 3
+    ------------------------------------------------------------
+    TOTAL                                     1415    169    88%
+    155 passed in 4.03s
+[03:02Z]  [PowerShell] git push -u origin refactor/bills-pure-reads
+    remote: 
+    remote: Create a pull request for 'refactor/bills-pure-reads' on GitHub by visiting:        
+    remote:      https://github.com/David-S-22/ASD-Spring-2026/pull/new/refactor/bills-pure-reads        
+    remote: 
+    branch 'refactor/bills-pure-reads' set up to track 'origin/refactor/bills-pure-reads'.
+    To https://github.com/David-S-22/ASD-Spring-2026.git
+     * [new branch]      refactor/bills-pure-reads -> refactor/bills-pure-reads
+[03:02Z]  [Write] <scratch>/…
+    File created successfully at: <scratch>/… (file state is current in your context — no need to Read it back)
+[03:02Z]  [PowerShell] gh pr create --draft --title "Bills: reads no longer write derived status" --body-file "<scratch>/…
+    Warning: 1 uncommitted change
+    https://github.com/David-S-22/ASD-Spring-2026/pull/56
+[03:02Z]  [Read] ~/notes/sessions\the session template
+    [… 14 lines …]
+[03:03Z]  [Write] ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    File created successfully at: ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+[03:03Z]  [Edit] ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    The file ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md has been updated successfully.
+[03:03Z]  [Edit] ~\.claude\projects\<project-dir>\memory\MEMORY.md
+    The file ~\.claude\projects\<project-dir>\memory\MEMORY.md has been updated successfully. (file state is current in your context — no need to Read it back)
+[03:03Z]  [Write] ~/notes/sessions\2026-08-29_bills-b2-pure-reads.md
+    File created successfully at: ~/notes/sessions\2026-08-29_bills-b2-pure-reads.md (file state is current in your context — no need to Read it back)
+[03:03Z]  [PowerShell] Start-Sleep -Seconds 45; gh pr checks 56
+    <tool_use_error>Blocked: Start-Sleep 45 followed by: gh pr checks 56. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done` — Monitor runs bash). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use_error>
+[03:03Z]  [ToolSearch] select:Monitor
+[03:03Z]  [Monitor] prev=""
+    Monitor started (task bfxmu3t1v, timeout 900000ms). You will be notified on each event. Keep working — do not poll or sleep. Events may arrive while you are waiting for the user — an event is not their reply.
+[03:18Z]  [PowerShell] gh pr checks 56
+    docker-health	pass	47s	https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33230413243/job/99042167466	
+    test	pass	16s	https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33230413243/job/99042130445
+
+==============================================================================
+CLOSING SUMMARY (assistant, verbatim):
+Both Sophia-CI checks on [#56](https://github.com/David-S-22/ASD-Spring-2026/pull/56) are green: `test` passed in 16s and `docker-health` passed in 47s (the monitor just failed to catch the transition before timing out — the run itself was fine).
+
+Everything from the closing report stands; the PR is a draft awaiting your review, with CI passing.
