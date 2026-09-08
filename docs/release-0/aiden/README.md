@@ -96,9 +96,4 @@ documentation:
 
 ## Evidence
 
-No Aiden-specific screenshots are currently committed under
-`docs/release-0`. The architecture diagram above provides a current visual
-summary of the Release 0 service boundaries and data flow. The repository's
-anomalies frontend can be run through Docker Compose to capture screenshots of the
-anomaly list, transaction review, and confirmation workflow. Future evidence
-should also document the RAG/MCP integration once implemented.
+TODO put NFR tests and screenshots here.
