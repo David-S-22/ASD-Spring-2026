@@ -27,17 +27,6 @@ anomaly.
 
 ![anomalies architecture diagram](./screenshots/architecture.png)
 
-```mermaid
-flowchart LR
-    browser["Browser"] --> frontend["anomalies-frontend<br/>nginx + HTMX"]
-    frontend --> backend["anomalies-backend<br/>Flask + review queue"]
-    backend --> anomaly_api["anomalies-database<br/>Flask REST API"]
-    anomaly_api --> orm["SQLAlchemy ORM"]
-    orm --> sqlite["SQLite"]
-    backend --> transactions["transactions database API"]
-    backend --> ollama["ollama<br/>language model"]
-```
-
 The frontend proxies backend requests through `/anomalies-backend/`. The
 backend communicates with the anomalies and transactions APIs over HTTP and
 uses an OpenAI-compatible client to call Ollama. The database API maps anomaly
