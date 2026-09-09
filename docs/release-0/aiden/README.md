@@ -25,6 +25,8 @@ anomaly.
 
 ## Architecture
 
+![anomalies architecture diagram](./screenshots/architecture.png)
+
 ```mermaid
 flowchart LR
     browser["Browser"] --> frontend["anomalies-frontend<br/>nginx + HTMX"]
