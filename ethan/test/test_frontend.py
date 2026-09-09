@@ -25,6 +25,12 @@ def test_budgets_frontend_contains_overview_screen():
     assert 'id="affordability-amount"' in index_html
     assert 'id="affordability-result"' in index_html
     assert 'id="coach-panel"' in index_html
+    assert 'id="chat-history"' in index_html
+    assert 'id="coach-proposals-list"' in index_html
+    assert 'id="chat-form"' in index_html
+    assert 'id="chat-input"' in index_html
+    assert 'id="reset-chat-button"' in index_html
+    assert 'id="show-rejected-proposals"' in index_html
     assert "data-edit-budget-line" in index_html
     assert "data-delete-budget-line" in index_html
     assert "data-edit-planned-event" in index_html
@@ -49,6 +55,15 @@ def test_budgets_frontend_contains_overview_screen():
     assert "Planned event dates must stay inside " in index_html
     assert "function affordabilityOutcome(category, amountCents)" in index_html
     assert "function updateAffordabilityPreview()" in index_html
+    assert "function setChatActionsEnabled(isEnabled, message)" in index_html
+    assert "function renderChatMessages(messages)" in index_html
+    assert "function renderCoachProposals(summary)" in index_html
+    assert "async function applyCoachProposal(proposalId)" in index_html
+    assert "async function rejectCoachProposal(proposalId)" in index_html
+    assert "async function readApiJson(response, requestMessage, unexpectedMessage)" in index_html
+    assert "data-chat-chip" in index_html
+    assert "data-apply-proposal" in index_html
+    assert "data-reject-proposal" in index_html
     assert "Projected warning" in index_html
     assert "budget-progress-fill projected" in index_html
     assert "String(line.id) === String(lineId)" in index_html
