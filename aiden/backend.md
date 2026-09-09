@@ -36,6 +36,66 @@ The agent is instructed to be cautious, avoid claiming fraud as fact, use only
 the supplied transaction information, and incorporate the user's previous
 confirmation or dismissal decisions.
 
+## Plan–Act–Observe–Adapt workflow
+
+The anomaly review implements a **Plan → Act → Observe → Adapt** loop whose
+cycle spans *across* reviews: the user's decisions on one finding shape how the
+agent judges the next transaction.
+
+- **Plan** — Before calling the model, `agent_api.review_new_transaction`
+  gathers context and constructs a constrained prompt. It serialises the
+  transaction fields and calls `_build_anomaly_context` to fold in the user's
+  previously **confirmed** (true positive) and **denied** (false positive)
+  findings, joined back to their underlying transactions. The plan for judging
+  the current transaction is therefore shaped by the accumulated human feedback.
+- **Act** — The agent sends the system and user prompts to the model through
+  `ollama_api.prompt`, requesting a JSON finding with `is_suspicious` and
+  `justification`. A valid, suspicious finding is converted to an anomaly DTO
+  and persisted so it can be shown to the user. (Malformed responses are simply
+  retried with a higher temperature, up to four attempts — a robustness detail,
+  not part of the adaptation loop.)
+- **Observe** — The persisted finding is surfaced to the user, who reviews it
+  and records the ground truth by **confirming** it as genuinely suspicious
+  (true positive) or **dismissing** it as a false positive. This human review
+  is the observation of how well the agent's judgement matched reality.
+- **Adapt** — Those confirmed/denied decisions are exactly the reviewed findings
+  that `_build_anomaly_context` pulls into the *next* review's prompt. The agent
+  treats transactions similar to confirmed findings as more likely suspicious,
+  and avoids re-flagging transactions similar to denied ones. The loop then
+  returns to Plan for the next transaction, with the agent's behaviour adapted
+  to the user's accumulated feedback.
+
+```mermaid
+flowchart TD
+    A[Transaction enqueued for review] --> B
+
+    subgraph Plan
+        B[Load anomalies and transactions] --> C[Build context from<br/>confirmed/denied feedback]
+        C --> D[Construct constrained prompt<br/>transaction fields + prior findings]
+    end
+
+    subgraph Act
+        D --> E[Prompt Ollama for JSON finding]
+        E --> F{Suspicious?}
+        F -- No --> G[No anomaly created]
+        F -- Yes --> H[Create + persist anomaly DTO]
+    end
+
+    subgraph Observe
+        H --> I[User reviews the finding]
+        I --> J{Confirm or dismiss?}
+        J -- Confirm --> K[Marked CONFIRMED<br/>true positive]
+        J -- Dismiss --> L[Marked DENIED<br/>false positive]
+    end
+
+    subgraph Adapt
+        K --> M[Reviewed findings become<br/>context for future reviews]
+        L --> M
+    end
+
+    M -. feedback context .-> C
+```
+
 ## Services
 
 ### `services/agent_api.py`

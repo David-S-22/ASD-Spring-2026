@@ -45,6 +45,24 @@ routes to the SQLAlchemy model, which persists records in SQLite.
 7. The frontend polls `/anomaly-alert` for the completed review.
 8. Users can confirm or dismiss findings, providing future review context.
 
+### Plan–Act–Observe–Adapt loop
+
+The review is structured as a **Plan → Act → Observe → Adapt** loop:
+
+- **Plan** — the backend gathers transaction and anomaly context and builds a
+  constrained prompt, folding in the user's previously confirmed and dismissed
+  findings as feedback.
+- **Act** — it sends the prompt to the Ollama model and persists any suspicious
+  finding as an anomaly. (Malformed model responses are retried with increasing
+  temperature — a robustness detail rather than part of the loop.)
+- **Observe** — the persisted finding is shown to the user, who confirms it as a
+  true positive or dismisses it as a false positive.
+- **Adapt** — those reviewed confirm/dismiss decisions become context for the
+  *next* review, so the agent aligns future judgements with the user's feedback.
+
+The [backend documentation](../../../aiden/backend.md#planactobserveadapt-workflow)
+describes this loop in detail, including a Mermaid diagram of the flow.
+
 ## Routes and persistence
 
 The backend supports health checks, anomaly listing, transaction submission,
