@@ -1,7 +1,5 @@
 import os
-import sys
 from datetime import datetime
-from pathlib import Path
 
 import requests
 from dateutil import parser
@@ -29,7 +27,7 @@ def search_transactions(
         end_dt = datetime.now()
 
     if start_dt and end_dt and start_dt > end_dt:
-        return []
+        raise ValueError("start_date must not be after end_date")
 
     params = {}
     if start_dt:
