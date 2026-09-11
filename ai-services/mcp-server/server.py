@@ -7,11 +7,6 @@ import requests
 from dateutil import parser
 from fastmcp import FastMCP
 
-# Ensure the shared backend package is importable
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 mcp = FastMCP("Transactions")
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
