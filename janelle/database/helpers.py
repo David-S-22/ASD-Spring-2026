@@ -29,7 +29,7 @@ def filtered_transactions(filters):
 		)
 	if filters.get("category_name"):
 		statement = statement.join(Transaction.category).where(
-			func.casefold(Category.name) == filters["category_name"].casefold()
+			func.lower(Category.name) == filters["category_name"].lower()
 		)
 	if filters["min_amount"] is not None:
 		statement = statement.where(Transaction.amount >= filters["min_amount"])
