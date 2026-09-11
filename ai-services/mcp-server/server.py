@@ -14,12 +14,19 @@ TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
 def readme() -> str:
     return "Fetch transactions using requirements with the 'search_transactions' tool"
 
-@mcp.resource("data://transactions{?start_date,end_date,category_name}")
+@mcp.tool()
 def search_transactions(
     start_date: str = None,
     end_date: str = None,
     category_name: str = None,
 ) -> list[dict]:
+    """Search and filter transactions by date range and category name.
+
+    Args:
+        start_date: Earliest transaction date (inclusive). If omitted, searches from earliest transaction.
+        end_date: Latest transaction date (inclusive). If omitted, searches up to current date.
+        category_name: Name of category to filter by (case-insensitive). If omitted, returns all categories.
+    """
     start_dt = parser.parse(start_date) if start_date else None
     end_dt = parser.parse(end_date) if end_date else None
 
