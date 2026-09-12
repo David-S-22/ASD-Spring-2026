@@ -125,7 +125,10 @@ used for anomaly listings and agent context.
 
 OpenAI-compatible client wrapper for the model server. It caches one client
 instance and sends system and user prompts with the configured model,
-temperature, token limit, and timeout.
+temperature, token limit, and timeout. The returned model output and usage
+metadata are emitted at DEBUG level for troubleshooting; hidden chain-of-thought
+is not logged. Anomaly reviews also request and log a concise,
+user-safe `reasoning_summary` when the model provides one.
 
 ### `helpers.py`
 
