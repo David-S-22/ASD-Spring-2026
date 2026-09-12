@@ -10,7 +10,7 @@ mcp = FastMCP("Transactions")
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
 
 
-@mcp.resource("docs:://readme", mime_type="text/markdown")
+@mcp.resource("docs://readme", mime_type="text/markdown")
 def readme() -> str:
     return "Fetch transactions using requirements with the 'search_transactions' tool"
 
