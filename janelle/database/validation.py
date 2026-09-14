@@ -290,6 +290,7 @@ def parse_transaction_filters(arguments):
 			arguments.get("category_id"),
 			"category_id",
 		),
+		"category_name": (arguments.get("category_name") or "").strip(),
 		"min_amount": parse_query_amount(
 			arguments.get("min_amount"),
 			"min_amount",
