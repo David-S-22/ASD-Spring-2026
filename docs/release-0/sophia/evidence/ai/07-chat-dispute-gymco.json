@@ -1,1 +1,1 @@
-{"fallback":false,"op":"create","preview":{"entity":"dispute","fields":{"bill_id":6,"reason":"Charged after I cancelled"},"id":null,"op":"create"},"reply":"Drafting a dispute letter for GymCo."}
+{"fallback":false,"op":"create","preview":{"entity":"dispute","fields":{"bill_id":6,"reason":"Charged after I cancelled"},"id":null,"message_id":18,"op":"create","suggestion_id":2},"reply":"I've drafted a dispute note for GymCo, explaining you cancelled before this charge. You can review and edit it in the Disputes tab."}

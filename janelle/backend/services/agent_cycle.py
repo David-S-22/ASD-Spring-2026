@@ -1,5 +1,7 @@
 """Dependency-free Plan -> Act -> Observe -> Adapt cycle runner."""
 
+from time import perf_counter
+
 
 DECISIONS = {"complete", "clarify", "confirm", "replan", "failed"}
 SAFE_FAILURE = {
@@ -29,22 +31,38 @@ def run_cycle(
     current_context = dict(context)
 
     for iteration in range(1, max_iterations + 1):
-        cycle = {"iteration": iteration}
+        cycle = {"iteration": iteration, "durations_ms": {}}
         try:
-            planned = plan(current_context)
+            planned = run_stage(
+                cycle,
+                "PLAN",
+                lambda: plan(current_context),
+            )
             cycle["plan"] = planned
 
-            action = act(planned, current_context)
+            action = run_stage(
+                cycle,
+                "ACT",
+                lambda: act(planned, current_context),
+            )
             cycle["action"] = action
 
-            observation = observe(planned, action, current_context)
+            observation = run_stage(
+                cycle,
+                "OBSERVE",
+                lambda: observe(planned, action, current_context),
+            )
             cycle["observation"] = observation
 
-            adaptation = adapt(
-                planned,
-                action,
-                observation,
-                current_context,
+            adaptation = run_stage(
+                cycle,
+                "ADAPT",
+                lambda: adapt(
+                    planned,
+                    action,
+                    observation,
+                    current_context,
+                ),
             )
             validate_adaptation(adaptation)
             cycle["adaptation"] = adaptation
@@ -88,6 +106,17 @@ def run_cycle(
             "message": "maximum agent iterations reached",
         },
     }
+
+
+def run_stage(cycle, stage, operation):
+    started_at = perf_counter()
+    try:
+        return operation()
+    finally:
+        cycle["durations_ms"][stage] = round(
+            (perf_counter() - started_at) * 1000,
+            3,
+        )
 
 
 def validate_adaptation(adaptation):

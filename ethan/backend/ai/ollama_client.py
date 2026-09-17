@@ -5,7 +5,7 @@ import requests
 from .. import config
 
 
-def chat(model: str, messages: list[dict], timeout: float | None = None) -> dict:
+def chat(model, messages, timeout=None):
     response = requests.post(
         f"{config.OLLAMA_URL}/api/chat",
         json={
@@ -19,3 +19,4 @@ def chat(model: str, messages: list[dict], timeout: float | None = None) -> dict
     )
     response.raise_for_status()
     return response.json()
+

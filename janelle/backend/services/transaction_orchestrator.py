@@ -1,10 +1,15 @@
 """Coordinate the transaction planning and confirmation workflow."""
 
+import json
+import logging
 import re
+import sys
 from copy import deepcopy
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
+
+from flask import current_app, has_app_context
 
 from .. import config
 from . import chat_service, ollama_service
@@ -13,6 +18,7 @@ from .agent_cycle import SAFE_FAILURE, run_cycle
 
 _REQUESTS = {}
 _REQUEST_LOCK = Lock()
+_WORKFLOW_LOGGER = logging.getLogger("janelle.ai.workflow")
 _REPLANABLE_CODES = {
     "category_mismatch",
     "invalid_amount",
@@ -46,6 +52,7 @@ def orchestrate_transaction_request(message, db_url):
         adapt=adapt_to_observation,
         max_iterations=config.AGENT_MAX_ITERATIONS,
     )
+    log_agent_cycle(request_id, context["phase"], cycle_result)
     raise_cycle_error(cycle_result)
     response = deepcopy(cycle_result.get("result") or failed_response())
     action = last_cycle_value(cycle_result, "action")
@@ -147,6 +154,7 @@ def run_category_selection(payload, db_url):
             adapt=adapt_to_observation,
             max_iterations=1,
         )
+        log_agent_cycle(request_id, context["phase"], cycle_result)
         raise_cycle_error(cycle_result)
         response = deepcopy(
             cycle_result.get("result") or failed_response()
@@ -211,6 +219,7 @@ def run_confirmed_transaction(payload, db_url):
         adapt=adapt_to_observation,
         max_iterations=1,
     )
+    log_agent_cycle(request_id, context["phase"], cycle_result)
     try:
         raise_cycle_error(cycle_result)
         response = deepcopy(cycle_result.get("result") or failed_response())
@@ -801,10 +810,63 @@ def attach_agent(response, request_id, cycle_result):
     return response
 
 
+def log_agent_cycle(request_id, phase, cycle_result):
+    if not config.AGENT_LOG_ENABLED:
+        return
+
+    trace = build_trace(cycle_result.get("cycles", []))
+    for item in trace:
+        log_workflow_event({
+            "event": "ai_workflow_stage",
+            "request_id": request_id,
+            "phase": phase,
+            "model": config.CHAT_MODEL,
+            "iteration": item["iteration"],
+            "stage": item["stage"],
+            "status": item["status"],
+            "duration_ms": item["duration_ms"],
+        })
+
+    error = cycle_result.get("error") or {}
+    log_workflow_event({
+        "event": "ai_workflow_complete",
+        "request_id": request_id,
+        "phase": phase,
+        "model": config.CHAT_MODEL,
+        "status": cycle_result["status"],
+        "iterations": len(cycle_result.get("cycles", [])),
+        "duration_ms": round(
+            sum(item["duration_ms"] for item in trace),
+            3,
+        ),
+        "error_stage": error.get("stage"),
+        "error_type": error.get("type"),
+    })
+
+
+def log_workflow_event(payload):
+    logger = (
+        current_app.logger
+        if has_app_context()
+        else _WORKFLOW_LOGGER
+    )
+    try:
+        logger.info(
+            "AI_WORKFLOW %s",
+            json.dumps(payload, sort_keys=True, separators=(",", ":")),
+        )
+    except Exception as error:
+        print(
+            f"AI_WORKFLOW_LOG_FAILURE {type(error).__name__}",
+            file=sys.stderr,
+        )
+
+
 def build_trace(cycles):
     trace = []
     for cycle in cycles:
         iteration = cycle["iteration"]
+        durations = cycle.get("durations_ms", {})
         if "plan" in cycle:
             trace.append({
                 "stage": "PLAN",
@@ -815,6 +877,7 @@ def build_trace(cycles):
                 ),
                 "summary": plan_summary(cycle["plan"]),
                 "iteration": iteration,
+                "duration_ms": durations.get("PLAN", 0),
             })
         if "action" in cycle:
             trace.append({
@@ -822,6 +885,7 @@ def build_trace(cycles):
                 "status": cycle["action"]["status"],
                 "summary": action_summary(cycle["action"]),
                 "iteration": iteration,
+                "duration_ms": durations.get("ACT", 0),
             })
         if "observation" in cycle:
             trace.append({
@@ -829,6 +893,7 @@ def build_trace(cycles):
                 "status": cycle["observation"]["status"],
                 "summary": observation_summary(cycle["observation"]),
                 "iteration": iteration,
+                "duration_ms": durations.get("OBSERVE", 0),
             })
         if "adaptation" in cycle:
             trace.append({
@@ -836,13 +901,16 @@ def build_trace(cycles):
                 "status": cycle["adaptation"]["decision"],
                 "summary": cycle["adaptation"]["message"],
                 "iteration": iteration,
+                "duration_ms": durations.get("ADAPT", 0),
             })
         if "error" in cycle:
+            stage = cycle["error"]["stage"]
             trace.append({
-                "stage": cycle["error"]["stage"],
+                "stage": stage,
                 "status": "failed",
                 "summary": "The stage failed safely.",
                 "iteration": iteration,
+                "duration_ms": durations.get(stage, 0),
             })
     return trace
 

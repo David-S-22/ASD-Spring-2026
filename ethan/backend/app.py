@@ -50,6 +50,33 @@ def _ollama_status() -> str:
     return "up"
 
 
+def _history_turns(rows: object) -> list[dict]:
+    if not isinstance(rows, list):
+        return []
+    turns: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        role = row.get("role")
+        content = row.get("content")
+        if role not in {"user", "assistant"} or not isinstance(content, str) or not content.strip():
+            continue
+        turns.append({"role": role, "content": content.strip()})
+    return turns
+
+
+def _merge_histories(stored_rows: object, request_history: object) -> list[dict]:
+    merged: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for turn in _history_turns(stored_rows) + _history_turns(request_history):
+        key = (turn["role"], turn["content"])
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(turn)
+    return merged[-12:]
+
+
 def create_app() -> Flask:
     application = Flask(__name__)
 
@@ -197,8 +224,19 @@ def create_app() -> Flask:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             raise ServiceError("request body must be a JSON object", 400, "invalid_json")
-        return jsonify(chat_service.send_message(payload.get("budget_id"), payload.get("message"), payload.get("history")))
-
+        budget_id = payload.get("budget_id")
+        if isinstance(budget_id, bool) or not isinstance(budget_id, int):
+            raise ServiceError("budget_id must be an integer", 422, "invalid_field")
+        budget_id_text = str(budget_id)
+        combined_history = _merge_histories(
+            db_api.list_chat_messages(budget_id_text),
+            payload.get("history"),
+        )
+        result = chat_service.send_message(budget_id, payload.get("message"), combined_history)
+        for message_payload in result.get("messages_to_store", []):
+            if isinstance(message_payload, dict):
+                db_api.create_chat_message(budget_id_text, message_payload)
+        return jsonify(result)
     @application.get("/api/budgets/<budget_id>/coach-proposals")
     def list_coach_proposals(budget_id: str):
         return jsonify(db_api.list_coach_proposals(budget_id))
@@ -220,6 +258,14 @@ def create_app() -> Flask:
     def apply_coach_proposal(proposal_id: str):
         return jsonify(proposal_service.apply(proposal_id))
 
+    @application.get("/api/budgets/<budget_id>/chat-messages")
+    def list_chat_messages(budget_id: str):
+        return jsonify(db_api.list_chat_messages(budget_id))
+
+    @application.delete("/api/budgets/<budget_id>/chat-messages")
+    def delete_chat_messages(budget_id: str):
+        _payload, status = db_api.delete_chat_messages(budget_id)
+        return "", status
     @application.delete("/api/coach-proposals/<proposal_id>")
     def delete_coach_proposal(proposal_id: str):
         _payload, status = db_api.delete_coach_proposal(proposal_id)

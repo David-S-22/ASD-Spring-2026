@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import BadRequest, HTTPException
 
 from .models import Budget, BudgetLine, CoachProposal, PlannedEvent, db
+from .models import ChatMessage
 from .seed import seed_database_if_empty
 
 
@@ -20,6 +21,9 @@ BUDGET_STATUSES = {"draft", "active", "closed"}
 PLANNED_EVENT_SOURCES = {"user", "predicted"}
 PLANNED_EVENT_STATUSES = {"planned", "confirmed", "cancelled"}
 COACH_PROPOSAL_STATUSES = {"proposed", "accepted", "rejected"}
+CHAT_MESSAGE_ROLES = {"user", "assistant"}
+CHAT_MESSAGE_MODES = {"advice", "clarify", "proposal"}
+CHAT_RESPONSE_SOURCES = {"deterministic", "ollama"}
 
 
 class ApiError(Exception):
@@ -106,6 +110,18 @@ def _optional_json_object(data: dict, field: str, values: dict):
     if not isinstance(value, dict):
         raise ApiError(f"{field} must be a JSON object", 422, "invalid_field")
     values[field] = value
+
+
+def _optional_string_list(data: dict, field: str, values: dict):
+    if field not in data:
+        return
+    value = data[field]
+    if value is None:
+        values[field] = None
+        return
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise ApiError(f"{field} must be a list of strings", 422, "invalid_field")
+    values[field] = [item.strip() for item in value]
 
 
 def _validate_month(value: str | None):
@@ -218,6 +234,24 @@ def _validate_coach_proposal_payload(data: dict, partial: bool = False) -> dict:
     return values
 
 
+def _validate_chat_message_payload(data: dict) -> dict:
+    _require_fields(data, ["role", "content"])
+    values: dict = {}
+    _optional_enum(data, "role", CHAT_MESSAGE_ROLES, values)
+    _optional_string(data, "content", values)
+    _optional_enum(data, "mode", CHAT_MESSAGE_MODES, values)
+    _optional_enum(data, "response_source", CHAT_RESPONSE_SOURCES, values)
+    _optional_json_object(data, "plan_json", values)
+    _optional_json_object(data, "observation_json", values)
+    _optional_string_list(data, "stage_trace", values)
+    _optional_int(data, "proposal_id", values)
+    if values.get("role") is None:
+        raise ApiError("role must be user or assistant", 422, "invalid_field")
+    if values.get("content") is None:
+        raise ApiError("content must not be empty", 422, "invalid_field")
+    return values
+
+
 def _get_budget_or_404(budget_id: str) -> Budget:
     budget = db.session.get(Budget, _validate_id(budget_id, "budget_id"))
     if budget is None:
@@ -244,6 +278,10 @@ def _get_coach_proposal_or_404(proposal_id: str) -> CoachProposal:
     if proposal is None:
         raise ApiError("coach proposal not found", 404, "coach_proposal_not_found")
     return proposal
+
+
+def _get_chat_message_budget_or_404(budget_id: str) -> Budget:
+    return _get_budget_or_404(budget_id)
 
 
 def _budget_has_category_id(budget_id: int, category_id: int | None, excluded_line_id: int | None = None) -> bool:
@@ -279,6 +317,17 @@ def _require_existing_budget_line_category(budget_id: int, category: str | None)
             422,
             "budget_line_category_required",
         )
+
+
+def _planned_events_for_budget_line(line: BudgetLine) -> list[PlannedEvent]:
+    if not isinstance(line.category, str) or not line.category.strip():
+        return []
+    return db.session.scalars(
+        select(PlannedEvent).where(
+            PlannedEvent.budget_id == line.budget_id,
+            func.lower(PlannedEvent.category) == line.category.casefold(),
+        )
+    ).all()
 
 
 def _require_date_within_budget_month(budget: Budget, date_value: str | None):
@@ -443,6 +492,8 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     @application.delete("/budget-lines/<line_id>")
     def delete_budget_line(line_id: str):
         line = _get_budget_line_or_404(line_id)
+        for planned_event in _planned_events_for_budget_line(line):
+            db.session.delete(planned_event)
         db.session.delete(line)
         db.session.commit()
         return "", 204
@@ -553,6 +604,48 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
     def delete_coach_proposal(proposal_id: str):
         proposal = _get_coach_proposal_or_404(proposal_id)
         db.session.delete(proposal)
+        db.session.commit()
+        return "", 204
+
+    @application.get("/budgets/<budget_id>/chat-messages")
+    def list_chat_messages(budget_id: str):
+        budget = _get_chat_message_budget_or_404(budget_id)
+        messages = db.session.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.budget_id == budget.id)
+            .order_by(ChatMessage.created_at, ChatMessage.id)
+        ).all()
+        return jsonify([message.to_dict() for message in messages])
+
+    @application.post("/budgets/<budget_id>/chat-messages")
+    def create_chat_message(budget_id: str):
+        budget = _get_chat_message_budget_or_404(budget_id)
+        values = _validate_chat_message_payload(_json_body())
+        proposal_id = values.get("proposal_id")
+        if proposal_id is not None:
+            proposal = db.session.get(CoachProposal, proposal_id)
+            if proposal is None or proposal.budget_id != budget.id:
+                raise ApiError("proposal_id must refer to a coach proposal for this budget", 422, "proposal_not_found")
+        message = ChatMessage(
+            budget_id=budget.id,
+            proposal_id=proposal_id,
+            role=values["role"],
+            content=values["content"],
+            mode=values.get("mode"),
+            response_source=values.get("response_source"),
+            plan_json=values.get("plan_json"),
+            observation_json=values.get("observation_json"),
+            stage_trace=values.get("stage_trace"),
+            created_at=_now_timestamp(),
+        )
+        db.session.add(message)
+        db.session.commit()
+        return jsonify(message.to_dict()), 201
+
+    @application.delete("/budgets/<budget_id>/chat-messages")
+    def delete_chat_messages(budget_id: str):
+        budget = _get_chat_message_budget_or_404(budget_id)
+        db.session.query(ChatMessage).where(ChatMessage.budget_id == budget.id).delete()
         db.session.commit()
         return "", 204
 

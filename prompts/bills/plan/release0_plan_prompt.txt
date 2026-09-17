@@ -1,0 +1,173 @@
+PROMPT — Release 0 plan for the Bills feature and the shared shell
+Stage: PLAN · Run: 22 Aug 2026 (v4) · Tool: Claude Code, from the repo root
+Purpose: a written plan before any code exists — read the repo, design the
+         date engine, schema, endpoints, AI calls, containers and CI, and
+         sequence the work against two deadlines.
+Outcome: the plan behind PRs #6–#13 (scaffold, engine, DB API, backend,
+         frontend, AI). Nothing was created by this session.
+Condensed for readability; the wording is the original's.
+
+---
+
+You are helping me plan my individual feature for Release 0 of UTS 41026
+Advanced Software Development.
+
+**This is a planning task. Do not create, edit or delete any file. Do not
+run git commands that change state, do not create branches, do not commit.
+Read the repo, think, and give me a written plan. I will tell you when to
+build.**
+
+## Who I am and what is mine
+
+Repo: github.com/David-S-22/ASD-Spring-2026 (group 21, "Personal Finance
+App", working name Tally). I am Sophia Nguyen, **Student 5**. My folder is
+`sophia/` (lowercase, matching David's `david/`; the plan covers renaming the
+existing `Sophia-Nguyen/`).
+
+I own two separate pieces of work:
+
+1. **My individual feature — Bills List & Dispute Assistant**, in `sophia/`.
+   This is what I am marked on individually.
+2. **The shared shell**, in `shared/` — a team responsibility that was
+   unowned; I claimed it because nothing integrates without it. Treat it as
+   a smaller, separate deliverable with an earlier deadline.
+
+Architecture is the Week 6 sample: shared Main UI 3000 / Access API 5000 /
+Access DB 6000, then 300N/500N/600N per student. I am N = 5:
+
+| Service | Folder | Stack | Port |
+|---|---|---|---|
+| Main UI (shell) | `shared/` | HTML + HTMX + shared CSS | 3000 |
+| Shared Access API | `shared/` | Python 3 + Flask | 5000 |
+| Access DB API | `shared/` | Python 3 + Flask + SQLite | 6000 |
+| Bills frontend | `sophia/` | HTML + HTMX + shared CSS | 3005 |
+| Bills backend/API | `sophia/` | Python 3 + Flask | 5005 |
+| Bills database API | `sophia/` | Python 3 + Flask + SQLite | 6005 |
+
+## Scope: my changes only
+
+Plan changes to `sophia/` and `shared/` and nothing else, with two
+exceptions: `docker-compose.yml` (add my six services in David's style and
+key order) and one fix to `requirements.txt` (`flask.cors==4.0.1` is not a
+real package; it should be `flask-cors` — check the other pins too). Do not
+touch anyone else's folder or workflow file; list problems there under "for
+the team". The shell links to other people's frontends; it does not contain
+them.
+
+## Step 1 — read the repo as it actually is
+
+Root files, workflows, compose, requirements, README, docs, my folder, and
+`david/` as the pattern to match. Find out whether anyone has published a
+transactions API contract, and whether any shell work already exists (a
+root `index.html`, a shared folder, a nav page, a stylesheet, services on
+3000/5000/6000). Report what is there rather than assuming a blank slate.
+
+## Step 2 — the plan I want back
+
+**A. What is already there.** Facts, not assumptions.
+
+**B. Proposed file tree for `sophia/`** — every file, one-line purpose each,
+including how the rename is done so git tracks it.
+
+**B2. The shared shell — the smallest thing that makes "integrated" true.**
+Due Wednesday 27 August; the one place scope creep is the real risk. Main
+UI :3000 is the unified `index.html`: app frame, top nav with one tab per
+feature, a persona picker standing in for login (no auth at R0). Propose
+and defend how a feature page is reached (link-out, iframe or server-side
+include) and what each costs. Access API :5000 does two jobs only — serve
+the personas and the feature registry (port, tab label, up or down); a
+health check that greys out down features is worth proposing. Access DB
+:6000 holds `personas` and `features` (≥10 rows applies). The shared
+stylesheet is served from :3000 at one stable URL that every feature links
+to — never a file copied into five folders. State what is out of scope:
+other students' pages, cross-feature chat, auth, sessions, any shared write
+path.
+
+**C. The date engine, in detail.** The hard part; design it first. Status
+(paid / due / overdue), per-month estimates and the 180-day timeline are all
+computed in ordinary Python from cadence, `next_billing_date` and payment
+history — the AI is never asked for arithmetic or date maths. A pure,
+dependency-free module that projects a bill over a window (weekly,
+fortnightly, monthly); rolls a month into **usual** versus **extra** (a
+subscription starting or ending, the third fortnight landing in a month);
+derives status from `next_billing_date` and `payments`; and handles
+month-end rollover with plain `date` arithmetic. It takes an injectable
+demo clock — never `date.today()` inside business logic. Give me function
+signatures, edge cases, and test inputs for: the three-fortnight month,
+month-end rollover, a subscription starting mid-window, one ending
+mid-window, and an overdue bill.
+
+**D. Schema and seed data.** Tables as registered: `bills` (name, merchant,
+amount, cadence, next_billing_date, type, payment_method, status),
+`payments`, `disputes`, `dispute_drafts` (versioned), and a proposed
+`chat_messages` — flag it, do not assume it. **≥10 rows in every table** is
+a marking requirement; seed the awkward cases the feature exists for. No
+real merchant, bank or account details.
+
+**E. Endpoints.** CRUD over bills, payments and disputes, plus
+`GET /timeline?days=30..180` (occurrences tagged actual or predicted),
+`GET /calendar/<month>` (the usual/extra breakdown), a read endpoint other
+features call for upcoming and predicted bills, and
+`POST /disputes/<id>/regenerate`.
+
+**F. The two AI calls, and only two.** Both Frontend → Backend → Ollama →
+LLM; no tools, no retrieval.
+1. **Draft a dispute** (`llama3.1:8b`): the bill and its payment history go
+   in; schema-checked JSON comes back — letter text, a checklist of safe
+   steps, an escalation path. If `payment_method` is recorded the steps
+   adapt: cancelling in an app versus asking the merchant or bank to remove
+   a direct-debit authority. Regenerate feeds my edits back and stores a
+   new version.
+2. **Chat** (`qwen2.5:0.5b`): a plain-English request becomes exactly one
+   structured operation `{op, entity, fields}`. Plan for "I cancelled
+   Spotify from September, remove the future payments", "What do my bills
+   add up to?", and "Which subscriptions am I barely using?".
+For both: the JSON schema and the failure path — validate, retry once, fall
+back to a safe default and tell the user. Unvalidated model output never
+reaches the database.
+
+**G. Integration points.** Transaction history comes only over HTTP from
+the Transactions feature's database API, read-only, with a fixture stub as
+the fallback. I receive two handoffs (recurring requests from Transactions;
+"looks like a subscription" suggestions from Alerts) and have drafted both
+contracts — review them against the repo rather than inventing new ones.
+
+**H. Frontend screens.** Bill list, calendar, 30→180-day timeline with
+`[Predicted]` tags, dispute (draft letter + checklist + escalation +
+regenerate + status tracker), a per-tab chat with history. Non-negotiable
+UI rules: a confirmation modal before every state change and a toast after
+it; actuals show cents ($42.00), estimates and ranges are whole-dollar
+($379–415); sentence casing; the shared CSS theme.
+
+**I. Containers and CI.** One Dockerfile per service (`python:3.12-slim`,
+`nginx:alpine`), config through environment variables, no baked secrets.
+Two workflow files that fail independently: `Sophia-CI.yml` path-filtered
+to `sophia/**` (the spec's name is `student-5.yml`; flag it, match the
+repo's existing convention) and `Shared-CI.yml` for `shared/**`, both with
+`setup-python` pinned. Propose a `compose up` → `ps` → `curl` → `down`
+evidence sequence I can run and screenshot.
+
+**J. Build order and a rough estimate.** Shell first (Wed 27 Aug — worth no
+individual marks but unblocks four people), then Bills (Sun 30 Aug): date
+engine and tests, database API, backend, frontend, AI calls last. Say where
+the risk sits and what the smallest shippable shell is if Wednesday slips;
+Quiz 1 is the same week.
+
+**K. Open questions**, and a short "for the team" list.
+
+## Hard constraints for Release 0
+
+- No MCP, no RAG, no multi-agent, no cloud — those are R1 and R2.
+- Only Ollama with approved models. No commercial LLM in the product.
+- Nothing writes to the database without an explicit user click: the chat
+  produces a preview, I press Apply, the change goes through the normal
+  endpoints. Dispute letters are drafts; nothing is sent anywhere.
+- Mock money on seeded data; persona picker, seeded data, demo clock.
+- `main` is the integration branch; my work goes on a feature branch and
+  merges by PR.
+- A feature not integrated into the team app scores zero, so my frontend
+  must be reachable from the shared `index.html` and use the shared CSS.
+
+Give me the plan as a single document I can read top to bottom. Where you
+are uncertain, say so rather than picking silently. **Create nothing until
+I say go.**

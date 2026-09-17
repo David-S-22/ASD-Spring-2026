@@ -150,6 +150,13 @@ def test_create_planned_event(monkeypatch):
 
 
 def test_send_chat_message(monkeypatch):
+    stored_messages = []
+    monkeypatch.setattr(db_api, "list_chat_messages", lambda budget_id: [{"role": "assistant", "content": "Earlier stored advice"}])
+    monkeypatch.setattr(
+        db_api,
+        "create_chat_message",
+        lambda budget_id, payload: stored_messages.append((budget_id, payload)) or ({"id": len(stored_messages)}, 201),
+    )
     monkeypatch.setattr(
         chat_service,
         "send_message",
@@ -159,8 +166,23 @@ def test_send_chat_message(monkeypatch):
             "question": None,
             "proposal": None,
             "fallback": False,
+            "response_source": "deterministic",
+            "stage_trace": ["observe", "plan", "act", "adapt"],
+            "agentic_workflow": {"observe": {"month": "2026-09"}, "plan": {"intent": "overspending"}},
             "user_message": {"role": "user", "content": message},
             "assistant_message": {"role": "assistant", "content": "Dining is projected to reach warning this month."},
+            "messages_to_store": [
+                {"role": "user", "content": message},
+                {
+                    "role": "assistant",
+                    "content": "Dining is projected to reach warning this month.",
+                    "mode": "advice",
+                    "response_source": "deterministic",
+                    "plan_json": {"intent": "overspending"},
+                    "observation_json": {"month": "2026-09"},
+                    "stage_trace": ["observe", "plan", "act", "adapt"],
+                },
+            ],
         },
     )
 
@@ -171,14 +193,21 @@ def test_send_chat_message(monkeypatch):
 
     assert resp.status_code == 200
     assert resp.get_json()["mode"] == "advice"
+    assert resp.get_json()["response_source"] == "deterministic"
+    assert resp.get_json()["stage_trace"] == ["observe", "plan", "act", "adapt"]
     assert resp.get_json()["assistant_message"]["content"] == "Dining is projected to reach warning this month."
-
+    assert len(stored_messages) == 2
+    assert stored_messages[1][1]["plan_json"] == {"intent": "overspending"}
 
 def test_apply_coach_proposal_route(monkeypatch):
     monkeypatch.setattr(
         proposal_service,
         "apply",
-        lambda proposal_id: {"proposal": {"id": int(proposal_id), "status": "accepted"}, "applied": [{"id": 3}]},
+        lambda proposal_id: {
+            "proposal": {"id": int(proposal_id), "status": "accepted"},
+            "applied": [{"id": 3}],
+            "stage_trace": ["observe", "plan", "act", "observe", "adapt"],
+        },
     )
 
     resp = _client().post("/api/coach-proposals/7/apply")
@@ -186,6 +215,27 @@ def test_apply_coach_proposal_route(monkeypatch):
     assert resp.status_code == 200
     assert resp.get_json()["proposal"]["status"] == "accepted"
     assert resp.get_json()["applied"] == [{"id": 3}]
+    assert resp.get_json()["stage_trace"] == ["observe", "plan", "act", "observe", "adapt"]
+
+
+def test_chat_history_routes(monkeypatch):
+    monkeypatch.setattr(
+        db_api,
+        "list_chat_messages",
+        lambda budget_id: [{"id": 1, "budget_id": int(budget_id), "role": "assistant", "content": "Stored"}],
+    )
+    monkeypatch.setattr(
+        db_api,
+        "delete_chat_messages",
+        lambda budget_id: (None, 204),
+    )
+
+    list_resp = _client().get("/api/budgets/7/chat-messages")
+    delete_resp = _client().delete("/api/budgets/7/chat-messages")
+
+    assert list_resp.status_code == 200
+    assert list_resp.get_json() == [{"id": 1, "budget_id": 7, "role": "assistant", "content": "Stored"}]
+    assert delete_resp.status_code == 204
 
 
 def test_chat_prompt_examples_use_current_summary_values():
@@ -225,6 +275,7 @@ def test_chat_prompt_examples_use_current_summary_values():
 
 
 def test_chat_route_returns_json_when_proposal_storage_is_unavailable(monkeypatch):
+    monkeypatch.setattr(db_api, "list_chat_messages", lambda _budget_id: [])
     monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
     monkeypatch.setattr(
         summary_service,
@@ -518,6 +569,456 @@ def test_chat_service_answers_spend_more_question_from_current_mobile_budget(mon
     assert result["mode"] == "advice"
     assert result["proposal"] is None
     assert "Mobile is already over its hard cap." in result["reply"]
+
+
+def test_chat_service_recognises_unbudgeted_spend_question_wording(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 540000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "hard_cap": 17000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "what am I spending the most on that I'm not tracking with a budget")
+
+    assert result["mode"] == "advice"
+    assert result["proposal"] is None
+    assert result["reply"] == "I cannot see any spending categories outside your current budget lines for this month."
+
+
+def test_chat_service_keeps_music_subscription_affordability_grounded(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 15000,
+                    "hard_cap": 17000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "can i afford a new monthly music subscription of 50$ a month")
+
+    assert result["mode"] == "advice"
+    assert result["proposal"] is None
+    assert "Music subscriptions" in result["reply"]
+    assert "$250.00" in result["reply"]
+    assert "$80.00 over the hard cap of $170.00" in result["reply"]
+
+
+def test_chat_service_treats_category_only_follow_up_as_affordability_context(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "can i afford a new monthly music subscription of 50$ a month"},
+        {"role": "assistant", "content": "Tell me the rough amount you are considering."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 15000,
+                    "hard_cap": 17000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "a music subscription", history)
+
+    assert result["mode"] == "advice"
+    assert result["proposal"] is None
+    assert "Music subscriptions" in result["reply"]
+    assert "$250.00" in result["reply"]
+
+
+def test_chat_service_uses_latest_open_proposal_for_increase_it_another_amount(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 17000,
+                    "hard_cap": 22000,
+                },
+            ],
+            "coach_proposals": [
+                {
+                    "id": 60,
+                    "budget_id": 1,
+                    "status": "proposed",
+                    "proposal_json": {
+                        "proposal_type": "adjust_budget_line_thresholds",
+                        "summary": "Review Music subscriptions warning and hard-cap values.",
+                        "operations": [
+                            {
+                                "action": "update_budget_line",
+                                "budget_line_id": 6,
+                                "category": "Music subscriptions",
+                                "fields": {"warn_at": 20000, "hard_cap": 22000},
+                            }
+                        ],
+                    },
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    deleted_ids = []
+    stored = {}
+    monkeypatch.setattr(db_api, "delete_coach_proposal", lambda proposal_id: deleted_ids.append(int(proposal_id)) or (None, 204))
+
+    def create_coach_proposal(_budget_id, payload):
+        stored.update(payload)
+        return {
+            "id": 61,
+            "budget_id": 1,
+            "proposal_json": payload["proposal_json"],
+            "rationale": payload["rationale"],
+            "status": "proposed",
+        }, 201
+
+    monkeypatch.setattr(db_api, "create_coach_proposal", create_coach_proposal)
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "increase it another 50")
+
+    assert result["mode"] == "proposal"
+    assert result["proposal"]["id"] == 61
+    assert deleted_ids == [60]
+    assert stored["proposal_json"]["operations"][0]["budget_line_id"] == 6
+    assert stored["proposal_json"]["operations"][0]["fields"] == {"warn_at": 24000, "hard_cap": 27000}
+
+
+def test_chat_service_multiplies_follow_up_quantity_from_recent_affordability_context(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "can i afford another monthly $50 music subscription?"},
+        {"role": "assistant", "content": "Music subscriptions is currently spent $200.00."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 24000,
+                    "hard_cap": 27000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "what about 2", history)
+
+    assert result["mode"] == "advice"
+    assert "$100.00" in result["reply"]
+    assert "$300.00" in result["reply"]
+    assert "$30.00 over the hard cap of $270.00" in result["reply"]
+
+
+def test_chat_service_multiplies_two_50_music_subscriptions(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "can i afford another monthly $50 music subscription?"},
+        {"role": "assistant", "content": "Music subscriptions is currently spent $200.00."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 24000,
+                    "hard_cap": 27000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "what about 2 $50 music subscriptions", history)
+
+    assert result["mode"] == "advice"
+    assert "$100.00" in result["reply"]
+    assert "$300.00" in result["reply"]
+    assert "$30.00 over the hard cap of $270.00" in result["reply"]
+
+
+def test_chat_service_uses_recent_music_context_for_accommodate_follow_up(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "I want to be able to afford another $100 of music subscriptions per month"},
+        {"role": "assistant", "content": "No, that would put Music subscriptions over its hard cap."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 39000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 19000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                },
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 24000,
+                    "hard_cap": 27000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    stored = {}
+
+    def create_coach_proposal(_budget_id, payload):
+        stored.update(payload)
+        return {
+            "id": 70,
+            "budget_id": 1,
+            "proposal_json": payload["proposal_json"],
+            "rationale": payload["rationale"],
+            "status": "proposed",
+        }, 201
+
+    monkeypatch.setattr(db_api, "create_coach_proposal", create_coach_proposal)
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "I want to increase my budget to accomodate", history)
+
+    assert result["mode"] == "proposal"
+    assert result["proposal"]["id"] == 70
+    assert stored["proposal_json"]["operations"][0]["budget_line_id"] == 6
+    assert stored["proposal_json"]["operations"][0]["category"] == "Music subscriptions"
+    assert stored["proposal_json"]["operations"][0]["fields"] == {"warn_at": 34000, "hard_cap": 37000}
+
+
+def test_chat_service_summarises_music_budget_line_without_stale_affordability(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "can i afford another monthly $50 music subscription?"},
+        {"role": "assistant", "content": "Maybe, but that would put Music subscriptions into warning range."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 20000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 6,
+                    "category": "Music subscriptions",
+                    "actual_spend": 20000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 20000,
+                    "warn_at": 24000,
+                    "hard_cap": 27000,
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "tell me about my music subscription budget line", history)
+
+    assert result["mode"] == "advice"
+    assert "Music subscriptions is currently spent $200.00" in result["reply"]
+    assert "The warning amount is $240.00 and the hard cap is $270.00." in result["reply"]
+    assert "within its thresholds" in result["reply"]
+
+
+def test_chat_service_revises_transport_proposal_for_spend_at_least_target(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    history = [
+        {"role": "user", "content": "I want to allow myself to spend more on transport"},
+        {"role": "assistant", "content": "I revised the proposal to move that budget line's warning amount to $160.00 and hard cap to $180.00 for your review."},
+    ]
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 16000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 521000,
+            },
+            "budget_lines": [
+                {
+                    "id": 4,
+                    "category": "Transport",
+                    "actual_spend": 16000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 16000,
+                    "warn_at": 10000,
+                    "hard_cap": 13000,
+                },
+            ],
+            "coach_proposals": [
+                {
+                    "id": 80,
+                    "budget_id": 1,
+                    "status": "proposed",
+                    "proposal_json": {
+                        "proposal_type": "adjust_budget_line_thresholds",
+                        "summary": "Review Transport warning and hard-cap values.",
+                        "operations": [
+                            {
+                                "action": "update_budget_line",
+                                "budget_line_id": 4,
+                                "category": "Transport",
+                                "fields": {"warn_at": 16000, "hard_cap": 18000},
+                            }
+                        ],
+                    },
+                },
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    deleted_ids = []
+    stored = {}
+    monkeypatch.setattr(db_api, "delete_coach_proposal", lambda proposal_id: deleted_ids.append(int(proposal_id)) or (None, 204))
+
+    def create_coach_proposal(_budget_id, payload):
+        stored.update(payload)
+        return {
+            "id": 81,
+            "budget_id": 1,
+            "proposal_json": payload["proposal_json"],
+            "rationale": payload["rationale"],
+            "status": "proposed",
+        }, 201
+
+    monkeypatch.setattr(db_api, "create_coach_proposal", create_coach_proposal)
+    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+
+    result = chat_service.send_message(1, "I want to be able to spend at least $200", history)
+
+    assert result["mode"] == "proposal"
+    assert result["proposal"]["id"] == 81
+    assert deleted_ids == [80]
+    assert stored["proposal_json"]["operations"][0]["budget_line_id"] == 4
+    assert stored["proposal_json"]["operations"][0]["fields"] == {"warn_at": 18000, "hard_cap": 20000}
+    assert result["reply"] == "I revised the proposal to move Transport's warning amount to $180.00 and hard cap to $200.00 for your review."
 
 
 def test_chat_service_switches_topic_to_category_remaining(monkeypatch):
@@ -1408,6 +1909,12 @@ def test_chat_service_reuses_equivalent_open_proposal(monkeypatch):
 
 
 def test_apply_proposal_updates_budget_line_and_marks_proposal_accepted(monkeypatch):
+    snapshots = iter(
+        [
+            {"budget": {"month": "2026-09"}, "totals": {"projected_high_total": 79100, "remaining_income_high": 425400}, "budget_lines": [{"id": 3}]},
+            {"budget": {"month": "2026-09"}, "totals": {"projected_high_total": 79100, "remaining_income_high": 425400}, "budget_lines": [{"id": 3}]},
+        ]
+    )
     monkeypatch.setattr(
         db_api,
         "get_coach_proposal",
@@ -1442,13 +1949,18 @@ def test_apply_proposal_updates_budget_line_and_marks_proposal_accepted(monkeypa
         "update_coach_proposal",
         lambda proposal_id, payload: {"id": int(proposal_id), "status": payload["status"]},
     )
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: next(snapshots),
+    )
 
     result = proposal_service.apply(7)
 
     assert result["proposal"] == {"id": 7, "status": "accepted"}
     assert result["applied"] == [{"id": 3, "warn_at": 72000, "hard_cap": 85000}]
-
-
+    assert result["stage_trace"] == ["observe", "plan", "act", "observe", "adapt"]
+    assert result["agentic_workflow"]["plan"]["operation_count"] == 1
 def test_patch_planned_event(monkeypatch):
     monkeypatch.setattr(
         db_api,

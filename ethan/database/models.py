@@ -37,6 +37,11 @@ class Budget(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    chat_messages: Mapped[list[ChatMessage]] = relationship(
+        back_populates="budget",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         UniqueConstraint("month", name="uq_budgets_month"),
@@ -179,5 +184,59 @@ class CoachProposal(db.Model):
             "status": self.status,
             "rejection_reason": self.rejection_reason,
             "decided_at": self.decided_at,
+            "created_at": self.created_at,
+        }
+
+
+class ChatMessage(db.Model):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(
+        ForeignKey("budgets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("coach_proposals.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    response_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    observation_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    stage_trace: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40), nullable=False)
+
+    budget: Mapped[Budget] = relationship(back_populates="chat_messages")
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'assistant')",
+            name="ck_chat_messages_role",
+        ),
+        CheckConstraint(
+            "mode IS NULL OR mode IN ('advice', 'clarify', 'proposal')",
+            name="ck_chat_messages_mode",
+        ),
+        CheckConstraint(
+            "response_source IS NULL OR response_source IN ('deterministic', 'ollama')",
+            name="ck_chat_messages_response_source",
+        ),
+    )
+
+    def to_dict(self) -> dict[str, object | None]:
+        return {
+            "id": self.id,
+            "budget_id": self.budget_id,
+            "proposal_id": self.proposal_id,
+            "role": self.role,
+            "content": self.content,
+            "mode": self.mode,
+            "response_source": self.response_source,
+            "plan_json": self.plan_json,
+            "observation_json": self.observation_json,
+            "stage_trace": self.stage_trace,
             "created_at": self.created_at,
         }

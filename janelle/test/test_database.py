@@ -69,6 +69,18 @@ def test_index_identifies_database(database_client):
 	assert response.get_json() == {"container": "transactions-db"}
 
 
+def test_health_reports_database_liveness(database_client):
+	client, _database_path = database_client
+
+	response = client.get("/health")
+
+	assert response.status_code == 200
+	assert response.get_json() == {
+		"ok": True,
+		"container": "transactions-db",
+	}
+
+
 def test_setup_creates_schema_indexes_and_foreign_keys(database_client):
 	_client, database_path = database_client
 	connection = get_connection(database_path)
@@ -718,6 +730,76 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 	assert len(combined) == 1
 	assert combined[0]["merchant"] == "Merivale"
 	assert response_datetime(combined[0]["date"]) == datetime(2026, 8, 30)
+
+
+def test_transaction_filter_by_category_name(database_client):
+	client, _database_path = database_client
+
+	dining = client.get("/transactions?category_name=Dining").get_json()
+	assert len(dining) == 5
+	assert all(row["category_id"] == 80 for row in dining)
+
+	music = client.get(
+		"/transactions?category_name=Music subscriptions"
+	).get_json()
+	assert len(music) == 3
+	assert all(row["category_id"] == 32 for row in music)
+
+
+def test_transaction_filter_by_category_name_case_insensitive(database_client):
+	client, _database_path = database_client
+
+	lower = client.get("/transactions?category_name=dining").get_json()
+	assert len(lower) == 5
+	assert all(row["category_id"] == 80 for row in lower)
+
+	upper = client.get("/transactions?category_name=DINING").get_json()
+	assert len(upper) == 5
+	assert all(row["category_id"] == 80 for row in upper)
+
+
+def test_transaction_filter_by_category_name_with_date_range(database_client):
+	client, _database_path = database_client
+
+	results = client.get(
+		"/transactions?category_name=Dining&date_from=2026-08-15&date_to=2026-08-31"
+	).get_json()
+	assert len(results) == 3
+	assert all(row["category_id"] == 80 for row in results)
+	assert all(
+		datetime(2026, 8, 15)
+		<= response_datetime(row["date"])
+		<= datetime(2026, 8, 31, 23, 59, 59, 999999)
+		for row in results
+	)
+
+
+def test_transaction_filter_by_category_name_with_merchant(database_client):
+	client, _database_path = database_client
+
+	results = client.get(
+		"/transactions",
+		query_string={
+			"category_name": "dining",
+			"merchant": "merivale",
+			"date_from": "2026-08-10",
+			"date_to": "2026-08-31",
+		},
+	).get_json()
+	assert len(results) == 2
+	assert all(row["merchant"] == "Merivale" for row in results)
+	assert all(row["category_id"] == 80 for row in results)
+
+
+def test_transaction_filter_by_nonexistent_category_name_returns_empty(
+	database_client,
+):
+	client, _database_path = database_client
+
+	missing = client.get(
+		"/transactions?category_name=NonExistentCategory"
+	).get_json()
+	assert missing == []
 
 
 def test_date_only_filter_includes_the_entire_day(database_client):

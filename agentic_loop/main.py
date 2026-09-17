@@ -183,7 +183,7 @@ def main():
     keys = list(MODES)
 
     print("AGENTIC LOOP - shared review workflow (Plan -> Act -> Observe -> Adapt)")
-    print(f"Run record: {reports_dir}")
+    print(f"Run record: {reports_dir.relative_to(REPO_ROOT).as_posix()}")
     while True:
         print()
         print("=" * 70)

@@ -698,6 +698,13 @@
   font-size: 0.9em;
   color: var(--mut);
   margin-left: 0.5em;
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+
+.working.htmx-request,
+.htmx-request .working {
+  opacity: 1;
 }
 
 /* Two problems with the old `button:disabled { opacity: .6; cursor: progress }`.

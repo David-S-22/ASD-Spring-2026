@@ -1,0 +1,108 @@
+PROMPT — Review my recent PRs against the spec, the criteria and the team agreements
+Stage: OBSERVE · Run: 29 Aug 2026 · Tool: Claude Code, repo read-only
+Purpose: a pre-submission self-audit — find what a marker would find,
+         first, with every finding quoting the requirement it deviates from.
+Outcome: the audit note that drove the fixes in the ADAPT prompt
+         (#68, #69, #71, #75) and the declared-deviation sentences in the
+         report.
+Condensed for readability.
+
+---
+
+## Context
+
+I am Sophia Nguyen (zfere), Student 5, Bills List & Dispute Assistant, in
+the UTS 41026 team repo. Read your notes from earlier sessions first.
+
+**The job:** review my recent merged PRs — not my teammates' — against
+(1) the Release 0 specification, (2) the assessment criteria, and (3) the
+team's charter and agreements, and report every deviation with a verbatim
+quote of the requirement it deviates from. The showcase is Fri 4 Sep and
+the technical report is due Sun 6 Sep.
+
+## Sources of truth — locate and rank them before reviewing
+
+1. **The spec itself**, the subject's project specification PDF, plus any
+   Release 0 rubric, criteria or marking page. These are primary; quote
+   them. If a text extraction of the PDF looks thin on a load-bearing
+   claim, say so rather than trusting it.
+2. **My own digest of the brief** — secondary; a map of what to look for.
+   Quote the primary source wherever the two differ, and list differences.
+3. **Team charter / agreements.** If no 41026-specific charter exists, say
+   so plainly and use the documented agreements instead, citing each: the
+   signed registration form (feature allocation, ports, topic) and the
+   recorded team decisions (per-service requirements ownership; shared
+   DTOs with JSON-over-HTTP as the contract; Flask-SQLAlchemy adopted
+   team-wide; `<name>/` folder naming; the unratified proposal that
+   `shared/` changes go via PR with consumers tagged). Label anything drawn
+   from an unratified proposal as such — a deviation from a proposal is not
+   a deviation. A Team Charter exists for another subject; do not use it.
+
+## The PRs under review
+
+Every squash-merge on `main` authored by me since `73178a4` (23 Aug) — at
+least #47, #49, #50, #51, plus B2 if merged. List what you actually find
+with `git log --author`, and read each full squash diff, not just the
+message. Where a criterion concerns cumulative state (repo structure, CRUD
+completeness), judge the current `sophia/**` tree and use the PR set to
+explain how it got there.
+
+## Review dimensions — every finding quotes its source verbatim
+
+**A. Spec compliance.** Per requirement: MET / PARTIAL / NOT MET / N-A with
+evidence (path, route, commit, run URL). At minimum: three microservices
+with Dockerfiles and compose services · full CRUD through frontend and
+backend · ≥10 records per table (count the seeds) · FE → BE → Ollama with an
+approved model, local only, no MCP/RAG · Plan → Act → Observe → Adapt
+demonstrable (versioned dispute drafts) · own CI workflow and what it runs
+· own commit history via branches and PRs · reachable from the unified home
+page with the shared CSS (expect NOT MET at team level — attribute it as a
+team gap, not a Bills defect, and note what Bills did instead) · repository
+structure per §7.1, including the `student-N/` naming (folder `sophia/`,
+workflow `Sophia-CI.yml` — the known, team-conventional deviation; quote the
+spec line so the report can declare it deliberately).
+
+**B. Assessment criteria.** If a rubric or criteria page exists, walk it
+criterion by criterion for the Bills slice and flag anything the recent PRs
+weakened or left unevidenced (stale README numbers, evidence URLs not yet
+updated after #51 changed CI). If none exists, say so and skip — do not
+invent criteria.
+
+**C. Team agreements (Bills only).** Dependency ownership (nothing installs
+from the root requirements file) · JSON-over-HTTP as the cross-feature
+contract (did any PR quietly import the shared DTO? expected: no) ·
+Flask-SQLAlchemy versus Bills' raw sqlite3 (decided deviation D1, R1 —
+record it as declared) · ports 3005/5005/6005 per the signed form · folder
+naming · any PR that touched paths outside my agreed scope (`git diff
+--stat` each merge; expected: `sophia/**`, my compose blocks,
+`Sophia-CI.yml`, `docs/release-0/sophia/**` only).
+
+**D. Report-readiness gaps.** Anything the PRs promised that the report
+needs and lacks: test count and coverage consistent across README, docs and
+reality; a Sophia-CI run-on-main URL newer than the docker-health change;
+screenshots that predate the handoff form and deep links.
+
+## Rules
+
+1. **Repo is read-only.** No branches, commits, pushes or PR comments. A
+   defect goes in the note; I decide what happens next.
+2. Every finding cites the verbatim requirement text with its source, and
+   the evidence (path / commit / line). Where a requirement is ambiguous,
+   say "ambiguous — tutor question" rather than ruling.
+3. Separate the tiers: (a) genuine spec or criteria gaps in my work,
+   (b) declared deviations that need one justification sentence,
+   (c) team-level gaps not attributable to Bills, (d) agreement notes.
+   Don't inflate (b)–(d) into (a).
+4. Tone: factual and constructive — findings as fixes with effort
+   estimates, strongest compliance points first, so the note doubles as
+   report material.
+5. Date-stamp everything and record the head SHA; teammates push actively.
+
+## Output
+
+A review note: header (date, head, PR set, sources and their rank) →
+compliance table for A → findings by tier with quotes and evidence →
+agreements section, naming exactly which documents served as "charter" →
+a block of sentences ready to paste into the report → open tutor
+questions. In chat, a one-screen summary: counts per tier and the two or
+three findings that matter most.

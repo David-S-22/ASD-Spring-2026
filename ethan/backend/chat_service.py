@@ -9,6 +9,7 @@ from .db_api import ServiceError
 
 
 SUMMARY_TERMS = ("summaris", "overview", "budget situation", "how am i tracking", "how is my budget")
+BUDGET_LINE_SUMMARY_TERMS = ("tell me about", "budget line", "budget summary", "budget summarry", "line summary")
 SPEND_MOST_TERMS = (
     "where am i spending the most",
     "what am i spending the most",
@@ -20,7 +21,18 @@ OVERSPENDING_TERMS = ("where am i overspending", "what am i overspending", "over
 WARNING_TERMS = ("closest to warning", "near warning", "warning pressure", "closest to cap", "near cap")
 SAVINGS_TERMS = ("save money", "cut back", "reduce spending", "save more", "spend less")
 CATEGORY_SPEND_TERMS = ("how much am i spending on", "what am i spend", "spent on")
-UNBUDGETED_SPEND_TERMS = ("isnt tracked by a budget line", "isn't tracked by a budget line", "isnt being budgeted", "isn't being budgeted", "not being budgeted", "not tracked by a budget line")
+UNBUDGETED_SPEND_TERMS = (
+    "isnt tracked by a budget line",
+    "isn't tracked by a budget line",
+    "isnt being budgeted",
+    "isn't being budgeted",
+    "not being budgeted",
+    "not tracked by a budget line",
+    "not tracking with a budget",
+    "not tracking with my budget",
+    "not tracking with a budget line",
+    "not tracking in my budget",
+)
 ADJUSTMENT_TERMS = ("adjust", "adjustment", "allocated budget", "increase my budget", "increase the budget", "recommend increasing", "recommend adjusting", "budgetting plan", "budgeting plan")
 ADJUSTMENT_SUGGESTION_TERMS = ("suggest", "suggestion", "suggestions", "recommend", "ideas", "idea", "make room")
 INCREASE_TERMS = ("increase", "raise", "higher", "extend")
@@ -53,7 +65,21 @@ AFFORDABILITY_TERMS = (
 )
 FOLLOW_UP_TERMS = ("that", "it", "this", "over", "fit", "affect", "impact", "okay")
 RESET_TERMS = ("moving on", "something else", "another question", "different question", "new question")
-AMOUNT_PATTERN = re.compile(r"(?<!\d)(?:\$?\s*)(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?!\d)")
+AMOUNT_PATTERN = re.compile(r"(?<!\d)(?:\$?\s*)(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$)?(?!\d)")
+QUANTITY_AMOUNT_PATTERNS = (
+    re.compile(
+        r"\b(\d+)\s*(?:x|\*)\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$)?\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(\d+)\s+(?:more\s+)?\$?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$|\s+dollars?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(\d+)\s+(?:more\s+)?\$?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$)?\s+(?:monthly\s+)?(?:[a-z]+\s+){0,3}(subscriptions?|payments?|purchases?)\b",
+        re.IGNORECASE,
+    ),
+)
 
 
 def _format_cents(value: int | None) -> str:
@@ -185,6 +211,18 @@ def _extract_threshold_targets(message: str) -> dict[str, int]:
     return targets
 
 
+def _extract_spend_floor_target_cents(message: str) -> int | None:
+    patterns = (
+        r"\b(?:spend|budget)\s+(?:at\s+least|up\s+to)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$)?\b",
+        r"\b(?:be\s+able\s+to|allow\s+myself\s+to|let\s+me)\s+spend\s+(?:at\s+least|up\s+to)?\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\$)?\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            return _amount_text_to_cents(match.group(1))
+    return None
+
+
 def _explicit_threshold_proposal(
     line: dict,
     base_warn: int | None,
@@ -205,6 +243,9 @@ def _explicit_threshold_proposal(
         recommended_warn = _round_up(min(recommended_cap - step, derived_warn), step)
     else:
         recommended_warn = target_warn
+    if projected > 0:
+        recommended_warn = max(recommended_warn, projected)
+        recommended_cap = max(recommended_cap, projected + step)
     if recommended_warn >= recommended_cap:
         recommended_warn = max(0, recommended_cap - step)
     return recommended_warn, recommended_cap
@@ -220,15 +261,23 @@ def _is_amount_only_message(message: str) -> bool:
 def _line_aliases(category: str) -> list[str]:
     lowered = category.casefold()
     aliases = [lowered]
+    if lowered.endswith("s") and len(lowered) > 3:
+        aliases.append(lowered[:-1])
     if lowered == "dining":
         aliases.extend(["restaurant", "restaurants", "dinner", "eat out", "eating out", "lunch", "cafe", "takeaway", "take out"])
     if lowered == "groceries":
         aliases.extend(["grocery", "groceries", "supermarket", "food shop"])
+    if lowered == "music subscriptions":
+        aliases.extend(["music subscription", "subscription service", "streaming music", "spotify", "apple music"])
     if lowered == "transport":
         aliases.extend(["travel", "bus", "train", "fuel", "petrol", "gas"])
     if lowered == "entertainment":
         aliases.extend(["movie", "movies", "games", "fun"])
-    return aliases
+    result: list[str] = []
+    for alias in aliases:
+        if alias not in result:
+            result.append(alias)
+    return result
 
 
 def _extract_line_from_text(summary: dict, message: str) -> dict | None:
@@ -244,6 +293,51 @@ def _extract_line_from_text(summary: dict, message: str) -> dict | None:
                 best_line = line
                 best_length = len(alias)
     return best_line
+
+
+def _line_from_recent_context(summary: dict, history: list[dict]) -> dict | None:
+    affordability_context = _recent_affordability_context(summary, history)
+    if affordability_context is not None and isinstance(affordability_context.get("line"), dict):
+        return affordability_context["line"]
+    adjustment_context = _recent_adjustment_context(summary, history)
+    if adjustment_context is not None and isinstance(adjustment_context.get("line"), dict):
+        return adjustment_context["line"]
+    return _latest_open_proposal_target_line(summary)
+
+
+def _follow_up_quantity(message: str) -> int | None:
+    lowered = message.casefold().strip()
+    if "$" in lowered or "dollar" in lowered:
+        return None
+    match = re.fullmatch(r"(?:what about|about|make it|try|maybe)?\s*(\d+)", lowered)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _find_quantity_amount_cents(message: str) -> int | None:
+    lowered = message.casefold()
+    for pattern in QUANTITY_AMOUNT_PATTERNS:
+        match = pattern.search(lowered)
+        if not match:
+            continue
+        quantity = int(match.group(1))
+        unit_amount = _amount_text_to_cents(match.group(2))
+        if unit_amount is not None and quantity > 0:
+            return quantity * unit_amount
+    return None
+
+
+def _find_contextual_amount_cents(summary: dict, history: list[dict], message: str) -> int | None:
+    quantity_amount_cents = _find_quantity_amount_cents(message)
+    if quantity_amount_cents is not None:
+        return quantity_amount_cents
+    quantity = _follow_up_quantity(message)
+    if quantity is not None:
+        context = _recent_affordability_context(summary, history)
+        if context is not None and isinstance(context.get("amount_cents"), int) and quantity > 1:
+            return quantity * context["amount_cents"]
+    return _find_amount_cents(message)
 
 
 def _extract_adjustment_direction(message: str) -> str | None:
@@ -287,6 +381,10 @@ def _looks_like_adjustment_message(summary: dict, message: str) -> bool:
         return False
     if _contains_any(lowered, ADJUSTMENT_TERMS):
         return True
+    if "accommodate" in lowered or "accomodate" in lowered:
+        return True
+    if _extract_spend_floor_target_cents(lowered) is not None:
+        return True
     if _contains_any(lowered, ADJUSTMENT_SUGGESTION_TERMS) and (
         "budget" in lowered or "budgets" in lowered or "income" in lowered or "spending" in lowered
     ):
@@ -309,6 +407,8 @@ def _classify_message(summary: dict, message: str) -> str:
         return "other"
     if _contains_any(lowered, SUMMARY_TERMS):
         return "summary"
+    if _extract_line_from_text(summary, lowered) is not None and _contains_any(lowered, BUDGET_LINE_SUMMARY_TERMS):
+        return "budget-line-summary"
     if _contains_any(lowered, UNBUDGETED_SPEND_TERMS):
         return "unbudgeted-spend"
     if _contains_any(lowered, SPEND_MOST_TERMS):
@@ -354,14 +454,14 @@ def _recent_affordability_context(summary: dict, history: list[dict]) -> dict | 
                 break
             continue
         if kind == "amount-only" and amount_cents is None:
-            amount_cents = _find_amount_cents(content)
+            amount_cents = _find_contextual_amount_cents(summary, [], content)
             continue
         if kind == "affordability":
             saw_affordability = True
             if line is None:
                 line = _extract_line_from_text(summary, content)
             if amount_cents is None:
-                amount_cents = _find_amount_cents(content)
+                amount_cents = _find_contextual_amount_cents(summary, [], content)
     if not saw_affordability and amount_cents is None and line is None:
         return None
     return {"line": line, "amount_cents": amount_cents}
@@ -387,14 +487,14 @@ def _recent_adjustment_context(summary: dict, history: list[dict]) -> dict | Non
                 break
             continue
         if kind == "amount-only" and saw_adjustment and amount_cents is None:
-            amount_cents = _find_amount_cents(content)
+            amount_cents = _find_contextual_amount_cents(summary, [], content)
             continue
         if kind == "adjustments":
             saw_adjustment = True
             if line is None:
                 line = _extract_line_from_text(summary, content)
             if amount_cents is None:
-                amount_cents = _find_amount_cents(content)
+                amount_cents = _find_contextual_amount_cents(summary, [], content)
             if direction is None:
                 direction = _extract_adjustment_direction(content)
             if revision is None:
@@ -402,6 +502,31 @@ def _recent_adjustment_context(summary: dict, history: list[dict]) -> dict | Non
     if not saw_adjustment and amount_cents is None and line is None and direction is None and revision is None:
         return None
     return {"line": line, "amount_cents": amount_cents, "direction": direction, "revision": revision}
+
+
+def _looks_like_category_only_follow_up(summary: dict, history: list[dict], message: str) -> bool:
+    lowered = message.casefold().strip()
+    if not lowered or " " not in lowered:
+        return False
+    if _find_amount_cents(lowered) is not None:
+        return False
+    if _contains_any(
+        lowered,
+        SUMMARY_TERMS
+        + SPEND_MOST_TERMS
+        + OVERSPENDING_TERMS
+        + WARNING_TERMS
+        + SAVINGS_TERMS
+        + CATEGORY_SPEND_TERMS
+        + CATEGORY_REMAINING_TERMS
+        + AFFORDABILITY_TERMS
+        + ADJUSTMENT_TERMS
+        + ADJUSTMENT_SUGGESTION_TERMS
+        + RESET_TERMS
+        + UNBUDGETED_SPEND_TERMS,
+    ):
+        return False
+    return _extract_line_from_text(summary, lowered) is not None and _recent_affordability_context(summary, history) is not None
 
 
 def _remaining_before(value: int | None, current: int) -> int | None:
@@ -434,6 +559,47 @@ def _summary_reply(summary: dict) -> dict:
         f"For {_format_month_label(budget.get('month'))}, income is {_format_cents(income)}. "
         f"You have spent {_format_cents(actual)} and planned {_format_cents(planned)}, leaving {_format_cents(remaining)} projected. "
         f"{pressure_text}"
+    )
+    return {"mode": "advice", "say": say[:500], "question": None, "proposal": None, "fallback": False}
+
+
+def _budget_line_summary_reply(summary: dict, history: list[dict], message: str) -> dict:
+    line = _extract_line_from_text(summary, message) or _line_from_recent_context(summary, history)
+    if line is None:
+        return {
+            "mode": "clarify",
+            "say": "Tell me which budget line you mean and I will summarise it.",
+            "question": "category_needed",
+            "proposal": None,
+            "fallback": False,
+        }
+    category = str(line.get("category") or "that budget line")
+    actual = line.get("actual_spend") if isinstance(line.get("actual_spend"), int) else 0
+    planned = line.get("planned_est_high_total") if isinstance(line.get("planned_est_high_total"), int) else 0
+    projected = _line_projected_high(line)
+    warn_at = line.get("warn_at") if isinstance(line.get("warn_at"), int) else None
+    hard_cap = line.get("hard_cap") if isinstance(line.get("hard_cap"), int) else None
+    if hard_cap is not None and projected >= hard_cap:
+        status = f"It is currently {_format_cents(projected - hard_cap)} over the hard cap of {_format_cents(hard_cap)}."
+    elif warn_at is not None and projected >= warn_at:
+        hard_cap_text = "" if hard_cap is None else f" It has {_format_cents(hard_cap - projected)} left before the hard cap."
+        status = f"It is currently in warning range at {_format_cents(projected)} against a warning amount of {_format_cents(warn_at)}.{hard_cap_text}"
+    else:
+        room_parts: list[str] = []
+        if warn_at is not None:
+            room_parts.append(f"{_format_cents(warn_at - projected)} before warning")
+        if hard_cap is not None:
+            room_parts.append(f"{_format_cents(hard_cap - projected)} before hard cap")
+        status = (
+            "It is currently within its thresholds."
+            if not room_parts
+            else "It is currently within its thresholds, with " + " and ".join(room_parts) + "."
+        )
+    say = (
+        f"{category} is currently spent {_format_cents(actual)} with {_format_cents(planned)} planned, "
+        f"so the projected total is {_format_cents(projected)}. "
+        f"The warning amount is {_format_cents(warn_at)} and the hard cap is {_format_cents(hard_cap)}. "
+        f"{status}"
     )
     return {"mode": "advice", "say": say[:500], "question": None, "proposal": None, "fallback": False}
 
@@ -660,6 +826,9 @@ def _recommended_increase_thresholds(line: dict, requested_increase: int | None)
         recommended_cap - current_gap,
     )
     recommended_warn = _round_up(min(recommended_cap, warn_target), step)
+    if projected > 0:
+        recommended_warn = max(recommended_warn, projected)
+        recommended_cap = max(recommended_cap, recommended_warn + step)
     if recommended_warn >= recommended_cap:
         recommended_warn = max(0, recommended_cap - step)
     return recommended_warn, recommended_cap
@@ -767,11 +936,11 @@ def _apply_revision_to_thresholds(
     if revision == "lower":
         delta = requested_change if isinstance(requested_change, int) and requested_change > 0 else step
         revised_cap = _round_up(max(projected + step, base_cap - delta, current_cap), step)
-        revised_warn = _round_up(max(projected - step, base_warn - delta, current_warn), step)
+        revised_warn = _round_up(max(projected, base_warn - delta, current_warn), step)
         return min(revised_warn, revised_cap - step), revised_cap
     delta = requested_change if isinstance(requested_change, int) and requested_change > 0 else step
     revised_cap = _round_up(max(base_cap + delta, projected + (step * 2)), step)
-    revised_warn = _round_up(max(base_warn + delta, int(revised_cap * 0.88), current_warn), step)
+    revised_warn = _round_up(max(projected, int(revised_cap * 0.88), current_warn), step)
     if revised_warn >= revised_cap:
         revised_warn = revised_cap - step
     return revised_warn, revised_cap
@@ -827,7 +996,8 @@ def _normalise_proposal_reply(result: dict) -> dict:
 
 def _adjustment_proposal_reply(summary: dict, history: list[dict], message: str) -> dict:
     context = _recent_adjustment_context(summary, history) or {}
-    line = _extract_line_from_text(summary, message) or context.get("line")
+    affordability_context = _recent_affordability_context(summary, history) or {}
+    line = _extract_line_from_text(summary, message) or context.get("line") or affordability_context.get("line")
     if line is None and _contains_any(message.casefold(), ADJUSTMENT_FOLLOW_UP_TERMS):
         line = (_recent_affordability_context(summary, history) or {}).get("line")
     if line is None:
@@ -877,14 +1047,21 @@ def _adjustment_proposal_reply(summary: dict, history: list[dict], message: str)
     base_cap = latest_fields.get("hard_cap") if isinstance(latest_fields, dict) and isinstance(latest_fields.get("hard_cap"), int) else current_cap
     direction = _extract_adjustment_direction(message) or context.get("direction") or "increase"
     explicit_targets = _extract_threshold_targets(message)
-    requested_increase = None if explicit_targets else _find_amount_cents(message)
+    spend_floor_target = _extract_spend_floor_target_cents(message)
+    if "hard_cap" not in explicit_targets and isinstance(spend_floor_target, int):
+        explicit_targets["hard_cap"] = spend_floor_target
+    requested_increase = None if explicit_targets else _find_contextual_amount_cents(summary, history, message)
     if requested_increase is None:
-        requested_increase = context.get("amount_cents")
+        requested_increase = context.get("amount_cents") or affordability_context.get("amount_cents")
     revision = _extract_proposal_revision(message) or context.get("revision")
     if revision is None and _contains_any(message.casefold(), PROPOSAL_CONTEXT_TERMS):
         revision = "higher"
     if revision is None and "proposal" in message.casefold() and requested_increase is not None:
         revision = "higher" if direction != "decrease" else "lower"
+    if revision is None and latest_proposal is not None and direction != "decrease" and requested_increase is not None and (
+        "another" in message.casefold() or "more" in message.casefold() or "further" in message.casefold()
+    ):
+        revision = "higher"
     if direction == "decrease" and revision != "lower" and not (
         "cap" in message.casefold() and (requested_increase is not None or "hard_cap" in explicit_targets)
     ):
@@ -971,8 +1148,8 @@ def _adjustment_proposal_reply(summary: dict, history: list[dict], message: str)
 
 def _affordability_reply(summary: dict, history: list[dict], message: str) -> dict:
     context = _recent_affordability_context(summary, history) or {}
-    line = _extract_line_from_text(summary, message) or context.get("line")
-    amount_cents = _find_amount_cents(message)
+    line = _extract_line_from_text(summary, message) or context.get("line") or _line_from_recent_context(summary, history)
+    amount_cents = _find_contextual_amount_cents(summary, history, message)
     if amount_cents is None:
         amount_cents = context.get("amount_cents")
     if amount_cents is None:
@@ -1034,7 +1211,9 @@ def _affordability_reply(summary: dict, history: list[dict], message: str) -> di
     else:
         headline = f"Yes, that still fits within {category}."
     line_tail = ""
-    if hard_cap is not None and after_spend < hard_cap:
+    if hard_cap is not None and after_spend >= hard_cap:
+        line_tail = f" That would be {_format_cents(after_spend - hard_cap)} over the hard cap of {_format_cents(hard_cap)}."
+    elif hard_cap is not None and after_spend < hard_cap:
         line_tail = f" It would leave {_format_cents(hard_cap - after_spend)} before the hard cap."
     elif warn_at is not None and after_spend < warn_at:
         line_tail = f" It would leave {_format_cents(warn_at - after_spend)} before the warning amount."
@@ -1052,7 +1231,11 @@ def _should_use_affordability_context(summary: dict, history: list[dict], messag
         return False
     if _extract_line_from_text(summary, message) is not None and _contains_any(lowered, CATEGORY_REMAINING_TERMS + CATEGORY_SPEND_TERMS):
         return False
+    if _looks_like_category_only_follow_up(summary, history, message):
+        return True
     if _contains_any(lowered, AFFORDABILITY_TERMS):
+        return True
+    if _extract_line_from_text(summary, message) is not None and _recent_affordability_context(summary, history) is not None:
         return True
     if _is_amount_only_message(lowered):
         return _recent_affordability_context(summary, history) is not None
@@ -1072,11 +1255,27 @@ def _should_use_adjustment_context(summary: dict, history: list[dict], message: 
     if _looks_like_adjustment_message(summary, lowered):
         return True
     context = _recent_adjustment_context(summary, history)
-    if context is not None and (_has_proposal_feedback(lowered) or _contains_any(lowered, ADJUSTMENT_SUGGESTION_TERMS)):
+    if context is not None and (
+        _has_proposal_feedback(lowered)
+        or _contains_any(lowered, ADJUSTMENT_SUGGESTION_TERMS)
+        or _extract_spend_floor_target_cents(lowered) is not None
+    ):
         return True
     if _contains_any(lowered, ADJUSTMENT_FOLLOW_UP_TERMS) and (_recent_affordability_context(summary, history) or _latest_open_proposal_target_line(summary)):
         return True
-    return _latest_open_proposal_target_line(summary) is not None and (_has_proposal_feedback(lowered) or _contains_any(lowered, ADJUSTMENT_SUGGESTION_TERMS))
+    return _latest_open_proposal_target_line(summary) is not None and (
+        _has_proposal_feedback(lowered)
+        or _extract_spend_floor_target_cents(lowered) is not None
+        or _contains_any(lowered, ADJUSTMENT_SUGGESTION_TERMS)
+        or (
+            _extract_adjustment_direction(lowered) is not None
+            and (
+                _find_amount_cents(lowered) is not None
+                or "another" in lowered
+                or "more" in lowered
+            )
+        )
+    )
 
 
 def _validated_history(history: object) -> list[dict]:
@@ -1096,10 +1295,48 @@ def _validated_history(history: object) -> list[dict]:
     return validated
 
 
+def _observation_snapshot(summary: dict, budget_id: str, history: list[dict]) -> dict:
+    budget = summary.get("budget") if isinstance(summary.get("budget"), dict) else {}
+    totals = summary.get("totals") if isinstance(summary.get("totals"), dict) else {}
+    transactions = summary.get("transactions") if isinstance(summary.get("transactions"), dict) else {}
+    return {
+        "budget_id": budget_id,
+        "month": budget.get("month"),
+        "history_turn_count": len(history),
+        "budget_line_count": len(_budget_lines(summary)),
+        "planned_event_count": len(summary.get("planned_events")) if isinstance(summary.get("planned_events"), list) else 0,
+        "active_proposal_count": len(_active_coach_proposals(summary)),
+        "transactions_count": transactions.get("count"),
+        "uncategorised_total": transactions.get("uncategorised_total"),
+        "remaining_income_high": totals.get("remaining_income_high"),
+        "projected_high_total": totals.get("projected_high_total"),
+    }
+
+
+def _plan_snapshot(summary: dict, message: str, kind: str) -> dict:
+    line = _extract_line_from_text(summary, message)
+    line_id = line.get("id") if isinstance(line, dict) and isinstance(line.get("id"), int) else None
+    return {
+        "intent": kind,
+        "target_budget_line_id": line_id,
+        "target_category": line.get("category") if isinstance(line, dict) else None,
+        "requested_amount_cents": _find_amount_cents(message),
+        "conversation_mode": "proposal" if kind == "adjustments" else "advice",
+        "human_confirmation_required": kind == "adjustments",
+        "safety_checks": [
+            "budget_must_exist",
+            "responses_must_stay_grounded_in_budget_summary",
+            "proposal_changes_require_user_approval",
+        ],
+    }
+
+
 def _deterministic_reply(summary: dict, history: list[dict], message: str) -> dict | None:
     kind = _classify_message(summary, message)
     if kind == "summary":
         return _summary_reply(summary)
+    if kind == "budget-line-summary":
+        return _budget_line_summary_reply(summary, history, message)
     if kind == "unbudgeted-spend":
         return _unbudgeted_spend_reply(summary)
     if kind == "spend-most":
@@ -1135,8 +1372,13 @@ def send_message(budget_id: object, message: object, history: object = None) -> 
     db_api.get_budget(budget_id_text)
     summary = summary_service.build_budget_summary(budget_id_text)
     user_message = {"role": "user", "content": trimmed_message}
+    kind = _classify_message(summary, trimmed_message)
+    observation = _observation_snapshot(summary, budget_id_text, conversation_history)
+    plan = _plan_snapshot(summary, trimmed_message, kind)
     result = _deterministic_reply(summary, conversation_history, trimmed_message)
+    response_source = "deterministic"
     if result is None:
+        response_source = "ollama"
         result = guard.run(
             config.CHAT_MODEL,
             lambda error: chat_prompt.build(trimmed_message, conversation_history, summary, error),
@@ -1145,6 +1387,8 @@ def send_message(budget_id: object, message: object, history: object = None) -> 
         )
     result = _normalise_proposal_reply(result)
     stored_proposal = None
+    reused_existing_proposal = False
+    replaced_proposal_ids: list[int] = []
     if isinstance(result.get("proposal"), dict):
         active_proposals = _active_coach_proposals(summary)
         matching_existing = next(
@@ -1156,6 +1400,7 @@ def send_message(budget_id: object, message: object, history: object = None) -> 
         )
         if matching_existing is not None:
             stored_proposal = matching_existing
+            reused_existing_proposal = True
         else:
             target_line_ids = set(_proposal_line_ids(result["proposal"]))
             for proposal in active_proposals:
@@ -1164,6 +1409,7 @@ def send_message(budget_id: object, message: object, history: object = None) -> 
                 if not isinstance(proposal_id, int) or not target_line_ids.intersection(proposal_line_ids):
                     continue
                 db_api.delete_coach_proposal(str(proposal_id))
+                replaced_proposal_ids.append(proposal_id)
             stored_proposal, _status = db_api.create_coach_proposal(
                 budget_id_text,
                 {
@@ -1178,6 +1424,37 @@ def send_message(budget_id: object, message: object, history: object = None) -> 
         "question": result.get("question"),
         "proposal": stored_proposal,
         "fallback": bool(result.get("fallback")),
+        "response_source": response_source,
+        "stage_trace": ["observe", "plan", "act", "adapt"],
+        "agentic_workflow": {
+            "observe": observation,
+            "plan": plan,
+            "act": {
+                "response_source": response_source,
+                "used_model": response_source == "ollama",
+                "fallback_used": bool(result.get("fallback")),
+                "response_mode": result["mode"],
+            },
+            "adapt": {
+                "proposal_created": stored_proposal is not None and not reused_existing_proposal,
+                "reused_existing_proposal": reused_existing_proposal,
+                "replaced_proposal_ids": replaced_proposal_ids,
+                "proposal_id": stored_proposal.get("id") if isinstance(stored_proposal, dict) else None,
+            },
+        },
         "user_message": user_message,
         "assistant_message": assistant_message,
+        "messages_to_store": [
+            {"role": "user", "content": trimmed_message},
+            {
+                "role": "assistant",
+                "content": result["say"],
+                "mode": result["mode"],
+                "response_source": response_source,
+                "plan_json": plan,
+                "observation_json": observation,
+                "stage_trace": ["observe", "plan", "act", "adapt"],
+                "proposal_id": stored_proposal.get("id") if isinstance(stored_proposal, dict) else None,
+            },
+        ],
     }

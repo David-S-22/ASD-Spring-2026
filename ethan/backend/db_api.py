@@ -186,3 +186,29 @@ def delete_coach_proposal(proposal_id: str):
     response = requests.delete(_url(f"/coach-proposals/{proposal_id}"), timeout=config.DATABASE_TIMEOUT_SECONDS)
     _raise_for_status(response)
     return None, response.status_code
+
+
+def list_chat_messages(budget_id: str):
+    response = requests.get(
+        _url(f"/budgets/{budget_id}/chat-messages"),
+        timeout=config.DATABASE_TIMEOUT_SECONDS,
+    )
+    return _json(response)
+
+
+def create_chat_message(budget_id: str, payload: dict | None):
+    response = requests.post(
+        _url(f"/budgets/{budget_id}/chat-messages"),
+        json=payload,
+        timeout=config.DATABASE_TIMEOUT_SECONDS,
+    )
+    return _json(response), response.status_code
+
+
+def delete_chat_messages(budget_id: str):
+    response = requests.delete(
+        _url(f"/budgets/{budget_id}/chat-messages"),
+        timeout=config.DATABASE_TIMEOUT_SECONDS,
+    )
+    _raise_for_status(response)
+    return None, response.status_code

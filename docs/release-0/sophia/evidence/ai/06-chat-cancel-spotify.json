@@ -1,1 +1,1 @@
-{"fallback":false,"op":"update","preview":{"entity":"bill","fields":{"end_date":"2026-09-16"},"id":3,"op":"update"},"reply":"Marking Spotify as ending after 16 Sep."}
+{"fallback":false,"op":"update","preview":{"entity":"bill","fields":{"end_date":"2026-10-16"},"id":3,"message_id":16,"op":"update","suggestion_id":1},"reply":"I've suggested ending Spotify after 16 Oct — approve it to save."}

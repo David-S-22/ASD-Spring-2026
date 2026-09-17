@@ -169,6 +169,28 @@ def _history_summary(history: list[dict]) -> str:
     return "\n".join(lines) if lines else "No prior conversation in this month yet."
 
 
+def _proposal_feedback_summary(summary: dict) -> str:
+    proposals = summary.get("coach_proposals")
+    if not isinstance(proposals, list):
+        return "No prior proposal outcomes recorded for this month."
+    lines: list[str] = []
+    for proposal in proposals[-6:]:
+        if not isinstance(proposal, dict):
+            continue
+        status = proposal.get("status")
+        rationale = str(proposal.get("rationale") or "").strip()
+        rejection_reason = str(proposal.get("rejection_reason") or "").strip()
+        if status == "rejected":
+            lines.append(
+                f"Rejected proposal: {rejection_reason or rationale or 'No rejection reason recorded.'}"
+            )
+        elif status == "accepted":
+            lines.append(
+                f"Accepted proposal: {rationale or 'Applied after user approval.'}"
+            )
+    return "\n".join(lines) if lines else "No prior proposal outcomes recorded for this month."
+
+
 def build(message: str, history: list[dict], summary: dict, error: str | None = None) -> list[dict]:
     budget = summary.get("budget") or {}
     totals = summary.get("totals") or {}
@@ -196,6 +218,8 @@ def build(message: str, history: list[dict], summary: dict, error: str | None = 
         f"Projected remaining income: {_format_cents(totals.get('remaining_income_high'))}\n"
         "Budget lines:\n"
         + "\n".join(_line_summary(line) for line in lines[:12])
+        + "\nProposal feedback:\n"
+        + _proposal_feedback_summary(summary)
         + "\nRecent conversation:\n"
         + _history_summary(history)
     )
