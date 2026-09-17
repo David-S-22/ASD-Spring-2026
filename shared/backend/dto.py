@@ -47,3 +47,4 @@ class Suggestion:
 class Feedback:
     id: int
     feedback: str
+    suggestion_id: Optional[int] = None

@@ -95,7 +95,20 @@ def setup_app(database_path) -> Flask:
         if "feedback" not in payload:
             return jsonify({"error": "Missing feedback field"}), 400
 
-        feedback = Feedback(feedback=payload["feedback"])
+        suggestion_id = payload.get("suggestion_id")
+        if suggestion_id is not None:
+            try:
+                suggestion_id = int(suggestion_id)
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid suggestion_id"}), 400
+            suggestion = db.session.get(Suggestion, suggestion_id)
+            if not suggestion:
+                return abort(404)
+
+        feedback = Feedback(
+            feedback=payload["feedback"],
+            suggestion_id=suggestion_id,
+        )
         db.session.add(feedback)
         db.session.commit()
         return jsonify(feedback.to_dto()), 201
