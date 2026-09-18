@@ -164,6 +164,10 @@ services:
       FLASK_ENV: production
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
+    depends_on:
+      transactions-db:
+        condition: service_started
 
   budgets-frontend:
     build: ./ethan/frontend

@@ -1,9 +1,11 @@
-from typing import Any
+from typing import Any, List
 
+import requests
 from flask.testing import FlaskClient
 from pytest import fixture
 
 from backend.helpers import deserialise_safe, serialise
+from database import reconcile
 from database.app import app, setup_database
 from shared.backend import dto
 
@@ -229,6 +231,59 @@ def test_delete_by_transaction_repeated_calls_are_idempotent(client: FlaskClient
     assert second.status_code == 204
 
 
+# Startup reconciliation of orphaned anomalies
+def test_remove_orphaned_anomalies_deletes_only_orphans(client: FlaskClient):
+    kept = create_anomaly(client, id=0, transaction_id=701, agent_reason_suspected="beans", is_confirmed_by_user=False)
+    orphan = create_anomaly(client, id=0, transaction_id=702, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    removed = reconcile.remove_orphaned_anomalies(_all_transaction_ids(client) - {702})
+
+    assert removed == 1
+    assert client.get(f"/anomalies/{kept.id}").status_code == 200
+    assert client.get(f"/anomalies/{orphan.id}").status_code == 404
+
+
+def test_remove_orphaned_anomalies_empty_set_removes_all(client: FlaskClient):
+    create_anomaly(client, id=0, transaction_id=703, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    removed = reconcile.remove_orphaned_anomalies(set())
+
+    assert removed >= 1
+    assert client.get("/anomalies/").json == []
+
+
+def test_remove_orphaned_anomalies_keeps_all_when_all_present(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=704, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    removed = reconcile.remove_orphaned_anomalies(_all_transaction_ids(client))
+
+    assert removed == 0
+    assert client.get(f"/anomalies/{anomaly.id}").status_code == 200
+
+
+def test_fetch_transaction_ids_with_retry_returns_ids(monkeypatch):
+    monkeypatch.setattr(reconcile.requests, "get", _fake_get([{"id": 1}, {"id": 2}]))
+
+    ids = reconcile.fetch_transaction_ids_with_retry("http://transactions-db:6001", 1, 3, 0)
+
+    assert ids == {1, 2}
+
+
+def test_fetch_transaction_ids_with_retry_gives_up_when_unreachable(monkeypatch):
+    calls = {"count": 0}
+
+    def raising_get(*_args, **_kwargs):
+        calls["count"] += 1
+        raise requests.ConnectionError("boom")
+
+    monkeypatch.setattr(reconcile.requests, "get", raising_get)
+
+    ids = reconcile.fetch_transaction_ids_with_retry("http://transactions-db:6001", 1, 3, 0)
+
+    assert ids is None
+    assert calls["count"] == 3
+
+
 # Pytest fixtures & helpers
 @fixture
 def client():
@@ -236,6 +291,25 @@ def client():
 
     with app.test_client() as client:
         yield client
+
+
+def _fake_get(payload: List[dict]):
+    class _Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    def _get(*_args, **_kwargs):
+        return _Response()
+
+    return _get
+
+
+def _all_transaction_ids(client: FlaskClient) -> set:
+    return {anomaly["transaction_id"] for anomaly in client.get("/anomalies/").json}
+
 
 def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
     model = dto.Anomaly(**kwargs)
