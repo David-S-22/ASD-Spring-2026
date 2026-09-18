@@ -4,7 +4,7 @@ from random import choice, randint
 from flask import Flask, abort, jsonify, render_template, request
 
 from shared.backend import dto
-from . import config
+from .config import config
 from .helpers import deserialise_or_abort, empty
 from .services import anomalies_api, ollama_api, review_queue, transaction_api
 

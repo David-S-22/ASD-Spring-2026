@@ -1,7 +1,9 @@
+from .config import config
 from .app import app
-from .config import PORT
 
 
 if __name__ == "__main__":
+    config.check_all()
+
     app.logger.setLevel("INFO")
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host="0.0.0.0", port=config.PORT)

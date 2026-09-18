@@ -10,7 +10,7 @@ from flask.testing import FlaskClient
 from requests import PreparedRequest
 from responses import RequestsMock
 
-from backend import config
+from backend.config import config
 from backend.app import app
 from backend.services import review_queue
 from backend.services import anomalies_api
@@ -420,13 +420,20 @@ def client():
         yield client
 
 @fixture(autouse=True)
-def integrate_services():
+def integrate_services(monkeypatch: MonkeyPatch):
     # In order to get the backend client to send requests
     # to the actual database server, we have to intercept
     # the requests via responses and redirect them to the
     # test_client instance. Same with the transactions db
 
     transactionsapp = setup_transactions()
+
+    # config resolves these lazily from the environment; set them here so the
+    # backend's HTTP clients target URLs the RequestsMock below intercepts.
+    monkeypatch.setenv("ANOMALIES_DB_URL", "http://mock-database-url/anomalies")
+    monkeypatch.setenv("TRANSACTIONS_DB_URL", "http://mock-transactions-url")
+    monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
+    monkeypatch.setenv("OLLAMA_MODEL", "billy")
 
     dburl = re.compile(rf"^{re.escape(config.ANOMALIES_DB_URL)}(/.*)?$")
     transactionsurl = re.compile(rf"^{re.escape(config.TRANSACTIONS_DB_URL)}/.+$")

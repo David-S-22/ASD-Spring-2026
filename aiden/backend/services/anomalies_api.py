@@ -5,7 +5,7 @@ from flask import abort
 from requests import get, patch, post
 
 from shared.backend import dto
-from .. import config
+from ..config import config
 from ..helpers import deserialise_or_abort, serialise
 
 

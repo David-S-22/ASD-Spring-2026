@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from openai import OpenAI
 
-from .. import config
+from ..config import config
 
 
 def prompt(*, system_prompt: str, user_prompt: str, model: str, temperature: float, output_tokens: int) -> str:

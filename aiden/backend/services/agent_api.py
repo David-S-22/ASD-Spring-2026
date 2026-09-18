@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from flask import current_app
 
 from shared.backend import dto
-from .. import config
+from ..config import config
 from .ollama_api import prompt
 from ..helpers import serialise
 

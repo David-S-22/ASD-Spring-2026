@@ -3,7 +3,7 @@ from typing import List
 from requests import get
 
 from shared.backend import dto
-from .. import config
+from ..config import config
 from ..helpers import deserialise_or_abort
 
 
