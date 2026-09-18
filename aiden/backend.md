@@ -24,10 +24,11 @@ at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
 2. The backend validates and deserialises the request into a transaction DTO.
 3. The transaction is placed on the in-process review queue, and the endpoint
    immediately returns `HTTP 202 (Accepted)` with the transaction ID.
-4. A background worker retrieves the transaction and loads existing anomalies
-   and transactions to provide reviewed context to the agent.
-5. The agent builds a constrained prompt for the language model, including the
-   transaction fields and confirmed or denied historical findings.
+4. A background worker passes the transaction to the agent.
+5. The agent uses the MCP server's
+   `get-transactions-with-confirmed-anomalies` and
+   `get-transactions-with-rejected-anomalies` tools to retrieve reviewed
+   examples before classifying the transaction.
 6. The model must return JSON containing `is_suspicious` and `justification`.
    Invalid responses are retried with increasing temperature, up to four
    attempts.
@@ -46,12 +47,12 @@ The anomaly review implements a **Plan → Act → Observe → Adapt** loop whos
 cycle spans *across* reviews: the user's decisions on one finding shape how the
 agent judges the next transaction.
 
-- **Plan** — Before calling the model, `agent_api.review_new_transaction`
-  gathers context and constructs a constrained prompt. It serialises the
-  transaction fields and calls `_build_anomaly_context` to fold in the user's
-  previously **confirmed** (true positive) and **denied** (false positive)
-  findings, joined back to their underlying transactions. The plan for judging
-  the current transaction is therefore shaped by the accumulated human feedback.
+- **Plan** — Before classifying the transaction, the model calls the MCP
+  server's `get-transactions-with-confirmed-anomalies` and
+  `get-transactions-with-rejected-anomalies` tools. These return reviewed
+  transactions and their anomaly records as positive and negative examples.
+  The plan for judging the current transaction is therefore shaped by the
+  accumulated human feedback without embedding that history in the prompt.
 - **Act** — The agent sends the system and user prompts to the model through
   `ollama_api.prompt`, requesting a JSON finding with `is_suspicious` and
   `justification`. A valid, suspicious finding is converted to an anomaly DTO
@@ -63,19 +64,19 @@ agent judges the next transaction.
   (true positive) or **dismissing** it as a false positive. This human review
   is the observation of how well the agent's judgement matched reality.
 - **Adapt** — Those confirmed/denied decisions are exactly the reviewed findings
-  that `_build_anomaly_context` pulls into the *next* review's prompt. The agent
-  treats transactions similar to confirmed findings as more likely suspicious,
-  and avoids re-flagging transactions similar to denied ones. The loop then
-  returns to Plan for the next transaction, with the agent's behaviour adapted
-  to the user's accumulated feedback.
+  returned by the MCP tools on the *next* review. The agent treats transactions
+  similar to confirmed findings as more likely suspicious, and avoids
+  re-flagging transactions similar to denied ones. The loop then returns to Plan
+  for the next transaction, with the agent's behaviour adapted to the user's
+  accumulated feedback.
 
 ```mermaid
 flowchart TD
     A[Transaction enqueued for review] --> B
 
     subgraph Plan
-        B[Load anomalies and transactions] --> C[Build context from<br/>confirmed/denied feedback]
-        C --> D[Construct constrained prompt<br/>transaction fields + prior findings]
+        B[Call MCP reviewed-example tools] --> C[Retrieve confirmed/rejected examples]
+        C --> D[Construct constrained prompt<br/>transaction fields]
     end
 
     subgraph Act
@@ -93,20 +94,28 @@ flowchart TD
     end
 
     subgraph Adapt
-        K --> M[Reviewed findings become<br/>context for future reviews]
+        K --> M[Reviewed findings available<br/>through MCP tools]
         L --> M
     end
 
-    M -. feedback context .-> C
+    M -. MCP results for next review .-> B
 ```
 
 ## Services
 
 ### `services/agent_api.py`
 
-Implements the anomaly-detection agent. It creates prompts, builds context from
-reviewed anomalies, parses model JSON, validates the expected response fields,
-and converts suspicious findings into anomaly DTOs.
+Implements the anomaly-detection agent. It creates prompts that instruct the
+model to use the MCP reviewed-example tools, parses model JSON, validates the
+expected response fields, and converts suspicious findings into anomaly DTOs.
+
+### `ai-services/mcp-server/server.py`
+
+Provides transaction search plus
+`get-transactions-with-confirmed-anomalies` and
+`get-transactions-with-rejected-anomalies`. The reviewed-example tools join
+anomaly records from the anomalies database to their corresponding
+transactions.
 
 ### `services/review_queue.py`
 

@@ -1,6 +1,6 @@
 from datetime import datetime
-from json import JSONDecodeError, loads
-from typing import List, Optional, Tuple
+from json import JSONDecodeError
+from typing import Optional
 from dataclasses import dataclass
 
 from flask import current_app
@@ -40,9 +40,10 @@ Guidance:
 - Do not claim fraud as a fact and do not invent missing context; describe only what the supplied fields show.
 - Keep the explanation concise and factual.
 
-You may be given additional context describing prior findings the user has already reviewed:
-- CONFIRMED entries are transactions the user agreed were genuinely suspicious. Treat similar transactions as more likely to be suspicious.
-- DENIED entries are transactions the user decided were NOT suspicious (false positives). Treat similar transactions as more likely to be legitimate, and avoid flagging them for the same reasons.
+Before evaluating the transaction, call both MCP tools:
+- get_transactions_with_confirmed_anomalies: transactions the user agreed were suspicious.
+- get_transactions_with_rejected_anomalies: transactions the user decided were not suspicious.
+Use the confirmed results as positive examples and the rejected results as negative examples.
 Use this feedback to align your judgement with the user's, but still evaluate the current transaction on its own merits.
 
 Return ONLY valid JSON matching this schema:
@@ -62,13 +63,6 @@ _detect_user_prompt = """
 Review the following transaction. Determine whether this transaction is suspicious according to your instructions.
 
 {0}
-{1}
-"""
-
-_anomaly_context_prompt = """
-
-Additional context — prior findings the user has already reviewed:
-{0}
 """
 
 class CouldNotParseAgentResponseException(Exception):
@@ -81,18 +75,14 @@ class ReviewFinding:
 
 def review_new_transaction(
     transaction: dto.Transaction,
-    all_anomalies: List[dto.Anomaly],
-    all_transactions: List[dto.Transaction],
 ) -> Optional[dto.Anomaly]:
     iteration = 1
     serialised = serialise(transaction)
-    anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
     detect_system_prompt = _detect_system_prompt.format(datetime.now().strftime("%Y-%m-%d"))
-    detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
+    detect_user_prompt = _detect_user_prompt.format(serialised)
     review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
-    current_app.logger.info("Anomaly context: %s", anomaly_context)
 
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
@@ -125,52 +115,6 @@ def review_new_transaction(
         agent_reason_suspected=review_finding.justification,
         is_confirmed_by_user=None
     )
-
-def _build_anomaly_context(
-    all_anomalies: List[dto.Anomaly],
-    all_transactions: List[dto.Transaction],
-) -> str:
-    """Builds additional prompt context from anomalies the user has already reviewed.
-
-    Only anomalies confirmed (True) or denied (False) by the user are included;
-    anomalies still awaiting review (None) are ignored. Each entry is joined to its
-    underlying transaction (by transaction_id) so the model sees the actual amount,
-    merchant, and date the user made their decision on — not just the agent's reason.
-    """
-
-    confirmed = [a for a in all_anomalies if a.is_confirmed_by_user is True]
-    denied = [a for a in all_anomalies if a.is_confirmed_by_user is False]
-
-    if not confirmed and not denied:
-        return ""
-
-    transactions_by_id = {t.id: t for t in all_transactions}
-
-    def format_entry(label: str, anomaly: dto.Anomaly) -> str:
-        transaction = transactions_by_id.get(anomaly.transaction_id)
-
-        if transaction is None:
-            current_app.logger.error("Transaction with ID %s not found in all_transactions", anomaly.transaction_id)
-            details = "transaction details unavailable"
-        else:
-            details = (
-                f"amount={transaction.amount}, "
-                f"merchant={transaction.merchant!r}, "
-                f"description={transaction.description!r}, "
-                f"date={transaction.date}"
-            )
-
-        return f"- {label} ({details}): {anomaly.agent_reason_suspected}"
-
-    lines: List[str] = []
-
-    for anomaly in confirmed:
-        lines.append(format_entry("CONFIRMED (true positive)", anomaly))
-
-    for anomaly in denied:
-        lines.append(format_entry("DENIED (false positive)", anomaly))
-
-    return _anomaly_context_prompt.format("\n".join(lines))
 
 def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:
     """Determines if the model response was a valid format"""

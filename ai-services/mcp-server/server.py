@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 mcp = FastMCP("Transactions")
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
+ANOMALIES_DB_URL = os.getenv("ANOMALIES_DB_URL", "http://localhost:6004/anomalies")
 
 
 @mcp.resource("docs://readme", mime_type="text/markdown")
@@ -49,8 +50,42 @@ def search_transactions(
     resp.raise_for_status()
     return resp.json()
 
+def _get_transactions_with_anomaly_status(is_confirmed: bool) -> list[dict]:
+    anomalies_response = requests.get(ANOMALIES_DB_URL.rstrip("/"))
+    anomalies_response.raise_for_status()
+    anomalies = [
+        anomaly for anomaly in anomalies_response.json()
+        if anomaly.get("is_confirmed_by_user") is is_confirmed
+    ]
+
+    transactions_response = requests.get(
+        f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions")
+    transactions_response.raise_for_status()
+    transactions_by_id = {
+        transaction["id"]: transaction
+        for transaction in transactions_response.json()
+    }
+
+    return [
+        {
+            "transaction": transactions_by_id[anomaly["transaction_id"]],
+            "anomaly": anomaly,
+        }
+        for anomaly in anomalies
+        if anomaly["transaction_id"] in transactions_by_id
+    ]
+
+@mcp.tool()
+def get_transactions_with_confirmed_anomalies() -> list[dict]:
+    """Return transactions whose anomalies the user confirmed as suspicious."""
+    return _get_transactions_with_anomaly_status(True)
+
+@mcp.tool()
+def get_transactions_with_rejected_anomalies() -> list[dict]:
+    """Return transactions whose anomalies the user rejected as not suspicious."""
+    return _get_transactions_with_anomaly_status(False)
+
 
 
 if __name__ == "__main__":
     mcp.run(transport="http", port=8000)
-

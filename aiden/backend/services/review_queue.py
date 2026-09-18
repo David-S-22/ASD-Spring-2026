@@ -15,7 +15,7 @@ from typing import Optional, Set
 from flask import Flask, current_app
 
 from shared.backend import dto
-from . import anomalies_api, agent_api, transaction_api
+from . import anomalies_api, agent_api
 
 
 transaction_queue: "queue.Queue[dto.Transaction]" = queue.Queue()
@@ -102,13 +102,10 @@ def process_transaction(transaction: dto.Transaction) -> Optional[dto.Anomaly]:
 
     Must be called within an application context.
     """
-    all_anomalies = anomalies_api.get_all_anomalies()
-    all_transactions = transaction_api.get_all_transactions()
-
     current_app.logger.info(
         "Reviewing transaction %s (merchant=%r, amount=%s)",
         transaction.id, transaction.merchant, transaction.amount)
-    anomaly = agent_api.review_new_transaction(transaction, all_anomalies, all_transactions)
+    anomaly = agent_api.review_new_transaction(transaction)
 
     if anomaly is None:
         current_app.logger.info("Transaction %s cleared (no anomaly)", transaction.id)
