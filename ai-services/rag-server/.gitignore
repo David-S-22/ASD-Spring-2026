@@ -1,0 +1,6 @@
+chroma/
+corpus/*.jsonl
+rag-audit.jsonl
+retrieval-metrics.md
+__pycache__/
+.pytest_cache/

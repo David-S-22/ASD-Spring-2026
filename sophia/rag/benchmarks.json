@@ -1,0 +1,7 @@
+[
+  {"query": "What evidence do I have to dispute the GymCo charge?", "feature": "bills",
+   "relevant_keywords": ["GymCo"], "expected_relevant": 3},
+  {"query": "How does Bills decide whether a bill is overdue?", "feature": "bills",
+   "relevant_keywords": ["overdue"], "expected_relevant": 1},
+  {"query": "What is the interest rate on my mortgage?", "feature": "bills", "expect_insufficient": true}
+]
