@@ -10,7 +10,6 @@ from flask.testing import FlaskClient
 from requests import PreparedRequest
 from responses import RequestsMock
 
-from backend.config import config
 from backend.app import app
 from backend.services import review_queue
 from backend.services import anomalies_api
@@ -428,15 +427,13 @@ def integrate_services(monkeypatch: MonkeyPatch):
 
     transactionsapp = setup_transactions()
 
-    # config resolves these lazily from the environment; set them here so the
-    # backend's HTTP clients target URLs the RequestsMock below intercepts.
     monkeypatch.setenv("ANOMALIES_DB_URL", "http://mock-database-url/anomalies")
     monkeypatch.setenv("TRANSACTIONS_DB_URL", "http://mock-transactions-url")
-    monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
     monkeypatch.setenv("OLLAMA_MODEL", "billy")
+    monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
 
-    dburl = re.compile(rf"^{re.escape(config.ANOMALIES_DB_URL)}(/.*)?$")
-    transactionsurl = re.compile(rf"^{re.escape(config.TRANSACTIONS_DB_URL)}/.+$")
+    dburl = re.compile(r"^http://mock-database-url/anomalies(/.*)?$")
+    transactionsurl = re.compile(r"^http://mock-transactions-url/.+$")
 
     with RequestsMock(assert_all_requests_are_fired=False) as rsps:
         rsps.add_callback(RequestsMock.GET, dburl, lambda r: intercept(dbapp, r))
