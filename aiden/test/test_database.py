@@ -308,7 +308,9 @@ def _fake_get(payload: List[dict]):
 
 
 def _all_transaction_ids(client: FlaskClient) -> set:
-    return {anomaly["transaction_id"] for anomaly in client.get("/anomalies/").json}
+    response = client.get("/anomalies/")
+    assert isinstance(anomalies := response.json, list)
+    return {anomaly["transaction_id"] for anomaly in anomalies}
 
 
 def create_anomaly(client: FlaskClient, **kwargs: Any) -> dto.Anomaly:
