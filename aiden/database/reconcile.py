@@ -6,14 +6,16 @@ exists is deleted, keeping the two independent databases logically consistent.
 """
 
 import logging
-import os
+import threading
 import time
 from typing import Optional, Set
 
 import requests
+from flask import Flask
 from sqlalchemy import select
 
 from .app import app
+from .config import config
 from .models import Anomaly, db
 
 
@@ -79,18 +81,10 @@ def reconcile_anomalies() -> None:
     than crashing the container.
     """
 
-    base_url = os.environ.get("TRANSACTIONS_DB_URL")
-
-    if not base_url:
-        logger.warning(
-            "TRANSACTIONS_DB_URL is not set; skipping anomaly reconciliation"
-        )
-        return
-
-    base_url = base_url.rstrip("/")
-    timeout = float(os.environ.get("TRANSACTIONS_TIMEOUT_SECONDS", "10"))
-    retries = int(os.environ.get("RECONCILE_MAX_RETRIES", "30"))
-    retry_delay = float(os.environ.get("RECONCILE_RETRY_DELAY_SECONDS", "2"))
+    base_url = config.TRANSACTIONS_DB_URL.rstrip("/")
+    timeout = config.TRANSACTIONS_TIMEOUT_SECONDS
+    retries = config.RECONCILE_MAX_RETRIES
+    retry_delay = config.RECONCILE_RETRY_DELAY_SECONDS
 
     transaction_ids = fetch_transaction_ids_with_retry(
         base_url, timeout, retries, retry_delay
@@ -106,3 +100,12 @@ def reconcile_anomalies() -> None:
     logger.info(
         "Anomaly reconciliation complete; removed %s orphaned anomalies", removed
     )
+
+
+def start_reconcile(app: Flask) -> threading.Thread:
+    thread = threading.Thread(
+        target=reconcile_anomalies, name="anomaly-reconcile", daemon=True
+    )
+    thread.start()
+    app.logger.info("Started anomaly reconciliation thread %r", thread.name)
+    return thread

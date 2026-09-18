@@ -166,6 +166,9 @@ services:
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
       TRANSACTIONS_DB_URL: http://transactions-db:6001
+      TRANSACTIONS_TIMEOUT_SECONDS: 10
+      RECONCILE_MAX_RETRIES: 30
+      RECONCILE_RETRY_DELAY_SECONDS: 2
     depends_on:
       transactions-db:
         condition: service_started

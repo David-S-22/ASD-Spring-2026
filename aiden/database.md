@@ -27,14 +27,15 @@ declares a `depends_on` relationship on it in `docker-compose.yml`. The pass is
 best-effort: if the transactions database cannot be reached within the retry
 budget, reconciliation is skipped and logged rather than crashing the container.
 
-The behaviour is configured through environment variables:
+The behaviour is configured through environment variables, all of which are
+required:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TRANSACTIONS_DB_URL` | (unset) | Base URL of the transactions database. Reconciliation is skipped if unset. |
-| `TRANSACTIONS_TIMEOUT_SECONDS` | `10` | Per-request timeout when polling transactions. |
-| `RECONCILE_MAX_RETRIES` | `30` | Number of polling attempts before giving up. |
-| `RECONCILE_RETRY_DELAY_SECONDS` | `2` | Delay between polling attempts. |
+| Variable | Purpose |
+| --- | --- |
+| `TRANSACTIONS_DB_URL` | Base URL of the transactions database. |
+| `TRANSACTIONS_TIMEOUT_SECONDS` | Per-request timeout when polling transactions. |
+| `RECONCILE_MAX_RETRIES` | Number of polling attempts before giving up. |
+| `RECONCILE_RETRY_DELAY_SECONDS` | Delay between polling attempts. |
 
 ## Routes
 
