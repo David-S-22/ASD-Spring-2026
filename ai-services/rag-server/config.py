@@ -23,6 +23,6 @@ EMBED_MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")
 EMBED_TIMEOUT = int(os.environ.get("RAG_EMBED_TIMEOUT", "60"))
 
 DEFAULT_K = int(os.environ.get("RAG_K", "5"))
-# Cosine distance (0 = identical, 1 = unrelated). A chunk further than this is not evidence;
+# From lecture notes; the recommended use is the Cosine distance from benchmark provided where (0 = identical, 1 = unrelated). 
 # if nothing is closer, retrieve_context reports insufficient_context. Tune once with eval.py.
 MAX_DISTANCE = float(os.environ.get("RAG_MAX_DISTANCE", "0.55"))
