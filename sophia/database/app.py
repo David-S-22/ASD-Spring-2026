@@ -322,6 +322,89 @@ def create_app(db_path=None):
         row = connection.execute("SELECT * FROM dispute_drafts WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return jsonify(row_to_dict(row)), 201
 
+    # --- suggestions: AI-proposed changes awaiting approval -----------------
+    #
+    # The status column is a tiny state machine and the PUT below is its only
+    # gate: pending -> applied | rejected | failed, plus applied -> failed
+    # (an approve claims the row *before* executing, so a failed execution
+    # has to be able to record itself) and failed -> rejected (dismissing a
+    # failed card). The transition runs as a guarded UPDATE, so two racing
+    # approves cannot both claim one suggestion.
+    SUGGESTION_TRANSITIONS = {
+        "pending": {"applied", "rejected", "failed"},
+        "applied": {"failed"},
+        "failed": {"rejected"},
+    }
+
+    @app.get("/suggestions")
+    def list_suggestions():
+        status = request.args.get("status")
+        if status:
+            rows = db().execute(
+                "SELECT * FROM suggestions WHERE status = ? ORDER BY id", (status,)
+            ).fetchall()
+        else:
+            rows = db().execute("SELECT * FROM suggestions ORDER BY id").fetchall()
+        return jsonify(rows_to_list(rows))
+
+    @app.post("/suggestions")
+    def create_suggestion():
+        data = request.get_json(silent=True) or {}
+        _require(data, ["op", "entity"])
+        if data["op"] not in ("create", "update", "delete"):
+            raise ApiError("op must be one of ['create', 'delete', 'update']")
+        if data["entity"] not in ("bill", "payment", "dispute"):
+            raise ApiError("entity must be one of ['bill', 'dispute', 'payment']")
+        payload_json = data.get("payload_json")
+        if payload_json is not None and not isinstance(payload_json, str):
+            payload_json = json.dumps(payload_json)
+        connection = db()
+        cursor = connection.execute(
+            """
+            INSERT INTO suggestions (op, entity, entity_id, payload_json, status, message_id, created_at)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?)
+            """,
+            (data["op"], data["entity"], data.get("entity_id"), payload_json,
+             data.get("message_id"), _now_timestamp()),
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM suggestions WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        return jsonify(row_to_dict(row)), 201
+
+    @app.get("/suggestions/<int:suggestion_id>")
+    def get_suggestion(suggestion_id):
+        row = db().execute("SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)).fetchone()
+        if row is None:
+            raise ApiError("suggestion not found", 404)
+        return jsonify(row_to_dict(row))
+
+    @app.put("/suggestions/<int:suggestion_id>")
+    def update_suggestion(suggestion_id):
+        data = request.get_json(silent=True) or {}
+        new_status = data.get("status")
+        if new_status not in ("applied", "rejected", "failed"):
+            raise ApiError("status must be one of ['applied', 'failed', 'rejected']")
+        connection = db()
+        existing = connection.execute(
+            "SELECT status FROM suggestions WHERE id = ?", (suggestion_id,)
+        ).fetchone()
+        if existing is None:
+            raise ApiError("suggestion not found", 404)
+        allowed_from = [
+            current for current, targets in SUGGESTION_TRANSITIONS.items() if new_status in targets
+        ]
+        placeholders = ", ".join("?" for _ in allowed_from)
+        cursor = connection.execute(
+            f"UPDATE suggestions SET status = ?, error = ?, resolved_at = ? "
+            f"WHERE id = ? AND status IN ({placeholders})",
+            (new_status, data.get("error"), _now_timestamp(), suggestion_id, *allowed_from),
+        )
+        connection.commit()
+        if cursor.rowcount == 0:
+            raise ApiError(f"suggestion is already {existing['status']}", 409)
+        row = connection.execute("SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)).fetchone()
+        return jsonify(row_to_dict(row))
+
     @app.get("/chat_messages")
     def list_chat_messages():
         rows = db().execute("SELECT * FROM chat_messages ORDER BY id").fetchall()

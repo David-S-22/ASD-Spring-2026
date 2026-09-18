@@ -8,7 +8,7 @@ This file should be **actively updated whenever the schema, table purposes, fiel
 
 ## Database role in the system
 
-The Budget Coach database service is a Flask application that owns the Ethan feature's SQLite schema and exposes it through HTTP CRUD endpoints. Its job is to:
+The Budget Coach database service is a Flask application that owns the Budgets feature's SQLite schema and exposes it through HTTP CRUD endpoints. Its job is to:
 
 - store budget data for each month
 - store category-level budget rules
@@ -34,7 +34,7 @@ So the overall model is:
 These are the current written definitions that implementation should follow:
 
 - `budgets (id PK, month, declared_income, status)`
-- `budget_lines (id PK, budget_id FK -> budgets.id, category, warn_at, hard_cap)`
+- `budget_lines (id PK, budget_id FK -> budgets.id, category_id, category, warn_at, hard_cap)`
 - `planned_events (id PK, budget_id FK -> budgets.id, date, label, category, est_low, est_high, source, status)`
 - `coach_proposals (id PK, budget_id FK -> budgets.id, proposal_json, rationale, status, decided_at)`
 
@@ -43,10 +43,10 @@ These are the current written definitions that implementation should follow:
 These decisions are now part of the intended implementation unless they are later revised:
 
 1. all money values are stored as integers
-2. all primary keys use GUID values
+2. all primary keys use integer values
 3. `month` uses `YYYY-MM`
 4. there is only one budget per month
-5. `category` is free text, but business rules should only allow planned events and similar records to align with an existing budget line category
+5. budget lines should use categories from the transactions service, storing the transaction `category_id` plus the resolved category name
 6. deleting a budget should cascade delete linked `budget_lines`, `planned_events`, and `coach_proposals`
 7. all fields may be null for now except primary keys and foreign keys
 
@@ -71,7 +71,7 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the monthly budget
+- `id`: integer primary key and unique identifier for the monthly budget
 - `month`: the month this budget applies to, such as `2026-09`
 - `declared_income`: the user's income for that month
 - `status`: lifecycle state such as `draft`, `active`, or `closed`
@@ -106,6 +106,7 @@ One row means:
 
 - `id`
 - `budget_id`
+- `category_id`
 - `category`
 - `warn_at`
 - `hard_cap`
@@ -114,9 +115,10 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the budget line
+- `id`: integer primary key and unique identifier for the budget line
 - `budget_id`: foreign key linking the line to a row in `budgets`
-- `category`: spending category name, such as groceries or transport
+- `category_id`: category identifier from the transactions service
+- `category`: resolved spending category name from the transactions service, such as groceries or transport
 - `warn_at`: threshold where the app should begin warning the user
 - `hard_cap`: maximum intended amount for the category
 - `created_at` / `updated_at`: audit fields
@@ -141,7 +143,7 @@ That means:
 
 ### Recommended rules
 
-- category names should be unique within one budget
+- category ids should be unique within one budget
 - `warn_at` is stored as an integer amount
 - `hard_cap` is stored as an integer amount
 - `warn_at <= hard_cap`
@@ -172,7 +174,7 @@ One row means:
 
 ### Field meaning
 
-- `id`: primary key and unique identifier for the planned event
+- `id`: integer primary key and unique identifier for the planned event
 - `budget_id`: foreign key linking the event to the relevant monthly budget
 - `date`: expected date of the event
 - `label`: short human-readable description

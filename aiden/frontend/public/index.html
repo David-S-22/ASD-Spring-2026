@@ -7,64 +7,92 @@
 </head>
 <body>
     <style>
-        /* Toast notification area, pinned to the bottom-right of the viewport. */
-        #alert {
+        .modal-overlay {
             position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 1000;
+            inset: 0;
             display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            max-width: 22rem;
-            pointer-events: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 8vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
         }
-
-        #alert .toast {
-            pointer-events: auto;
-            position: relative;
-            background: #2b2b2b;
-            color: #fff;
-            border-left: 4px solid #e0a800;
-            border-radius: 6px;
-            padding: 0.75rem 2rem 0.75rem 1rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-            font-family: system-ui, -apple-system, sans-serif;
-            animation: toast-in 0.25s ease-out;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+        .modal-overlay[hidden] { display: none; }
+        .modal {
+            background: var(--color-surface, #ffffff);
+            color: var(--color-text, #1e293b);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--color-border, #cbd5e1);
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
+        .modal h2, .modal p, .modal label { color: var(--color-text, #1e293b); }
+        .modal label { display: block; margin: 0.75rem 0 0.25rem; }
+        .modal select {
+            width: 100%;
+            padding: 0.4rem;
+            background: var(--color-surface-alt, #ffffff);
+            color: var(--color-text, #1e293b);
+            border: 1px solid var(--color-border, #cbd5e1);
+            border-radius: 5px;
+        }
+        .modal-actions { margin-top: 1.25rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
 
-        #alert .toast-close {
-            position: absolute;
-            top: 0.35rem;
-            right: 0.45rem;
-            background: none;
-            border: none;
-            color: #fff;
-            opacity: 0.6;
-            font-size: 1.1rem;
-            line-height: 1;
+        /* Review action buttons (matches the savings module palette). */
+        button.btn-accept, button.btn-cancel {
+            padding: 5px 16px;
             cursor: pointer;
-            padding: 0.15rem 0.35rem;
+            border-radius: 5px;
+            border: 1px solid transparent;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: #ffffff !important;
+            transition: background-color 0.15s ease;
         }
-
-        #alert .toast-close:hover { opacity: 1; }
-
-        #alert .toast.toast--hide {
-            opacity: 0;
-            transform: translateX(1rem);
+        button.btn-accept { background-color: #198754 !important; }
+        button.btn-accept:hover { background-color: #157347 !important; }
+        button.btn-cancel { background-color: #475569 !important; }
+        button.btn-cancel:hover { background-color: #334155 !important; }
+        button.review-btn {
+            padding: 4px 12px;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid transparent;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: #ffffff !important;
+            background-color: #0284c7 !important;
+            transition: background-color 0.15s ease;
         }
+        button.review-btn:hover { background-color: #0369a1 !important; }
 
-        #alert .toast strong { display: block; margin-bottom: 0.15rem; }
-        #alert .toast p { margin: 0.15rem 0; font-size: 0.9rem; }
-        #alert .toast small { display: block; opacity: 0.7; font-size: 0.75rem; }
-
-        @keyframes toast-in {
-            from { opacity: 0; transform: translateX(1rem); }
-            to { opacity: 1; transform: none; }
+        /* Status badges (mirrors the savings accepted/rejected styling). */
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .status-accepted {
+            background-color: rgba(74, 222, 128, 0.15);
+            color: var(--color-success, #15803d);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+        .status-rejected {
+            background-color: rgba(248, 113, 113, 0.15);
+            color: var(--color-danger, #b91c1c);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+        }
+        .status-unreviewed {
+            background-color: rgba(148, 163, 184, 0.15);
+            color: var(--color-text-muted, #475569);
+            border: 1px solid rgba(148, 163, 184, 0.3);
         }
     </style>
-
     <h1>Anomalies</h1>
     <button type="button"
             hx-post="/anomalies-backend/dummy-anomaly"
@@ -72,12 +100,7 @@
             hx-swap="innerHTML">
         Create dummy anomaly
     </button>
-    <button type="button"
-            hx-post="/anomalies-backend/check-transaction"
-            hx-ext="json-enc"
-            hx-vals="js:{...window.dummyTransaction()}"
-            hx-target="#alert"
-            hx-swap="innerHTML">
+    <button type="button" onclick="checkDummyTransaction()">
         Check dummy transaction
     </button>
     <div id="alert"></div>
@@ -85,15 +108,33 @@
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Transaction</th>
+                <th>Date</th>
+                <th>Merchant</th>
                 <th>Reason suspected</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
-        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load" hx-swap="innerHTML">
-            <tr><td colspan="4" style="text-align: center;">Loading…</td></tr>
+        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <tr><td colspan="6" style="text-align: center;">Loading…</td></tr>
         </tbody>
     </table>
+
+    <div id="review-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
+        <div class="modal">
+            <h2 id="review-modal-title">Review anomaly</h2>
+            <p>Your feedback will be used to better predict future anomalies.</p>
+            <label for="review-decision">Decision</label>
+            <select id="review-decision">
+                <option value="confirm">Accept</option>
+                <option value="dismiss">Reject</option>
+            </select>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeReviewModal()">Cancel</button>
+                <button type="button" class="btn-accept" onclick="submitReview()">Submit</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // Provides a dummy transaction payload for the anomaly checker.
@@ -109,38 +150,68 @@
             };
         }
 
-        // Anomaly toasts auto-dismiss after 30 seconds, or immediately when the
-        // close (×) button is pressed. Guarded so the listeners are only registered
-        // once, even if this fragment is re-loaded into the shell multiple times.
-        if (!window.__anomalyToastInit) {
-            window.__anomalyToastInit = true;
+        // Queue a dummy transaction for review, then poll for its result by key.
+        async function checkDummyTransaction() {
+            const transaction = window.dummyTransaction();
+            const alert = document.getElementById('alert');
+            alert.innerHTML = '<p>Transaction queued for anomaly review…</p>';
 
-            function dismissToast(toast) {
-                if (!toast || toast.classList.contains("toast--hide")) return;
-                toast.classList.add("toast--hide");
-                toast.addEventListener("transitionend", function () {
-                    toast.remove();
-                }, { once: true });
+            await fetch('/anomalies-backend/check-transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transaction)
+            });
+
+            watchForAnomaly(transaction.id, alert);
+        }
+
+        // Long-poll /anomaly-alert for a specific transaction id (key).
+        // 200 -> render the alert; 204 -> reviewed with no anomaly (stop).
+        async function watchForAnomaly(key, target) {
+            const resp = await fetch('/anomalies-backend/anomaly-alert?key=' + key);
+            if (resp.status === 200) {
+                target.innerHTML = await resp.text();
+            } else {
+                target.innerHTML = '<p>Transaction reviewed — no anomaly detected.</p>';
+            }
+        }
+
+        // Dismiss an anomaly toast when its close button is clicked.
+        document.addEventListener('click', function (event) {
+            if (event.target.classList.contains('toast-close')) {
+                const toast = event.target.closest('.toast');
+                if (toast) toast.remove();
+            }
+        });
+
+        // Anomaly review modal: pick Accept/Reject from a dropdown, then submit.
+        let reviewAnomalyId = null;
+
+        function openReviewModal(id) {
+            reviewAnomalyId = id;
+            document.getElementById('review-decision').value = 'confirm';
+            document.getElementById('review-modal').hidden = false;
+        }
+
+        function closeReviewModal() {
+            reviewAnomalyId = null;
+            document.getElementById('review-modal').hidden = true;
+        }
+
+        // Send the chosen decision to the backend and refresh the table.
+        async function submitReview() {
+            if (reviewAnomalyId === null) return;
+
+            const decision = document.getElementById('review-decision').value; // 'confirm' | 'dismiss'
+            const resp = await fetch('/anomalies-backend/anomalies/' + reviewAnomalyId + '/' + decision, {
+                method: 'POST'
+            });
+
+            if (resp.ok) {
+                document.getElementById('anomalies').innerHTML = await resp.text();
             }
 
-            document.body.addEventListener("htmx:afterSwap", function (evt) {
-                const target = evt.detail && evt.detail.target;
-                if (!target || target.id !== "alert") return;
-
-                const toast = target.querySelector(".toast");
-                if (!toast) return;
-
-                setTimeout(function () {
-                    dismissToast(toast);
-                }, 30000);
-            });
-
-            // Close-button clicks (event delegation, since toasts are swapped in).
-            document.body.addEventListener("click", function (evt) {
-                const closeBtn = evt.target.closest(".toast-close");
-                if (!closeBtn) return;
-                dismissToast(closeBtn.closest(".toast"));
-            });
+            closeReviewModal();
         }
     </script>
 </body>

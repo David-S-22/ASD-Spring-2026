@@ -102,59 +102,9 @@ function showToast(text) {
   }, 2500);
 }
 
-// The four inner tabs, in markup order. Also the whitelist for the fragment:
-// only these names are ever written to or restored from location.hash.
-var TAB_NAMES = ["bills", "calendar", "timeline", "disputes"];
-
-// Tab memory is namespaced -- "#bills:disputes", not "#disputes". In the shell
-// this fragment lives on the shell's own URL, which is shared ground: if the
-// shell later records its active feature there, a bare "#bills" would be
-// ambiguous between "the shell's Bills tab" and "Bills' own bills tab". The
-// prefix also keeps these values clear of the published deep links, which are
-// "#bills?confirm=<id>" and "#chat?..." and are contract, not tab state.
-var TAB_HASH_PREFIX = "#bills:";
-
-function activateTab(name) {
-  document.querySelectorAll(".tabs button").forEach(function (btn) {
-    btn.classList.toggle("active", btn.getAttribute("data-tab") === name);
-  });
-  document.querySelectorAll(".tab-page").forEach(function (page) {
-    page.classList.toggle("active", page.getAttribute("data-tab-page") === name);
-  });
-  rememberTab(name);
-}
-
-// Record the open tab in the fragment so a reload comes back to it.
-//
-// replaceState rather than assigning location.hash: assigning pushes a history
-// entry per tab click, so Back would walk the tabs instead of leaving the page.
-// replaceState also fires no hashchange, so this cannot re-enter the restore
-// branch in the initialiser below.
-//
-// Inside the shell this writes to the shell's own URL (:3000/#calendar), which
-// is the only place a reload can survive -- the shell swaps features into
-// #content without touching the URL, so Bills has nowhere else to put it. The
-// shell has no hashchange listener and no other feature reads the fragment, so
-// the value is inert until Bills is opened again. A reload at :3000 still lands
-// on the shell's own Home tab, because Bills is not mounted at that point;
-// clicking Bills then restores the remembered tab. Making the reload itself
-// return to Bills needs the shell to record its active tab, which is Aiden's.
-function rememberTab(name) {
-  if (TAB_NAMES.indexOf(name) === -1) {
-    return;
-  }
-  // Leave a deep link alone while its own tab is the one being activated:
-  // "#bills?confirm=12" already says bills, and overwriting it would drop the
-  // target row on a reload.
-  if (location.hash.indexOf("#" + name + "?") === 0) {
-    return;
-  }
-  var next = TAB_HASH_PREFIX + name;
-  if (location.hash === next) {
-    return;
-  }
-  history.replaceState(null, "", next);
-}
+// The page is a single scroll now — no inner tabs. The old tab machinery
+// (activateTab, hash-remembered tab state) went with them; the "#bills?confirm"
+// and "#chat?" deep links below are contract and survive.
 
 // The add/edit/cancel/payment/dispute forms are server fragments swapped into
 // #modal-root, so none of them can carry dialog semantics of their own without
@@ -304,7 +254,16 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
   // comment argued the card had to stay gated because it sits in the same panel
   // as the ask form; that reasoning was about where the control lives, not what
   // it does, and the card was already a review step by the time it was written.
-  if (evt.detail.elt && (evt.detail.elt.closest(".chat-panel form") || evt.detail.elt.closest(".preview-card"))) {
+  // The suggestion card (chat copy or panel copy) is the same review step the
+  // preview card was: it names the change field by field and Approve/Reject
+  // is the deliberate decision. A dialog on top would ask twice with less
+  // information than the card already shows.
+  if (
+    evt.detail.elt &&
+    (evt.detail.elt.closest(".chat-panel form") ||
+      evt.detail.elt.closest(".preview-card") ||
+      evt.detail.elt.closest(".suggestion-card"))
+  ) {
     return;
   }
   evt.preventDefault();
@@ -329,11 +288,47 @@ billsRoot.addEventListener("toast", function (evt) {
   showToast(typeof text === "string" ? text : "Done.");
 });
 
-billsRoot.addEventListener("switchTab", function (evt) {
-  var detail = evt.detail || {};
-  var name = typeof detail.value === "string" ? detail.value : detail;
-  if (typeof name === "string") {
-    activateTab(name);
+// The Disputes card is collapsed by default: a grid of tiles, with the letter
+// panel BELOW them and hidden until a tile is clicked. On a full grid the panel
+// therefore opens off-screen, so opening it has to bring it into view.
+//
+// Only the closed -> open transition scrolls. Every write inside an open panel
+// (Mark sent, Regenerate) re-renders it through the same target, and scrolling
+// on each of those yanks the page out from under whoever just clicked.
+function revealDisputePanel() {
+  var panel = document.getElementById("dispute-panel");
+  if (panel && !panel.hidden) {
+    panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+var disputePanelWasHidden = false;
+
+billsRoot.addEventListener("htmx:beforeSwap", function (evt) {
+  var target = evt.detail && evt.detail.target;
+  disputePanelWasHidden = !!(target && target.id === "dispute-panel" && target.hidden);
+});
+
+billsRoot.addEventListener("htmx:afterSettle", function () {
+  if (disputePanelWasHidden) {
+    disputePanelWasHidden = false;
+    revealDisputePanel();
+  }
+});
+
+// Historically switched inner tabs; with the single-page layout the server's
+// switchTab trigger (sent when a dispute is created) reveals the freshly opened
+// letter instead — same intent, no tabs. Falls back to the section heading when
+// the panel did not open, so the card is still found.
+billsRoot.addEventListener("switchTab", function () {
+  var panel = document.getElementById("dispute-panel");
+  if (panel && !panel.hidden) {
+    revealDisputePanel();
+    return;
+  }
+  var section = document.getElementById("disputes-section");
+  if (section) {
+    section.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 });
 
@@ -341,10 +336,10 @@ billsRoot.addEventListener("switchTab", function (evt) {
 // the whole table is already in the DOM, and filtering it is the honest shape
 // for twelve rows. Server-side search is the R1 shape, for when it is not.
 //
-// Matched against Name, Every, Paid by and Status. Deliberately not the actions
-// cell, whose every row reads "Edit Cancel Dispute Record payment" and would
-// therefore match any query that is a substring of those words.
-var SEARCHABLE_CELLS = [0, 2, 4, 5];
+// Matched against Name and Status. Deliberately not the actions cell, whose
+// rows read "Cancel Edit Dispute Record payment" and would match any query
+// that is a substring of those words.
+var SEARCHABLE_CELLS = [0, 3];
 
 function rowMatches(row, needle) {
   for (var i = 0; i < SEARCHABLE_CELLS.length; i++) {
@@ -403,12 +398,6 @@ billsRoot.addEventListener("click", function (evt) {
     closeRowMenus();
   }
 
-  var tab = evt.target.closest(".tabs button");
-  if (tab) {
-    activateTab(tab.getAttribute("data-tab"));
-    return;
-  }
-
   var chip = evt.target.closest("[data-chip]");
   if (chip) {
     var input = document.querySelector('.chat-panel input[name="message"]');
@@ -449,11 +438,12 @@ billsRoot.addEventListener("click", function (evt) {
     return;
   }
 
-  var dismissPreview = evt.target.closest('[data-action="dismiss-preview"]');
-  if (dismissPreview) {
-    var card = dismissPreview.closest(".preview-card");
-    if (card) {
-      card.remove();
+  var closeDispute = evt.target.closest('[data-action="close-dispute-panel"]');
+  if (closeDispute) {
+    var panel = document.getElementById("dispute-panel");
+    if (panel) {
+      panel.innerHTML = "";
+      panel.hidden = true;
     }
     return;
   }
@@ -470,9 +460,17 @@ billsRoot.addEventListener("click", function (evt) {
     history.replaceState(null, "", "/");
     return;
   }
-  if (location.hash.indexOf("#bills?confirm=") === 0) {
-    var billId = parseInt(location.hash.split("confirm=")[1], 10);
-    activateTab("bills");
+  // Canonical form is "?confirm=7#bills" -- parameter in the query, bare page
+  // name in the hash, because the shared shell matches the hash EXACTLY and
+  // falls back to Home on anything else. The legacy "#bills?confirm=7" form is
+  // still read so older links and docs keep working standalone.
+  var params = new URLSearchParams(location.search);
+  var legacyBills = location.hash.indexOf("#bills?confirm=") === 0;
+  if (params.has("confirm") || legacyBills) {
+    var billId = parseInt(
+      legacyBills ? location.hash.split("confirm=")[1] : params.get("confirm"),
+      10
+    );
     if (isNaN(billId)) {
       return;
     }
@@ -490,16 +488,9 @@ billsRoot.addEventListener("click", function (evt) {
     billsRoot.addEventListener("htmx:afterSettle", scrollToBill);
     return;
   }
-  // "#bills:<tab>" is the tab remembered from a previous visit. Checked after
-  // the deep links above, which carry a query and are the more specific match.
-  if (location.hash.indexOf(TAB_HASH_PREFIX) === 0) {
-    var remembered = location.hash.slice(TAB_HASH_PREFIX.length);
-    if (TAB_NAMES.indexOf(remembered) !== -1) {
-      activateTab(remembered);
-      return;
-    }
-  }
-  if (location.hash.indexOf("#chat?") === 0) {
+  // Chat intents: "?handoff=<id>#bills" or "?message=<text>#bills". "#chat" is
+  // not a shell page at all, so the legacy hash form is standalone-only.
+  if (params.has("handoff") || params.has("message") || location.hash.indexOf("#chat?") === 0) {
     var chat = document.querySelector(".ask-tally");
     if (chat) {
       chat.scrollIntoView({ block: "start" });

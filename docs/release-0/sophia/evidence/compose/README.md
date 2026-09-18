@@ -1,5 +1,22 @@
 # Docker Compose verification — 22 Aug 2026
 
+> **Dates.** The captures here are stamped 21 Aug **UTC** (`compose-ps.txt` says
+> so explicitly; the `Date:` headers in `ui-write-routes.txt` run from "Fri, 21 Aug
+> 2026 18:56:52 GMT" to "18:58:29 GMT"). That is 22 Aug in Sydney, which is the date on this heading.
+> Both are correct; they are not two different runs.
+>
+> **Superseded in part.** `pytest-283-passed.txt` and `compose-ps-2026-09-07.txt`
+> in this directory, and `../ci-summary-2026-09-07.txt`, are the current numbers.
+> `pytest-283-passed.txt` is the full suite output — 283 passed, 91% coverage,
+> Python 3.13.2 at `ffb625f`, matching Sophia-CI run 145 on 3.12.
+> `compose-ps-2026-09-07.txt` is a fresh `docker compose up -d --build` of the whole
+> team stack: 17 services up (16 built, `ollama` pulled), all five frontends and
+> four of five backends 200 through the shared shell on `:3000`. The one 404 is
+> Bills' own backend root, which registers no `/` route (`/health` and `/api/bills`
+> are 200 through the same path); three non-Bills backends have no `/health`
+> endpoint, recorded as an observation outside this feature's scope.
+> Everything below is the 22 Aug record and is kept as history.
+
 `compose-down.txt`, `compose-ps.txt`, `curl-endpoints.txt` are the baseline
 verification from the prior PR (services build/start/health, before this
 addendum's frontend write-path work existed). `up.txt` and
@@ -17,15 +34,29 @@ docker compose up -d --build
 `up.txt` — `docker compose ps`, and health checks for all three services
 (`:6005/health`, `:5005/health`, `:3005/`, `:3005/api/bills`).
 
-`ui-write-routes.txt` — every `/ui/*` write route curled form-encoded, the
+`ui-write-routes.txt` — eleven `/ui/*` write routes curled form-encoded, the
 way HTMX actually sends them: add/edit/cancel/delete/confirm a bill, record
-a payment, create/status/regenerate a dispute (the last two are real
-Ollama calls, not mocked), send a chat message and apply its preview, plus
-a validation failure (422 + error fragment) and three `/api/*` routes hit
-with a form body (400 JSON, never 500). The exclude_from_plan/next-month
-calendar work is visible in the apply response: `Plan for September` /
-`Set aside up to $697`, and the timeline's top row is `Home internet`
-tagged `Overdue` at `$79.00` (cents, not a rounded estimate).
+a payment, create/status/regenerate a dispute (**create and regenerate** are
+the real Ollama calls, not mocked; `status` is a plain database update that
+never reaches the model), send a chat message and apply its preview, plus a
+validation failure (422 + error fragment) and three `/api/*` routes hit with
+a form body (400 JSON, never 500).
+
+**This was every write route on 22 Aug; it is 11 of 15 now.** Four arrived
+later and have no transcript here: `POST /ui/disputes/<id>/delete` (#106) and
+`POST /ui/suggestions/<id>/approve`, `/reject` and `/suggest` (#105).
+
+**Correction (7 Sep).** An earlier version of this file said the
+exclude_from_plan/next-month calendar work was "visible in the apply
+response" as `Plan for September` / `Set aside up to $697`, and that the
+timeline's top row read `Home internet` / `Overdue` / `$79.00`. Those strings
+appear in none of the four capture files. The transcript records status lines
+and headers only — the apply response is logged as `HTTP/1.1 200 OK` with
+`Content-Length: 13989` and `HX-Trigger: {"toast": "Done \u2014 change
+saved."}` (the em dash is JSON-escaped in the capture), and the body itself was
+never saved. The underlying behaviour is
+real and covered by the test suite; it was simply never evidenced *here*, so
+the claim has been withdrawn rather than restated.
 
 `four-cases.txt` — after an independent curl sweep found two leftover
 500s (a bad calendar month, and a chat/apply fields key outside the

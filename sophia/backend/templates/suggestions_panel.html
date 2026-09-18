@@ -1,0 +1,17 @@
+{# The approve/reject window: every change the AI proposes waits here (and as
+   the matching card in the chat) until the user decides. Root id is a fragment
+   contract — approve/reject responses and the chat's OOB refresh both replace
+   #suggestions-panel wholesale. #}
+<div class="suggestions-panel" id="suggestions-panel"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <h3 class="suggestions-heading">Suggestions
+    {% if pending_count %}<span class="suggestions-badge">{{ pending_count }}</span>{% endif %}
+  </h3>
+  {% if not suggestions %}
+  <p class="suggestions-empty">Changes Tally proposes appear here for approval — nothing is saved without your say-so.</p>
+  {% endif %}
+  {% for suggestion in suggestions %}
+  <div class="suggestion-card status-{{ suggestion.status }}" data-suggestion-id="{{ suggestion.id }}">
+    {% include "suggestion_card.html" %}
+  </div>
+  {% endfor %}
+</div>

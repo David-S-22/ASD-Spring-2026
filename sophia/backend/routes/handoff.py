@@ -1,4 +1,15 @@
-"""JSON API routes for inbound automation handoffs from other students' features."""
+"""JSON API routes for inbound automation handoffs from other students' features.
+
+Deep-link shape: the parameter travels in the QUERY and the hash is a bare
+"#bills". The shared shell routes tabs on an exact hash match
+(`tabs.find(t => t.dataset.page === location.hash.slice(1)) || tabs[0]`), so the
+old "#bills?confirm=7" sliced to "bills?confirm=7", matched nothing and landed
+on Home -- the link silently did nothing. There is no "chat" page in the shell
+either, so "#chat?handoff=x" could never work there; Bills owns Ask Tally, and
+app.js routes on the query parameter once Bills is loaded.
+"""
+from urllib.parse import quote
+
 from flask import Blueprint, jsonify, request
 
 from sophia.backend import config
@@ -34,7 +45,7 @@ def handoff_recurring():
         {
             "preview": preview,
             "apply_url": "/api/chat/apply",
-            "ui_url": f"{config.FRONTEND_ORIGIN}/#chat?handoff={handoff_id}",
+            "ui_url": f"{config.FRONTEND_ORIGIN}/?handoff={quote(handoff_id)}#bills",
         }
     )
 
@@ -59,7 +70,7 @@ def suggestions():
             {
                 "bill_id": bill["id"],
                 "status": bill["status"],
-                "confirm_url": f"{config.FRONTEND_ORIGIN}/#bills?confirm={bill['id']}",
+                "confirm_url": f"{config.FRONTEND_ORIGIN}/?confirm={bill['id']}#bills",
             }
         ),
         201,

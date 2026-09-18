@@ -1,0 +1,187 @@
+PROMPT — Verify the 26 Aug improvement plan, then complete Tier A
+Stage: ACT · Run: 28 Aug 2026 · Tool: Claude Code, from the repo root
+Purpose: re-check every claim in a plan written from an older head, then
+         implement its four Tier A items as four branches and four PRs.
+Outcome: #47 (docs truth pass), #49 (Feature 4 link handoff + config
+         slim-down), #50 (integration-edge tests), #51 (Sophia-CI
+         docker-health job).
+Condensed for readability. The original ran a read-only verification phase
+that ended with a report and a STOP; each later phase was unlocked with
+"go", every push with "push". That choreography is summarised here.
+
+---
+
+## Context
+
+You are working in the shared team repo for UTS 41026 Release 0. I am
+Sophia Nguyen, Student 5: my feature is Bills List & Dispute Assistant, my
+folder is `sophia/`, my services are `bills-frontend` (:3005),
+`bills-backend` (:5005), `bills-db` (:6005), my workflow is
+`.github/workflows/Sophia-CI.yml`, my docs live in `docs/release-0/sophia/`.
+
+On 26 Aug a plan was written from a fresh clone of `main` at `73178a4`. It
+makes factual claims about the repo and proposes four "Tier A" items to
+finish before the code freeze on Wed 2 Sep. Your job: (a) check every claim
+against the repo as it is *right now* — teammates may have pushed since —
+and (b) once I say go, implement Tier A exactly as specified, one branch
+and one PR per item.
+
+**Decisions already made — do not reopen them:**
+- D1: `bills-db` stays on raw `sqlite3` + `schema.sql` for R0. No
+  Flask-SQLAlchemy migration, not even "while you're in there".
+- D2: `POST /api/handoff/recurring` (Feature 3 → Bills) stays a POST.
+  The Feature 4 → Bills contract becomes a link,
+  `GET /handoff/subscription?…` — that is item A1.
+- D3 (stop `list_bills()` writing during reads) stays locked as item B2.
+- Shared DTO adoption is gated on PR #39 merging with a `date` field on
+  `Transaction`. If `shared/` exists on `main`, report it and stop.
+
+## Hard scope rules — these override anything else you infer
+
+1. Modify ONLY `sophia/**`, my three `bills-*` blocks in
+   `docker-compose.yml`, `Sophia-CI.yml`, and `docs/release-0/sophia/**`.
+2. Root `requirements.txt`, other students' folders and compose blocks,
+   `shared/`, `ai-services/`, `scripts/`, other workflow files: read-only.
+   Problems there are listed in the report, never fixed.
+3. Before every commit run `git diff --stat main` and abort if any path
+   outside rule 1 appears.
+4. No `Co-Authored-By` trailers, no inline comments explaining a change.
+   Small commits, meaningful messages.
+5. Never push without showing me `git diff --stat` and the test summary
+   first. Never merge — I squash-merge after review.
+6. No new Python dependencies. Tests fake HTTP with `monkeypatch`, as
+   `sophia/test/test_backend_routes.py` already does.
+7. If Docker Desktop is not running, say so and skip the build step rather
+   than failing silently.
+
+## Phase 0 — verify (read-only)
+
+Pull `main`, record the head SHA, and produce a table — claim · verified /
+changed / wrong · evidence (command + one line of output) — for:
+
+- Repo state: what `main` is now and which PRs merged since `73178a4`,
+  noting any that touch `shared/`, `docker-compose.yml` or workflows;
+  whether `shared/` exists; Sophia's merged PR count (was 22).
+- Test suite: `python -m pytest sophia/test -q --cov=sophia/backend`
+  was 108 passed / 81 %; report the exact numbers now plus per-file
+  coverage for `routes/handoff.py`, `clients/transactions.py`,
+  `services/bills.py`, `services/payments.py`.
+- The six open gaps: no route serves `GET /handoff/subscription`; `app.js`
+  never reads `location.*` so the emitted deep links do nothing;
+  `contracts-inbound.md` §1 names the wrong transactions port;
+  `sophia/README.md` has a stale "Merge status" section; `handoff.py`
+  hard-codes `FRONTEND_ORIGIN`; `list_bills()`/`get_bill()` issue PUTs to
+  :6005 during a GET.
+- Things the plan relies on: `engine/projection.project()` and its
+  `Occurrence.date`; how `bill_form.html` is rendered and which fields it
+  takes; that nginx's `try_files … /index.html` serves the shell for
+  `/handoff/subscription` without a config change; what both `/health`
+  routes return.
+- **Dependency independence (standing check, every session):** nothing of
+  mine may install from the root `requirements.txt` — every Dockerfile,
+  workflow step and compose directive must reference a file under
+  `sophia/`. If any does not, flag it in bold at the top and treat it as the
+  highest-priority item.
+- Teammates' conventions, for the report only: quote Aiden's `docker-health`
+  CI job; A3 copies the pattern.
+
+If claims 6–11 have all been fixed by someone else already, say so and stop.
+
+## Phase 1 — A2, documentation truth pass
+
+Branch `docs/bills-readme-and-contracts-truth-pass`. In `sophia/README.md`
+replace "Merge status" with "Pull requests" (all Bills PRs merged, grouped
+by kind, plus the Sophia-CI run-on-main URL as the Actions evidence) and
+update the test count and coverage. In `contracts-inbound.md` fix the port,
+state that the transactions field shape is the data owner's call with the
+stub fixture as the worked example, and rewrite §2 for the link handoff
+that A1 builds, with its parameter table (`source`, `alert_id`, `merchant`,
+`amount` in dollars, `cadence`, `first_seen`, `last_seen`, `occurrences`,
+optional `confidence`, `evidence`, `return_url`; `next_billing_date` is
+deliberately not a parameter — the sender reports what it observed, Bills
+computes what happens next). In `api.md` add "Reading projected bills":
+stored rows via `:6005/bills`, projections via `:5005/api/upcoming`. Run the
+suite, scope check, PR "Bills docs: README merge status, contracts ports,
+projected-bills read" — body says "no code change".
+
+## Phase 2 — A1 + B1, the Feature 4 link handoff
+
+Branch `feat/bills-f4-link-handoff`.
+
+**B1 first:** `config.py` gains `FRONTEND_ORIGIN` (default
+`http://localhost:3005`) and the `OLLAMA_URL` default becomes
+`http://host.docker.internal:11434`; `handoff.py` uses the config value; the
+`bills-backend` compose block drops the env lines whose values now live as
+`config.py` defaults, keeping `PORT`, `BILLS_DB_API_URL` and the
+`extra_hosts` line. One new test: emitted `confirm_url`/`ui_url` start with
+`config.FRONTEND_ORIGIN`. `docker compose config` must show only the
+expected variables in my block.
+
+**A1 backend:** `GET /ui/handoff/subscription` in `routes/fragments.py`.
+Validate the parameters (`source == "f4"`, non-empty merchant, amount a
+decimal ≥ 0 converted to cents, cadence one of the engine's three values,
+ISO dates with `first_seen <= last_seen`, `occurrences` an int ≥ 1); on
+failure render the existing error fragment. Compute `next_billing_date`
+with the engine — the first projected occurrence strictly after
+`last_seen` — never with hand-rolled date arithmetic. Render
+`bill_form.html` prefilled, with `source="f4_handoff"` as a hidden input and
+an evidence sentence ("Suggested by Spending Alerts — based on N charges
+from … to …", plus a low-confidence note and a back link when present).
+Saving goes through the existing `POST /ui/bills` unchanged, so **nothing
+is written until the user saves**.
+
+**A1 frontend:** in `app.js`, on load: a `/handoff/…` path fetches the
+fragment into the modal via `htmx.ajax` and rewrites the URL to `/`;
+`#bills?confirm=<id>` switches to Bills and triggers that row's existing
+confirm prompt (or just scrolls to it — do not invent new UI);
+`#chat?handoff=` switches to Chat. Under ~30 lines, no framework.
+
+**Tests** in `test_frontend_fragments.py`: happy path (200, merchant,
+amount, subscription selected, computed date, evidence sentence); missing
+merchant → 400; `cadence=yearly` → 400; `first_seen > last_seen` → 400;
+low-confidence wording; and two concrete `next_billing_date` cases
+(`last_seen=2026-08-01` monthly → `2026-09-01`; `2026-08-19` weekly →
+`2026-08-26`, with `DEMO_TODAY=2026-08-20`).
+
+Build and start the three services and give me the handoff URL to open in
+Chrome; I confirm the prefilled modal. PR "Bills: Feature 4 link handoff
+(GET /handoff/subscription) and deep links".
+
+## Phase 3 — A4, tests on the integration edges
+
+Branch `test/bills-integration-edges`. New `test_handoff_routes.py`
+(recurring handoff: `end`, `change_amount`, unknown merchant → `create`;
+`apply_url` and `ui_url` shapes; `POST /api/suggestions` → 201 with
+`source="f4_handoff"`, `confirmed_at=None`). New
+`test_contract_transactions.py` (every stub row normalises to an ISO date,
+numeric amount, non-empty merchant; live path with `requests.get`
+monkeypatched → `source == "up"`; a raised `RequestException` → stub
+fallback; `merchant=`/`since=` filters). Parametrised validation tests for
+the uncovered branches in `services/bills.py` and `services/payments.py`.
+Target: `handoff.py` and `transactions.py` ≥ 85 %, total ≥ 85 %; report the
+before/after per-file numbers. PR "Bills tests: handoff routes,
+transactions contract, service validation branches".
+
+## Phase 4 — A3, Sophia-CI docker-health job
+
+Branch `ci/sophia-docker-health`, editing only `Sophia-CI.yml`: measure
+`--cov=sophia/backend` (so CI reports the README's number) and replace the
+`build` job with `docker-health` modelled on Aiden's — build the three
+images, `up -d`, curl `:6005/health`, `:5005/health` and `:3005/`, dump
+logs on failure, `down -v` always. Note in the PR body that `:5005/health`
+reports `"ollama": "down"` in CI by design and still returns 200. PR
+"Sophia-CI: container health smoke test after build". After merge, fetch
+the run-on-main URL — it replaces the earlier one as the Actions evidence.
+
+## Phase B2 — pure reads (locked; separate approval)
+
+`list_bills()` and `get_bill()` stop writing status; persist it only where a
+write already happens. Add a test that `GET /api/bills` results in zero
+`update_bill` calls. PR "Bills: reads no longer write derived status".
+
+## Closing report
+
+Head SHA at start and end · the PR URLs · test count and coverage before
+and after · per-file numbers for the four thin modules · anything in the
+plan that was wrong · anything outside my scope worth telling the team ·
+the exact message to send Aiden for the new link.

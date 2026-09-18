@@ -1,0 +1,64 @@
+# pytest — Bills (Feature 5) — captured 2026-09-07
+#
+# Command : python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
+# Working  : main @ ffb625f (in sync with origin/main), clean tree
+# Local    : Python 3.13.2 on win32, pytest 9.1.1, pytest-cov 7.1.0
+# Result   : 283 passed, TOTAL coverage 91% (1698 stmts, 155 missed), 11.42s
+#
+# CI parity: Sophia-CI pins python-version "3.12" and runs this exact command.
+# The matching green run is #145 (id 33720083787, sha 9454b11, 2026-09-03T05:43:45Z,
+# https://github.com/David-S-22/ASD-Spring-2026/actions/runs/33720083787).
+# That run tested a byte-identical Bills tree: `git rev-parse HEAD:sophia` and
+# `git rev-parse 9454b11:sophia` both return b23a2be2580cc1a25594f405512ed037735c29a9.
+# The last commit to touch sophia/ is f64accc (#120, 3 Sep); every commit since has
+# fallen outside the workflow's sophia/** + shared/** path filter, so #145 remains
+# both the newest Sophia-CI run and the one covering this code.
+#
+# The 3.13-vs-3.12 gap is therefore the only difference between this transcript
+# and CI, and it is a local-toolchain artefact, not a source difference.
+#
+........................................................................ [ 25%]
+........................................................................ [ 50%]
+........................................................................ [ 76%]
+...................................................................      [100%]
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.2-final-0 _______________
+Name                                     Stmts   Miss  Cover
+------------------------------------------------------------
+sophia\backend\__init__.py                   0      0   100%
+sophia\backend\ai\__init__.py                0      0   100%
+sophia\backend\ai\chat_prompt.py            20      0   100%
+sophia\backend\ai\dispute_prompt.py         41      1    98%
+sophia\backend\ai\guard.py                  21      0   100%
+sophia\backend\ai\ollama_client.py           6      3    50%
+sophia\backend\ai\schemas.py                46      1    98%
+sophia\backend\app.py                       41     14    66%
+sophia\backend\clients\__init__.py           0      0   100%
+sophia\backend\clients\bills_db.py         137     18    87%
+sophia\backend\clients\transactions.py      29      0   100%
+sophia\backend\config.py                    11      0   100%
+sophia\backend\engine\__init__.py           32      0   100%
+sophia\backend\engine\calendar.py           58      0   100%
+sophia\backend\engine\dates.py              24      1    96%
+sophia\backend\engine\money.py              28      0   100%
+sophia\backend\engine\projection.py         63      1    98%
+sophia\backend\engine\status.py             43      1    98%
+sophia\backend\json_body.py                  7      0   100%
+sophia\backend\routes\__init__.py            0      0   100%
+sophia\backend\routes\bills.py              25      3    88%
+sophia\backend\routes\chat.py               26      1    96%
+sophia\backend\routes\disputes.py           28      7    75%
+sophia\backend\routes\fragments.py         427     36    92%
+sophia\backend\routes\handoff.py            27      0   100%
+sophia\backend\routes\payments.py           13      2    85%
+sophia\backend\routes\views.py              59     17    71%
+sophia\backend\services\__init__.py          0      0   100%
+sophia\backend\services\bills.py           110      3    97%
+sophia\backend\services\calendar.py         10      0   100%
+sophia\backend\services\chat.py            249     33    87%
+sophia\backend\services\disputes.py         58     13    78%
+sophia\backend\services\errors.py            8      0   100%
+sophia\backend\services\payments.py         51      0   100%
+------------------------------------------------------------
+TOTAL                                     1698    155    91%
+283 passed in 11.42s

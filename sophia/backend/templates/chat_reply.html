@@ -1,8 +1,13 @@
-{# One assistant reply, appended (beforeend) to .history after a POST /ui/chat. #}
+{# One assistant reply, appended (beforeend) to .history after a POST /ui/chat.
+   A proposal is NOT rendered here as its own card — the Suggestions panel
+   below the chat is the one surface for reviewing and deciding on it (two
+   live copies of the same Approve/Reject element meant two things to keep in
+   sync and two places for state to disagree). The reply just points at it;
+   the panel itself arrives refreshed, out of band, in this same response. #}
 <div class="message message-assistant">{{ reply }}</div>
-{% if preview %}
-<div class="preview-card">
-  <button class="confirm" hx-post="/bills-backend/ui/chat/apply" hx-vals='{{ preview | tojson }}' hx-target="closest .preview-card" hx-swap="outerHTML">Confirm</button>
-  <button class="keep-it" type="button" data-action="dismiss-preview">Keep it</button>
-</div>
+{% if suggestion_title %}
+{# The title comes from the suggestion row, not the model's prose — when the
+   two disagree ("ending Netflix" vs "Update Prime Video"), this line is the
+   honest one. #}
+<p class="suggestion-pointer">Proposed: <strong>{{ suggestion_title }}</strong> — review it in Suggestions below; nothing is saved until you approve.</p>
 {% endif %}

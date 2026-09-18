@@ -1,0 +1,88 @@
+<section id="transactions-content"
+         class="panel transaction-form-screen">
+    <button type="button"
+            class="back-button"
+            hx-get="/transactions-backend/ui/transactions/page"
+            hx-target="#transactions-content"
+            hx-swap="outerHTML">
+        &larr; Back to transactions
+    </button>
+
+    <h1>Add a transaction</h1>
+    <p>Fill in the transaction details and choose a category before saving.</p>
+
+    <form id="add-transaction-form"
+          class="transaction-form"
+          hx-post="/transactions-backend/ui/transactions"
+          hx-target="#transactions-content"
+          hx-swap="outerHTML"
+          hx-disabled-elt="#save-transaction-button">
+        <div class="transaction-form-grid">
+            <div class="transaction-form-field">
+                <label for="transaction-date">Date</label>
+                <input id="transaction-date"
+                       name="date"
+                       type="date"
+                       value="{{ values.date }}"
+                       required>
+            </div>
+
+            <div class="transaction-form-field">
+                <label for="transaction-amount">Amount</label>
+                <input id="transaction-amount"
+                       name="amount"
+                       type="number"
+                       min="0"
+                       step="0.01"
+                       value="{{ values.amount }}"
+                       placeholder="0.00"
+                       required>
+            </div>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-merchant">Merchant</label>
+            <input id="transaction-merchant"
+                   name="merchant"
+                   type="text"
+                   maxlength="200"
+                   value="{{ values.merchant }}"
+                   placeholder="Woolworths Town Hall"
+                   required>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-description">Description</label>
+            <textarea id="transaction-description"
+                      name="description"
+                      maxlength="500"
+                      placeholder="What was the transaction for?"
+                      required>{{ values.description }}</textarea>
+        </div>
+
+        <div class="transaction-form-field">
+            <label for="transaction-category">Category</label>
+            <select id="transaction-category"
+                    name="category_id"
+                    required>
+                <option value="">Select a category</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}"
+                        {% if values.category_id|string == category.id|string %}selected{% endif %}>
+                    {{ category.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% if error %}
+        <p class="form-message" role="alert">{{ error }}</p>
+        {% endif %}
+
+        <div class="transaction-form-actions">
+            <button id="save-transaction-button" type="submit">
+                Save transaction
+            </button>
+        </div>
+    </form>
+</section>

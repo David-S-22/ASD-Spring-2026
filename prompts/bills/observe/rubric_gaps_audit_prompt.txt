@@ -1,0 +1,217 @@
+PROMPT — Close the rubric gaps, with a full evidence audit first
+Stage: OBSERVE · Run: 31 Aug 2026 · Tool: Claude Code, from the repo root
+Purpose: audit all ten rubric criteria against the head, verify every claim
+         in my drafted report sections, then close the gaps that are mine —
+         chiefly a terminal Plan → Act → Observe → Adapt loop, which the
+         repo did not have.
+Outcome: the rubric evidence audit; the shared agentic loop (#78, #88), its
+         committed sample run (#82), and the shell evidence (#89, #91).
+Condensed for readability; the read-only audit ended with a STOP and each
+later phase was unlocked with "go". The Lab 4 source the loop was ported
+from is described by shape, not by path.
+
+---
+
+## Context
+
+I am Sophia Nguyen (zfere), Student 5, Bills List & Dispute Assistant.
+Read your notes from earlier sessions first.
+
+**What changed.** The Release 0 marking rubric has been found — it lives on
+the assignment page, not a module page — and the 29 Aug audit note's "no R0
+rubric exists" is wrong; treat this prompt's rubric text as authoritative.
+It changes the picture in three ways:
+
+1. **Criterion 4 and criterion 5 are different things.** Criterion 4 is the
+   Plan → Act → Observe → Adapt loop "implemented, **demonstrated in the
+   terminal**, and logged in the technical report", reviewing the database,
+   implementation, microservices architecture and DevOps pipeline.
+   Criterion 5 is prompt-engineering and context-management artefacts used
+   **during software development**. My prompt files, PR trail and audit
+   answer 5, not 4. **Nothing in this repo satisfies 4** — there is no
+   `agentic_loop/`, no root `prompts/`, and `scripts/` is empty.
+2. **Data design is an individual report deliverable** (conceptual, ERD,
+   logical, physical) and my drafted sections don't have it.
+3. **Six of the ten criteria are group-level**, so my finished feature caps
+   out around four marks on its own.
+
+My Bills code itself is done: the nan/inf guard, the Ollama container
+wiring and the evidence refresh to 159 passed / 88 % are all merged.
+Deadlines: freeze Wed 2 Sep, video Thu 3, showcase Fri 4, group PDF Sun 6.
+
+## The rubric — 10 criteria, 2 marks each (use verbatim as the checklist)
+
+| # | Criterion | Full marks means |
+|---|---|---|
+| 1 | Project Setup | Repository structure, directories, integrated microservices, populated databases, AI-Mode, GitHub Actions, Docker Compose, **unified index.html** and **shared CSS theme** correctly configured. |
+| 2 | Service Implementation | Frontend, backend/API and database microservices integrated and operational within the group application. |
+| 3 | AI-Mode Integration | AI-Mode via Ollama and an approved LLM, **callable from the frontend**. |
+| 4 | Agentic AI Workflow | PAOA workflow **implemented, demonstrated, and documented** — "demonstrated in the terminal, and logged in the technical report", reviewing the database, implementation, architecture and DevOps pipeline. |
+| 5 | Prompt Engineering and Context Management | Artefacts **documented and clearly supporting software development**. |
+| 6 | DevOps and GitHub Actions | Workflows build and validate the assigned microservices. |
+| 7 | Docker Compose Integration | **One shared** Compose configuration builds and runs the integrated application. |
+| 8 | Working Software | Fully functional CRUD through frontend, backend/API and database. |
+| 9 | Technical Report | All required Release 0 documentation and evidence present. |
+| 10 | Project Demonstration | Video demonstrates the feature, AI-Mode, **and the CI/CD workflow and deployment steps**. |
+
+The assignment page's report sections, for the criterion-9 check: project
+overview · analysis and planning (Agile plan, backlog, FR/NFR, individual
+feature plan, risk plan, **data design at four levels**) · repository
+structure · individual, integrated and Compose architecture · **DevOps
+pipeline architecture** · PAOA diagram · workflow file descriptions ·
+implementation summary · Actions and Compose evidence · **Agentic Loop
+Workflow Record** · known issues · commit and contribution logs · video URL.
+Also for criterion 1: a *shared containerised HTMX index.html routing to
+all five frontends* — containerised and referenced from Compose, not merely
+a file.
+
+## Hard scope rules
+
+1. Normal territory: `sophia/**`, my three compose blocks, `Sophia-CI.yml`,
+   `docs/release-0/sophia/**`, and my own report notes.
+2. **One deliberate exception, Phase 2 only:** new root-level
+   `agentic_loop/`, `prompts/` and `reports/`. Normally team territory, so
+   it ships as a **draft PR offered to the team**: purely additive, new
+   files only, no edits to existing team files except a short README
+   section, and no touching `docker-compose.yml`, `shared/`,
+   `ai-services/` or anyone's student directory.
+3. Everything else read-only; problems elsewhere are listed, never fixed —
+   explicitly including PR #67.
+4. Concurrent-work rule as before, now also for `agentic_loop/`. Rebase
+   before every push; never force-push.
+5. No push without "push". No merging; draft PRs. No new dependencies in
+   `sophia/**`; the loop gets its own `agentic_loop/requirements.txt`.
+6. Build exactly what the rubric and assignment page ask for. No invented
+   sections, extra review modes or "nice to have" refactors.
+
+## Phase 0 — establish state
+
+Pull `main`, record head. Confirm the three merged fixes are on this head;
+run the suite and report the real numbers — later phases use those, not
+159/88. Report the state of the final-screenshot branch and cross-check the
+screenshot folder against the shot list. Search the whole repo and all
+branches for any agentic loop someone has added since. Confirm `shared/`
+still lacks `index.html`.
+
+## Phase 1 — read-only rubric evidence audit
+
+**Nothing is modified.** A per-criterion verdict for all ten — MET /
+PARTIAL / NOT MET / NOT MINE — with the concrete evidence checked and, where
+it is mine, the smallest change that moves it up a band.
+
+- **Team-level criteria (1, 4, 7, 10) are reported, never fixed.** Say
+  precisely what is missing, phrased so I can paste it into a team message.
+- **Verify, don't trust.** Every number, path, URL and count in my drafted
+  report sections gets checked against the repo: a claim-by-claim table —
+  claim → source line → true / stale / wrong → correct value. Test counts,
+  coverage, the Actions run URL and count, PR numbers, seed row counts, and
+  every `[SCREENSHOT n]` marker, which must map to a file that exists.
+- **Criterion 5 inventory.** Every prompt-engineering artefact that exists
+  and where it lives: the versioned session prompt files, the runtime
+  prompt modules (`chat_prompt.py`, `dispute_prompt.py`, `schemas.py`,
+  `guard.py`), the audit note, the PR trail — and whether each is
+  referenced in the report, because an artefact that exists only in my
+  notes earns nothing.
+- **Criterion 9 section-by-section**, naming every missing or thin section.
+- **PR #67 (read-only).** Confirm whether it calls a model the
+  `ai-services` setup script does not pull; if so, draft a short, friendly
+  message to its author with the two options. Say plainly whether #67
+  satisfies criterion 4 — it is a runtime HTTP endpoint, and criterion 4
+  asks for a terminal demonstration.
+
+Write the audit, then output the surviving work plan with time estimates.
+
+## Phase 2 — port the terminal agentic loop
+
+Branch `feat/agentic-loop`, purely additive. The source is my Lab 4 build:
+a menu-driven `main.py`; a prompt registry resolving
+`prompts/<family>/<file>.txt` and failing loudly; an OpenAI-compatible
+client with separate implementation and review models; an orchestrator
+(OBSERVE → load prompts → LLM → review model); collectors for db,
+endpoints and architecture; and prompt families under `prompts/`. Port it
+with these changes and no others:
+
+1. **Path resolution.** `agentic_loop/` now sits at the repo root; both
+   roots resolve there. No `.env` in the repo — document the variables.
+2. **Rewrite the collectors for this application.** `db`: the spec forbids
+   reaching another feature's SQLite file, so collect over **HTTP from each
+   student's database API**, reading the services out of
+   `docker-compose.yml` rather than hardcoding ports; per service report
+   reachable or not, row counts, and whether the ≥10 minimum is met —
+   unreachable services are evidence, not an error. `endpoints`: a live
+   sweep of the backends discovered from Compose, keeping the
+   status-plus-latency format (latency doubles as NFR timing evidence).
+   `architecture`: service inventory and dependency edges from Compose, the
+   student directory layout, and whether the spec's required directories
+   exist and are populated — it should surface the missing
+   `shared/index.html` on its own. **`devops` — new**: the workflow files,
+   which student each maps to, their jobs, the latest run conclusion per
+   workflow if `gh` is available, and the `student-N.yml` naming deviation
+   as a finding.
+3. **Add the ADAPT stage.** After the review model, a human
+   accept / reject / edit step at the terminal, recorded in the run record
+   — exactly what criterion 4 asks to be demonstrated.
+4. **Add a run recorder.** `reports/report.json`, `report.md` and
+   `run-view.md` per run: stage transitions, evidence, prompt family and
+   filenames, model names, model output, human decision. `reports/` is
+   gitignored; one committed sample run lives under
+   `docs/release-0/agentic-loop/`.
+5. **Models and endpoint.** OpenAI-compatible `/v1` on localhost — this
+   loop runs on the host, so it does not conflict with Bills' native
+   `/api/chat` client. Implementation `qwen2.5:0.5b`, review `llama3.1:8b`
+   — the two the setup script pulls. No third model.
+6. **Prompts.** Externalised `.txt` files per family under `prompts/`,
+   named for this project — that layout is itself criterion-5 evidence.
+7. **`agentic_loop/README.md`** — how to run it, the environment
+   variables, the prerequisite that the app and `ollama` are up, and that
+   each student's prompt assets live under `prompts/`.
+
+Draft PR "Add shared terminal agentic loop (Plan → Act → Observe → Adapt)"
+— body quotes the criterion-4 wording, explains the externalised prompts,
+and says plainly that it is offered to the team, not imposed.
+
+## Phase 3 — run it and capture the evidence (gated on Phase 2)
+
+Bring up the group application including `ollama`. Run every mode from a
+terminal, including the human adapt step, and capture: the full terminal
+transcript, the generated report files, and screenshots of the stage
+transitions — "demonstrated in the terminal". If a mode fails because a
+teammate's service is absent, keep the failing run and annotate it: a loop
+that honestly reports missing services is better evidence than a doctored
+clean run.
+
+## Phase 4 — data design section (notes only)
+
+For the Bills schema at the four levels the page names — conceptual in
+plain language; an ERD as a Mermaid `erDiagram`; logical (tables, columns,
+types, nullability, defaults, keys, normal form); physical (the SQLite DDL
+as deployed, indexes, cascade behaviour, seed counts). Source it from the
+schema in the running container and `schema-adoption.md`; if code and doc
+disagree, the code wins and you tell me. Cross-reference the additive
+columns already declared in the known-issues note rather than restating.
+
+## Phase 5 — finish the screenshot set (gated on Phase 0's finding)
+
+Only the shots Phase 0 found missing, on the final build with a fresh seed
+and `DEMO_TODAY=2026-08-20`. Shot 12 needs `shared/index.html` — if it still
+doesn't exist, skip it and leave the known-issues fallback; do not fake it.
+
+## Phase 6 — report text (notes only; last)
+
+Apply every correction from the Phase 1 claim table; insert the data
+design section and the Agentic Loop Workflow Record; add the criterion-5
+subsection — prompt-file excerpts as PLAN artefacts, the PR trail as ACT,
+the test suite, CI runs and self-audit as OBSERVE, the fix PRs as ADAPT —
+stating the context-management practice explicitly: scoped prompts, phase
+gates, verification before implementation, versioned prompts. Reconcile
+the known-issues note with reality and correct the earlier audit's
+rubric-existence error with one dated line.
+
+## Closing report
+
+Head at start and end · the per-criterion verdict table · how many report
+claims were stale or wrong · PR URLs · final test and coverage numbers ·
+loop status (modes working, modes blocked on absent services) ·
+screenshot set status · what remains gated and on whom · the drafted
+messages to the #67 author and to the team · anything noticed outside
+scope (list only).

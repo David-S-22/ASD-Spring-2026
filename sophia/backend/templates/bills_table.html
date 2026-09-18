@@ -1,6 +1,12 @@
-{# Bills table fragment: Name / Amount / Every / Next billing / Paid by / Status. #}
+{# Bills table fragment, single-page layout: Name / Amount / Next billing /
+   Status / actions. The monthly total moved into the header line; Every and
+   Paid by moved off the table (they live in the Edit form) — four data
+   columns scan, seven didn't. #}
 <div class="bills-panel" id="bills-table">
-  <h2>Bills &amp; subscriptions · {{ monthly_total }}</h2>
+  <div class="bills-head">
+    <h2>Bills &amp; subscriptions</h2>
+    <span class="monthly-total">{{ monthly_total }} per month</span>
+  </div>
   {# tabindex makes the region focusable so it can be scrolled without a mouse
      (WCAG 2.1.1); the role/label give that focus stop a name in a screen
      reader instead of announcing an anonymous group. #}
@@ -8,10 +14,7 @@
   <table class="bills-table">
     <thead>
       <tr>
-        {# The last column was <th></th> -- an unnamed column, which a screen
-           reader announces as nothing at all. The label is visually hidden
-           rather than shown so the header row's widths are unchanged. #}
-        <th scope="col">Name</th><th scope="col">Amount</th><th scope="col">Every</th><th scope="col">Next billing</th><th scope="col">Paid by</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th>
+        <th scope="col">Name</th><th scope="col">Amount</th><th scope="col">Next billing</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th>
       </tr>
     </thead>
     <tbody>
@@ -19,39 +22,38 @@
       <tr data-bill-id="{{ bill.id }}">
         <td>{{ bill.name }}</td>
         <td>{{ bill.amount }}</td>
-        <td>{{ bill.cadence_label }}</td>
         <td>{{ bill.next_billing }}</td>
-        <td>{{ bill.payment_method_label }}</td>
         <td class="status">
           <span class="chip chip-{{ bill.status_tone }}">{{ bill.status_label }}</span>
           {% if bill.needs_confirmation %}
           <span class="confirm-prompt">Added from Spending Alerts — keep it?</span>
-          <button class="confirm btn-sm" data-confirm="Keep {{ bill.name }} in your bills?" hx-post="/bills-backend/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
           {% endif %}
         </td>
-        {# Edit stays inline; the other three move behind a disclosure. The four
-           of them together are ~35 characters of button text, which wrapped onto
-           FOUR lines in the shell's ~684px table track and made every row 135px
-           tall (measured 2 Sep, both figures worse than the 3-lines/94px this
-           file's older comments claimed; the track reads 684-696px depending on
-           whether the panel is showing a scrollbar).
+        {# The mock's visible actions: Confirm for an unconfirmed handoff,
+           Cancel… for a live subscription. Everything else (Edit, Dispute,
+           Record payment, Cancel for plain bills) keeps working from the
+           disclosure menu — simplified presentation, same functionality.
 
-           <details> rather than a scripted dropdown, for two reasons that both
-           matter here. It stays in normal flow, so .table-scroll's overflow:auto
-           cannot clip it -- an absolutely-positioned panel would be cut off on
-           exactly the bottom rows where a menu is most likely to open downward.
-           And the server never emits `open`, so all eight paths that replace
-           #bills-table reset every menu for free: no state to persist across a
-           swap, and no listener that can go stale against a detached row. #}
+           <details> rather than a scripted dropdown: it stays in normal flow
+           so .table-scroll's overflow can't clip it, and the server never
+           emits `open`, so every path that replaces #bills-table resets the
+           menus for free. #}
         <td class="actions">
           <div class="row-actions">
-            <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+            {% if bill.needs_confirmation %}
+            <button class="confirm btn-sm" data-confirm="Keep {{ bill.name }} in your bills?" hx-post="/bills-backend/ui/bills/{{ bill.id }}/confirm" hx-target="#bills-table" hx-swap="outerHTML">Confirm</button>
+            {% elif bill.type == "subscription" and not bill.ended %}
+            <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+            {% endif %}
             <details class="row-menu">
-              {# Without the per-bill label these are twelve identical "⋯"
-                 controls to a screen reader. aria-expanded comes free. #}
+              {# Without the per-bill label these are identical "⋯" controls
+                 to a screen reader. aria-expanded comes free. #}
               <summary class="row-menu-toggle" aria-label="More actions for {{ bill.name }}">⋯</summary>
               <div class="row-menu-items">
+                <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/edit" hx-target="#modal-root">Edit</button>
+                {% if not (bill.type == "subscription" and not bill.ended) and not bill.needs_confirmation %}
                 <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/cancel-form" hx-target="#modal-root">Cancel…</button>
+                {% endif %}
                 <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/dispute-form" hx-target="#modal-root">Dispute</button>
                 <button class="btn-sm" hx-get="/bills-backend/ui/bills/{{ bill.id }}/payment-form" hx-target="#modal-root">Record payment</button>
               </div>
@@ -61,7 +63,7 @@
       </tr>
       {% endfor %}
       {# Toggled by the client-side filter in app.js; never rendered by the server. #}
-      <tr class="no-match" hidden><td colspan="7">No bills match that search.</td></tr>
+      <tr class="no-match" hidden><td colspan="5">No bills match that search.</td></tr>
     </tbody>
   </table>
   </div>

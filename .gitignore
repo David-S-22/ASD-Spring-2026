@@ -8,4 +8,5 @@ __pycache__/
 *.swp
 pytest.ini
 .vs
+reports/
 .mypy_cache/

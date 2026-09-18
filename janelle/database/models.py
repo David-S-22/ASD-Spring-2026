@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 
-def _casefold(value):
+def casefold_value(value):
 	return value.casefold() if isinstance(value, str) else value
 
 
@@ -38,7 +38,12 @@ def _casefold(value):
 def configure_sqlite_connection(database_connection, _connection_record):
 	if not isinstance(database_connection, sqlite3.Connection):
 		return
-	database_connection.create_function("casefold", 1, _casefold, deterministic=True)
+	database_connection.create_function(
+		"casefold",
+		1,
+		casefold_value,
+		deterministic=True,
+	)
 	database_connection.execute("PRAGMA foreign_keys = ON")
 	database_connection.execute("PRAGMA busy_timeout = 5000")
 

@@ -1,0 +1,16 @@
+{# Appended out of band to the chat history after a rejection — the Observe→
+   Adapt half of the loop. Tally has just seen the "[suggestion #N rejected]"
+   note in its transcript and responds to it now, without waiting for the
+   user's next message: a question about what to change, or (when the fix was
+   obvious from the conversation) a corrected proposal, which arrives as a
+   fresh pending suggestion in the panel this same response refreshes.
+
+   The outer div is a wrapper only: for selector-targeted oob inserts htmx
+   strips the element carrying hx-swap-oob and inserts its CHILDREN, so the
+   real markup lives inside it. #}
+<div hx-swap-oob="beforeend:#chat-history">
+  <div class="message message-assistant">{{ reply }}</div>
+  {% if suggestion_title %}
+  <p class="suggestion-pointer">Proposed: <strong>{{ suggestion_title }}</strong> — review it in Suggestions below; nothing is saved until you approve.</p>
+  {% endif %}
+</div>

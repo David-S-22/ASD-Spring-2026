@@ -56,7 +56,7 @@ FIXTURE_TRANSACTIONS = (
 )
 
 
-def _fixture_rows():
+def fixture_rows():
 	rows = []
 	for transaction_id, transaction in enumerate(FIXTURE_TRANSACTIONS, start=1):
 		transaction_date, merchant, description, amount, category_id = transaction
@@ -76,7 +76,7 @@ def _fixture_rows():
 	return rows
 
 
-TRANSACTIONS = tuple(_fixture_rows()) + (
+TRANSACTIONS = tuple(fixture_rows()) + (
 	(26, "2026-08-20", "Spotify AU", "Monthly subscription", "17.99", 32, "2026-08-20T12:00:00+00:00", "2026-08-20T12:00:00+00:00"),
 	(27, "2026-08-09", "Merivale", "Dinner", "84.50", 80, "2026-08-09T12:00:00+00:00", "2026-08-10T09:00:00+00:00"),
 	(28, "2026-08-16", "Merivale", "Lunch", "42.00", 80, "2026-08-16T12:00:00+00:00", "2026-08-16T12:00:00+00:00"),
@@ -95,13 +95,13 @@ CATEGORY_CORRECTIONS = (
 )
 
 
-def _seed_datetime(value):
+def seed_datetime(value):
 	return datetime.fromisoformat(value).replace(tzinfo=None)
 
 
 def seed_database_if_empty():
 	try:
-		if any(_seed_counts().values()):
+		if any(seed_counts().values()):
 			return
 
 		for category_row in CATEGORIES:
@@ -117,13 +117,13 @@ def seed_database_if_empty():
 			db.session.add(
 				Transaction(
 					id=transaction_row[0],
-					date=_seed_datetime(transaction_row[1]),
+					date=seed_datetime(transaction_row[1]),
 					merchant=transaction_row[2],
 					description=transaction_row[3],
 					amount=Decimal(transaction_row[4]),
 					category_id=transaction_row[5],
-					created_at=_seed_datetime(transaction_row[6]),
-					updated_at=_seed_datetime(transaction_row[7]),
+					created_at=seed_datetime(transaction_row[6]),
+					updated_at=seed_datetime(transaction_row[7]),
 				)
 			)
 
@@ -144,7 +144,7 @@ def seed_database_if_empty():
 		raise
 
 
-def _seed_counts():
+def seed_counts():
 	return {
 		"categories": db.session.scalar(select(func.count(Category.id))),
 		"transactions": db.session.scalar(select(func.count(Transaction.id))),

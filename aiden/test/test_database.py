@@ -52,6 +52,27 @@ def test_delete_anomaly_by_transaction(client: FlaskClient):
     assert response.status_code == 204
     assert client.get(f"/anomalies/{anomaly.id}").status_code == 404
 
+def test_get_anomaly_by_transaction_returns_anomaly(client: FlaskClient):
+    anomaly = create_anomaly(client, id=0, transaction_id=501, agent_reason_suspected="beans", is_confirmed_by_user=False)
+
+    response = client.get(f"/anomalies/by-transaction/{anomaly.transaction_id}")
+
+    assert response.status_code == 200
+    assert isinstance(response.json, dict)
+    assert response.json["id"] == anomaly.id
+    assert response.json["transaction_id"] == 501
+    assert response.json["agent_reason_suspected"] == "beans"
+
+
+def test_get_anomaly_by_transaction_not_found_returns_404(client: FlaskClient):
+    response = client.get("/anomalies/by-transaction/999999")
+
+    assert response.status_code == 404
+    assert isinstance(response.json, dict)
+    assert response.json["code"] == 404
+    assert response.json["name"] == "Not Found"
+
+
 def test_delete_anomaly_that_doesnt_exist(client: FlaskClient):
     by_id = client.delete("/anomalies/999999")
     by_transaction = client.delete("/anomalies/by-transaction/999999")
