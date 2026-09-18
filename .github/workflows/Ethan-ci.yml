@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: docker compose build budgets-frontend budgets-backend budgets-db
-      - run: docker compose up -d budgets-frontend budgets-backend budgets-db
+      - run: docker compose up -d budgets-frontend budgets-backend budgets-db --no-deps
       - run: sleep 3
       - name: Check frontend availability
         run: curl --fail http://127.0.0.1:3006/ || exit 1
