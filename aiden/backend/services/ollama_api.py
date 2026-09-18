@@ -21,8 +21,8 @@ def prompt(*, system_prompt: str, user_prompt: str, model: str, temperature: flo
     mcp = Mcp(
         type="mcp",
         server_label="mcp-server",
-        server_url="https://google.com",
-        require_approval="never"
+        server_url=config.MCP_SERVER_URL,
+        require_approval="never",
     )
 
     response = client.responses.create(
@@ -32,8 +32,6 @@ def prompt(*, system_prompt: str, user_prompt: str, model: str, temperature: flo
         max_output_tokens=output_tokens,
         tools=[mcp],
         temperature=temperature)
-
-    response.reasoning
 
     logger.debug("Model response for %s: %s", model, response.output_text)
     usage = getattr(response, "usage", None)

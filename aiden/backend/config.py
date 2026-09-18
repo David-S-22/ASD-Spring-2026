@@ -57,6 +57,10 @@ class _Config:
     def OLLAMA_MODEL(self) -> str:
         return _resolve("OLLAMA_MODEL", str)
 
+    @property
+    def MCP_SERVER_URL(self) -> str:
+        return _resolve("MCP_SERVER_URL", _url)
+
     def check_all(self) -> None:
         """Resolve every configured variable, raising if any is missing or invalid.
 
@@ -69,6 +73,7 @@ class _Config:
             "TRANSACTIONS_DB_URL",
             "OLLAMA_URL",
             "OLLAMA_MODEL",
+            "MCP_SERVER_URL",
         ):
             try:
                 getattr(self, name)

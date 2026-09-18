@@ -15,6 +15,8 @@ Configuration such as service URLs, the model name, and polling timeouts is
 read from environment variables in `config.py`. Values are resolved lazily, so
 reading one raises a `RuntimeError` if the variable is unset or invalid;
 `config.check_all()` validates every variable up front (it runs on startup).
+The Compose deployment sets `MCP_SERVER_URL` to the host machine's MCP server
+at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
 
 ## Agentic workflow
 
