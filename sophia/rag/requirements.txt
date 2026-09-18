@@ -1,0 +1,3 @@
+# sophia/rag/bills.py only — builds the Bills corpus and pushes it to the shared RAG server.
+requests
+langchain-text-splitters

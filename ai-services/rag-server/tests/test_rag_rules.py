@@ -1,10 +1,14 @@
 """The rules a marker will ask about, tested without Chroma or Ollama doing any work."""
-import corpus
+import pytest
+
 import rag
 
 
 def _hit(tier, distance=0.3, id_="bills:bill/1", **meta):
-    return {"rank": 1, "id": id_, "feature": "bills", "tier": tier, "distance": distance, "text": "x", **meta}
+    row = {"rank": 1, "id": id_, "feature": "bills", "distance": distance, "text": "x", **meta}
+    if tier is not None:
+        row["tier"] = tier
+    return row
 
 
 class _FakeCollection:
@@ -27,12 +31,14 @@ def _fake_index(monkeypatch, rows):
     monkeypatch.setattr(rag, "_audit", lambda *a, **k: None)
 
 
-def test_confidence_categories():
+def test_confidence_categories_and_optional_tier():
     assert rag.confidence([]) == "Unknown"
     assert rag.confidence([_hit(1), _hit(1), _hit(2)]) == "High"
     assert rag.confidence([_hit(1)]) == "Medium"
     assert rag.confidence([_hit(2), _hit(2)]) == "Medium"
     assert rag.confidence([_hit(2)]) == "Low"
+    assert rag.confidence([_hit(None), _hit(None)]) == "Medium"      # no tier → counts as a doc
+    assert rag.confidence([_hit(None)]) == "Low"
 
 
 def test_insufficient_context_is_decided_by_distance(monkeypatch):
@@ -42,6 +48,13 @@ def test_insufficient_context_is_decided_by_distance(monkeypatch):
     assert out["relevant"] == [] and out["citations"] == [] and out["context"] == ""
     assert out["confidence_category"] == "Low"
     assert len(out["results"]) == 2                      # the caller can still see what was nearest
+
+
+def test_unknown_feature_is_insufficient_not_an_error(monkeypatch):
+    monkeypatch.setattr(rag, "indexed_features", lambda: {})
+    monkeypatch.setattr(rag, "_audit", lambda *a, **k: None)
+    out = rag.retrieve_context("anything", "savings", 5)
+    assert out["insufficient_context"] is True and out["results"] == []
 
 
 def test_relevant_bundle_carries_context_citations_and_confidence(monkeypatch):
@@ -60,20 +73,17 @@ def test_relevant_bundle_carries_context_citations_and_confidence(monkeypatch):
     assert len(out["results"]) == 4 and len(out["relevant"]) == 3
 
 
-def test_doc_chunks_extract_section_metadata(tmp_path):
-    doc = tmp_path / "api.md"
-    doc.write_text("# Bills API\n\nThe Bills backend exposes bills, payments and disputes over HTTP.\n\n"
-                   "## Ports\n\nSee compose.\n\n"
-                   "## Overdue rules\n\nA bill is overdue when today is past next_billing_date.\n")
-    chunks = corpus.doc_chunks(doc, "bills")
-    assert [c["metadata"]["section"] for c in chunks] == ["Bills API", "Overdue rules"]   # "Ports" too short to be evidence
-    assert chunks[1]["metadata"]["doc"] == "api.md" and chunks[1]["metadata"]["tier"] == 2
-    assert chunks[1]["text"].startswith("Overdue rules: A bill is overdue")
-    assert corpus.doc_chunks(tmp_path / "missing.md", "bills") == []
-
-
-def test_row_chunk_drops_none_and_keeps_columns():
-    c = corpus.row_chunk("bills", "dispute", 2, "Dispute #2 ...", bill_id=12, status=None, opened="2026-08-16")
-    assert c["id"] == "bills:dispute/2"
-    assert c["metadata"] == {"feature": "bills", "tier": 1, "record": "dispute", "record_id": 2,
-                             "bill_id": 12, "opened": "2026-08-16"}
+def test_ingest_validation_is_only_chromas_contract():
+    ok = [{"id": "bills:bill/1", "text": "Bill #1", "metadata": {"tier": 1, "amount_cents": 2499, "active": True}}]
+    rag._validate("bills", ok)                                                   # id, text, flat scalars → fine
+    rag._validate("bills", [{"id": "x", "text": "no metadata at all"}])          # metadata optional
+    with pytest.raises(ValueError, match="feature"):
+        rag._validate("", ok)
+    with pytest.raises(ValueError, match="non-empty list"):
+        rag._validate("bills", [])
+    with pytest.raises(ValueError, match="'id' and 'text'"):
+        rag._validate("bills", [{"id": "x"}])
+    with pytest.raises(ValueError, match="duplicate"):
+        rag._validate("bills", ok + ok)
+    with pytest.raises(ValueError, match="str/int/float/bool"):
+        rag._validate("bills", [{"id": "x", "text": "y", "metadata": {"tags": ["a", "b"]}}])

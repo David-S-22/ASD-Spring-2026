@@ -1,21 +1,24 @@
-# Shared RAG server (Release 1) — context retrieval
+# Shared RAG server (Release 1) — store and retrieve
 
 One server process on the host, **127.0.0.1:5003**, with exactly one application client: the
-**MCP server's context tool**. It ingests each feature's knowledge into its own ChromaDB
-collection and, for a question, returns the relevant context together with the evidence a
-grounded answer needs: **citations**, a **confidence category** and the **insufficient-context**
-decision. It does not call a chat model. Feature backends never call this server; they call the
-MCP tool, and take the bundle it relays into their own prompt and their own model.
+**MCP server's context tool**. Each feature pushes its own corpus into its own ChromaDB collection
+(`POST /ingest`), chunked however that feature likes, from a script in that feature's folder.
+For a question, the server returns the relevant context together with the evidence a grounded
+answer needs: **citations**, a **confidence category** and the **insufficient-context** decision.
+It does not chunk anything and it does not call a chat model. Feature backends never call this
+server; they call the MCP tool, and take the bundle it relays into their own prompt and their
+own model.
 
 ```
-frontend ──▶ feature backend ──▶ MCP server (host :8000) ── context tool ──▶ RAG server (host 127.0.0.1:5003)
-                                                                                 │ Chroma: rag_<feature>
-                  backend prompt + own model ◀── bundle ◀──────────────────────────┘
+<you>/rag/<feature>.py ──POST /ingest──▶ RAG server (host 127.0.0.1:5003) ──▶ Chroma: rag_<feature>
+                                                    ▲
+frontend ──▶ feature backend ──▶ MCP server (host :8000) ── retrieve_context tool ──┘
+                  backend prompt + own model ◀── bundle (context, citations, confidence, insufficient)
 ```
 
 The server binds to the loopback interface on purpose: containers cannot reach `127.0.0.1` via
 `host.docker.internal`, so there is no direct path from any backend. Host-side validation (curl,
-`eval.py`, the agentic loop) uses the same `localhost:5003`.
+`eval.py`, the agentic loop) and each feature's ingest script use the same `localhost:5003`.
 
 ## Run it
 
@@ -25,7 +28,7 @@ docker exec ollama ollama pull nomic-embed-text   # once per machine — or add 
 cd ai-services/rag-server
 pip install -r requirements.txt
 python server.py                      # http://localhost:5003
-curl -s -X POST localhost:5003/refresh
+python ../../sophia/rag/bills.py      # each feature pushes its own corpus
 ```
 
 Not a Compose service (the assessment requires the RAG server to stay non-containerised), and
@@ -38,15 +41,28 @@ server's Compose wiring, not through a RAG URL of their own.
 | Endpoint | Input | Returns |
 |---|---|---|
 | `GET /health` | – | embed model, distance threshold, indexed features + chunk counts |
-| `GET /chunks` | `feature`, `where`? (JSON), `limit`? | what is indexed for that feature, with metadata |
-| `GET /benchmarks` | – | every feature's `BENCHMARKS` (the agentic loop's RAG mode runs these) |
-| `POST /refresh` | `feature`? | re-reads one feature's sources (or all); per-feature `loaders` report |
+| `POST /ingest` | `feature`, `chunks[]`, `replace`? | stores the chunks in that feature's collection |
 | `POST /retrieve` | `query`, `feature`, `k`=5, `where`? | the bundle below |
+| `GET /chunks` | `feature`, `where`? (JSON), `limit`? | what is indexed for that feature, with metadata |
+| `DELETE /chunks` | `feature` | drops that feature's collection |
+
+A chunk is Chroma's own contract, nothing more:
+
+```
+{"id": "bills:dispute/2",                         unique within your feature
+ "text": "Dispute #2 for bill #12 GymCo: …",      what gets embedded and shown to the model
+ "metadata": {"tier": 1, "record": "dispute", "status": "draft"}}   flat str/int/float/bool — optional
+```
+
+`replace: true` rebuilds the collection from exactly the chunks you send (a row that disappeared
+from your database disappears from the index); the default upserts, so several pushes add up.
+`tier` is the one metadata key the server reads: `1` = a database row (a fact), anything else or
+missing = a document. It feeds the confidence category only.
 
 `/retrieve` returns:
 
 ```
-results[]             every retrieved chunk: id, distance, text + the loader's metadata
+results[]             every retrieved chunk: id, distance, text + the metadata you pushed
 relevant[]            the subset within RAG_MAX_DISTANCE — the only chunks to show a model
 context               relevant chunks as "[id] text" lines, ready to paste into a prompt
 citations[]           id + metadata of each relevant chunk (source chips in the UI)
@@ -100,61 +116,73 @@ chunks), never the raw `results`.
 ## What each file is for
 
 - `server.py` — the thing you run. Flask routes that parse the request and call `rag.py`. Nothing clever.
-- `rag.py` — the retrieval logic: per-feature Chroma collections, `refresh_corpus`, `retrieve_context`
-  (Chroma `query` flattened into rows + the distance gate, citations and confidence), `chunks`.
-- `corpus.py` — where knowledge comes from: finds every loader in `sources/`, runs and validates it,
-  and provides the two extractors loaders use (`row_chunk`, `doc_chunks`). No vectors in here.
-- `config.py` — every setting, read from env with a localhost default (port, Ollama URL, embed model,
-  `RAG_MAX_DISTANCE`). Change things here, nowhere else.
-- `sources/_template.py` — copy me to `sources/<feature>.py`. Files starting with `_` are skipped.
-- `sources/bills.py` — worked example (Sophia's loader): rows from `:6005` as tier-1 sentences with
-  their columns as metadata, the four Bills docs as tier-2 chunks split by heading.
-- `sources/__init__.py` — empty; makes `sources/` importable so `corpus.py` can iterate it.
-- `eval.py` — asks the running server every feature's `BENCHMARKS` and prints P@5 / R@5 and the
-  insufficient-context check. This is the retrieval evidence for the report and how you tune
-  `RAG_MAX_DISTANCE`. Needs Ollama and the databases up.
+- `rag.py` — store and retrieve over Chroma: per-feature collections, `ingest`, `retrieve_context`
+  (Chroma `query` flattened into rows + the distance gate, citations and confidence), `chunks`,
+  `delete_feature`. No chunking, no model call.
+- `config.py` — every setting, read from env with a localhost default (port, bind address, Ollama URL,
+  embed model, `RAG_MAX_DISTANCE`). Change things here, nowhere else.
+- `eval.py` — runs one feature's `benchmarks.json` against the running server and prints P@5 / R@5 and
+  the insufficient-context check. This is the retrieval evidence for the report and how you tune
+  `RAG_MAX_DISTANCE`. Needs Ollama up and the feature's corpus pushed.
 - `tests/test_rag_rules.py` — pytest, no Chroma or Ollama needed: the confidence rule, the distance
-  gate, the bundle shape, the doc/row extractors.
+  gate, the bundle shape, the ingest validation.
 - `requirements.txt` — flask, requests, chromadb, ollama (Chroma's Ollama embedding function uses it).
 - `.gitignore` — the generated files: `chroma/` (the vector store) and `audit.jsonl` (one line per call).
 
-## How to add RAG feature
+## Add your feature (everything lives in your own folder)
 
-1. Copy `sources/_template.py` to `sources/<feature>.py`; set `FEATURE`.
-2. In `load_chunks()`, fetch your rows from your database API and write one plain sentence per row
-   with `corpus.row_chunk(...)` (money in dollars, dates as stored, useful columns as metadata).
-   Add your approved docs with `corpus.doc_chunks(config.REPO_ROOT / "docs/release-0/<you>/x.md", FEATURE)`.
-3. Fill `BENCHMARKS`: one question your rows answer, one your docs answer, one nothing answers
-   (`expect_insufficient`).
-4. `python -m pytest tests -q` · `curl -X POST localhost:5003/refresh -d feature=<feature>` ·
-   `curl "localhost:5003/chunks?feature=<feature>&limit=5"` · `python eval.py`. Commit only your loader.
+Write one script, `<you>/rag/<feature>.py`, that builds your chunks and posts them. How you chunk is
+yours. Chroma's recommended approach for markdown is LangChain's two splitters (header-aware, then
+size-limited — https://docs.trychroma.com/guides/build/chunking); `pip install langchain-text-splitters`
+is the whole dependency. `sophia/rag/bills.py` is a worked example: one plain sentence per database row
+with the row's columns as metadata (`tier: 1`), documents chunked with the LangChain splitters
+(`tier: 2`), then one `POST /ingest` with `replace: true`.
+
+```python
+requests.post("http://localhost:5003/ingest",
+              json={"feature": "savings", "replace": True, "chunks": chunks}, timeout=120).raise_for_status()
+```
+
+Next to it, `<you>/rag/benchmarks.json`: one question your rows answer, one your docs answer, one
+nothing answers (`expect_insufficient`). Then:
+
+```
+python <you>/rag/<feature>.py
+curl "localhost:5003/chunks?feature=<feature>&limit=5"
+python ai-services/rag-server/eval.py <you>/rag/benchmarks.json
+```
 
 ## Architectural decision (for the report)
 
-**Decision.** One shared, non-containerised RAG server on the host owns ingestion, indexing and
-retrieval for all five features, with one ChromaDB collection per feature. Its single
-application client is the shared MCP server's `retrieve_context` tool; feature backends reach
-retrieval only through that tool. The server returns retrieved context with citations, a
-confidence category and the insufficient-context decision; each feature's backend generates
-the grounded answer from that bundle with its own prompt and model.
+**Decision.** One shared, non-containerised RAG server on the host owns indexing and retrieval for
+all five features, with one ChromaDB collection per feature. Ingestion belongs to each feature:
+a script in the feature's own folder turns that feature's rows and documents into chunks, chunked
+as that feature sees fit, and pushes them to the server. The server's single application client is
+the shared MCP server's `retrieve_context` tool; feature backends reach retrieval only through
+that tool. The server returns retrieved context with citations, a confidence category and the
+insufficient-context decision; each feature's backend generates the grounded answer from that
+bundle with its own prompt and model.
 
 **Why.** The five features use different models and prompts and hold their knowledge in five
-separate databases. Keeping retrieval in one independently identifiable server gives the
-assessment a clear RAG boundary, one place where ingestion, indexing and retrieval occur, and
-one place where the evidence rules (what counts as relevant, how confidence is computed, when
-context is insufficient) are enforced identically for every feature. Per-feature collections
-keep feature knowledge separated without splitting the server. Routing all access through the
-MCP tool gives the integrated application one AI tool layer and one contract to validate, and
-binding the server to the loopback interface makes that the only path rather than a convention.
-Leaving generation in each backend preserves each feature's existing AI-Mode prompts and model
-choice and keeps the frontend unaware of both servers.
+separate databases, so the content of each corpus, and the right way to chunk it, is feature
+knowledge rather than shared knowledge. Keeping the shared part down to Chroma's own contract
+(an id, a text, flat metadata) means the server carries no opinion about anyone's data, while
+one independently identifiable server still gives the assessment a clear RAG boundary, one place
+where indexing and retrieval occur, and one place where the evidence rules (what counts as
+relevant, how confidence is computed, when context is insufficient) are enforced identically for
+every feature. Per-feature collections keep feature knowledge separated without splitting the
+server. Routing all access through the MCP tool gives the integrated application one AI tool
+layer and one contract to validate, and binding the server to the loopback interface makes that
+the only path rather than a convention. Leaving generation in each backend preserves each
+feature's existing AI-Mode prompts and model choice and keeps the frontend unaware of both servers.
 
 **Consequence.** Every backend follows the same two rules (no model call when
 `insufficient_context` is true; the model sees only `context`), so a request can be traced
 identically for any feature: frontend → backend → MCP `retrieve_context` tool → RAG
-`/retrieve` → bundle → backend prompt → model → answer with citations and confidence. Terminal
-validation of the RAG server is host-local (`curl localhost:5003`, `eval.py`, the agentic
-loop's RAG mode). The Assessment 2 page describes the RAG server as generating the grounded
-response; the team read the tutor's guidance (18 Sep) as accepting either placement provided
-the boundary, scoping and trace are documented, and chose backend generation for the reasons
-above. Adding a shared `/answer` endpoint later would be additive.
+`/retrieve` → bundle → backend prompt → model → answer with citations and confidence. Ingestion is
+traceable per feature (`<you>/rag/<feature>.py` → `POST /ingest` → `GET /chunks`), and terminal
+validation of the server is host-local (`curl localhost:5003`, `eval.py`, the agentic loop's RAG
+mode). The Assessment 2 page describes the RAG server as generating the grounded response; the
+team read the tutor's guidance (18 Sep) as accepting either placement provided the boundary,
+scoping and trace are documented, and chose backend generation for the reasons above. Adding a
+shared `/answer` endpoint later would be additive.
