@@ -236,9 +236,8 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
             app.logger.error(f"Error saving suggestion action: {e}")
             return jsonify({"error": f"Failed to save suggestion decision: {str(e)}"}), 500
 
-        next_suggestion = generate_savings_advice(db_url, tx_url)
         return make_response(
-            render_template("ai-suggestion.jinja", suggestion=next_suggestion, has_transactions=has_transactions),
+            render_template("ai-suggestion.jinja", suggestion=None, has_transactions=has_transactions, loading=True),
             200,
             {"HX-Trigger": "suggestionChanged, feedbackChanged"},
         )
