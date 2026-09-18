@@ -129,7 +129,12 @@ Compose supplies production-ready defaults. The backend reads:
 | `AI_TIMEOUT_SECONDS` | `90` | Ollama request timeout. |
 
 The database process reads `PORT` and `DB_PATH`; Compose uses port `6001` and
-`/app/data/transactions.db`. The frontend reads `PORT`; Compose uses `3001`.
+`/app/data/transactions.db`. When a transaction is deleted, the database also
+removes the associated anomaly by calling the anomalies database, reading
+`ANOMALIES_DB_URL` (default `http://anomalies-db:6004/anomalies`) and
+`ANOMALIES_TIMEOUT_SECONDS` (default `10`). This cleanup is best-effort: a
+failure to reach the anomalies database is logged and never fails the delete.
+The frontend reads `PORT`; Compose uses `3001`.
 
 ## Tests and probes
 

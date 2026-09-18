@@ -5,7 +5,8 @@ from flask import abort
 from requests import get, patch, post
 
 from shared.backend import dto
-from ..helpers import deserialise_or_abort, serialise, get_env
+from ..config import config
+from ..helpers import deserialise_or_abort, serialise
 
 
 def get_all_anomalies() -> List[dto.Anomaly]:
@@ -41,4 +42,4 @@ def set_confirmation(id: int, is_confirmed_by_user: bool) -> dto.Anomaly:
     return deserialise_or_abort(dto.Anomaly, resp.json())
 
 def _url(path: str) -> str:
-    return get_env("ANOMALIES_DB_URL") + path
+    return config.ANOMALIES_DB_URL + path

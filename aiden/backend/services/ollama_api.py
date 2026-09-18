@@ -4,7 +4,10 @@ from functools import lru_cache
 from openai import OpenAI
 from openai.types.responses.tool_param import Mcp
 
-from ..helpers import get_env
+from ..config import config
+
+
+logger = logging.getLogger(__name__)
 
 
 logger = logging.getLogger(__name__)
@@ -41,4 +44,4 @@ def prompt(*, system_prompt: str, user_prompt: str, model: str, temperature: flo
 
 @lru_cache(maxsize=1)
 def _get_client() -> OpenAI:
-    return OpenAI(base_url=get_env("OLLAMA_URL"), api_key="ollama", timeout=180)
+    return OpenAI(base_url=config.OLLAMA_URL, api_key="ollama", timeout=180)

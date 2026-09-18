@@ -14,6 +14,7 @@ from .helpers import (
 	category_name_exists,
 	filtered_transactions,
 )
+from .anomalies import delete_anomaly_by_transaction_id
 from .models import Category, CategoryCorrection, Transaction, db
 from .seed import seed_database_if_empty
 from .validation import (
@@ -271,10 +272,12 @@ def register_routes(application):
 					409,
 				)
 			db.session.commit()
+			delete_anomaly_by_transaction_id(transaction_id)
 			return "", 204
 
 		db.session.delete(resolve_transaction(transaction_id))
 		db.session.commit()
+		delete_anomaly_by_transaction_id(transaction_id)
 		return "", 204
 
 	@application.post("/transactions/<transaction_id>/category-correction")
