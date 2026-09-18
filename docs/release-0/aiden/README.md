@@ -11,10 +11,10 @@ server to provide the agent with structured retrieval and tool access.
 The frontend provides an anomaly list, transaction review controls, status
 updates, and confirmation or dismissal actions. A transaction can be submitted
 to the backend for asynchronous review. The backend places the transaction on
-an in-process queue and sends a structured prompt to the configured Ollama
-model. The model retrieves previously confirmed or dismissed findings as
-feedback examples through the MCP server. Suspicious findings are validated
-and persisted as anomaly records.
+an in-process queue, gathers transaction and anomaly context, and sends a
+structured prompt to the configured Ollama model. Suspicious findings are
+validated and persisted as anomaly records. Previously confirmed or dismissed
+findings are included as feedback context for later reviews.
 
 The anomalies database exposes a Flask REST API backed by SQLAlchemy and
 SQLite. Each anomaly stores the related transaction ID, the agent's reason, and
@@ -36,32 +36,29 @@ routes to the SQLAlchemy model, which persists records in SQLite.
 
 1. A transaction is submitted through `POST /check-transaction`.
 2. The backend validates the transaction and returns `202` after queueing it.
-3. A background worker passes the transaction to the agent.
-4. The agent calls the MCP tools
-   `get-transactions-with-confirmed-anomalies` and
-   `get-transactions-with-rejected-anomalies`, then prompts Ollama for a JSON
-   finding containing `is_suspicious` and `justification`.
+3. A background worker loads existing anomalies and transactions.
+4. The agent prompts Ollama for a JSON finding containing
+   `is_suspicious` and `justification`.
 5. Invalid model responses are retried up to four times with increasing
    temperature.
 6. Suspicious findings are saved to the anomalies database.
 7. The frontend polls `/anomaly-alert` for the completed review.
-8. Users can confirm or dismiss findings, making future reviewed examples
-   available through MCP.
+8. Users can confirm or dismiss findings, providing future review context.
 
 ### Plan–Act–Observe–Adapt loop
 
 The review is structured as a **Plan → Act → Observe → Adapt** loop:
 
-- **Plan** — the model calls the MCP tools for confirmed and dismissed
-  transactions, then evaluates the current transaction against those examples.
+- **Plan** — the backend gathers transaction and anomaly context and builds a
+  constrained prompt, folding in the user's previously confirmed and dismissed
+  findings as feedback.
 - **Act** — it sends the prompt to the Ollama model and persists any suspicious
   finding as an anomaly. (Malformed model responses are retried with increasing
   temperature — a robustness detail rather than part of the loop.)
 - **Observe** — the persisted finding is shown to the user, who confirms it as a
   true positive or dismisses it as a false positive.
-- **Adapt** — those reviewed confirm/dismiss decisions become MCP results for
-  the *next* review, so the agent aligns future judgements with the user's
-  feedback.
+- **Adapt** — those reviewed confirm/dismiss decisions become context for the
+  *next* review, so the agent aligns future judgements with the user's feedback.
 
 The [backend documentation](../../../aiden/backend.md#planactobserveadapt-workflow)
 describes this loop in detail, including a Mermaid diagram of the flow.
