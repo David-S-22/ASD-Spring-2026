@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from flask import current_app
 
 from shared.backend import dto
+from ..config import config
 from .ollama_api import prompt
-from ..helpers import serialise, get_env
+from ..helpers import serialise
 
 _detect_system_prompt = """
 
@@ -88,7 +89,6 @@ def review_new_transaction(
     anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
     detect_system_prompt = _detect_system_prompt.format(datetime.now().strftime("%Y-%m-%d"))
     detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
-    impl_model = get_env("OLLAMA_MODEL")
     review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
@@ -99,7 +99,7 @@ def review_new_transaction(
         response = prompt(
             system_prompt=detect_system_prompt,
             user_prompt=detect_user_prompt,
-            model=impl_model,
+            model=config.OLLAMA_MODEL,
             temperature=temperature,
             output_tokens=500)
 

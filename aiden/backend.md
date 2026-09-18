@@ -12,7 +12,9 @@ Transactions are submitted for review as `dto.Transaction` objects. The backend
 does not store transaction records itself; it retrieves transactions from the
 transactions database and sends detected anomalies to the anomalies database.
 Configuration such as service URLs, the model name, and polling timeouts is
-read from environment variables.
+read from environment variables in `config.py`. Values are resolved lazily, so
+reading one raises a `RuntimeError` if the variable is unset or invalid;
+`config.check_all()` validates every variable up front (it runs on startup).
 
 ## Agentic workflow
 

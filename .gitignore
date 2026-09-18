@@ -9,3 +9,4 @@ __pycache__/
 pytest.ini
 .vs
 reports/
+.mypy_cache/
