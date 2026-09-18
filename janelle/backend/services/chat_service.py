@@ -9,7 +9,6 @@ from email.utils import parsedate_to_datetime
 import requests
 
 from .. import config
-from .anomalies import delete_anomaly_by_transaction_id
 from . import ollama_service
 
 
@@ -168,7 +167,6 @@ def execute_confirmed_write(
                 error,
                 deleted=current,
             )
-        delete_anomaly_by_transaction_id(transaction_id)
         try:
             database_request(
                 "get",

@@ -1177,10 +1177,6 @@ def test_chat_delete_apply_rechecks_and_performs_exactly_one_write(
             },
             timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
         ),
-        call(
-            f"{backend_app.config.ANOMALIES_DB_URL}/by-transaction/27",
-            timeout=backend_app.config.ANOMALIES_TIMEOUT_SECONDS,
-        ),
     ]
 
 

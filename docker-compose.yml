@@ -63,7 +63,6 @@ services:
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       DATABASE_TIMEOUT_SECONDS: 20
       ANOMALIES_BACKEND_URL: http://anomalies-backend:5004
-      ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
       ANOMALIES_TIMEOUT_SECONDS: 10
       OLLAMA_URL: http://ollama:11434
       CHAT_MODEL: qwen2.5:3b
@@ -87,6 +86,8 @@ services:
       FLASK_ENV: production
       PORT: 6001
       DB_PATH: /app/data/transactions.db
+      ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      ANOMALIES_TIMEOUT_SECONDS: 10
     volumes:
       - transactions_data:/app/data
 
