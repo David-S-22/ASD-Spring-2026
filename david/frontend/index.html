@@ -34,12 +34,28 @@
             </div>
           </div>
 
-          <div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" hx-get="/savings-backend/ai-suggestion" hx-trigger="load, feedbackChanged from:body, suggestionChanged from:body, goalChanged from:body" hx-target="#ai-suggestion-container" hx-swap="outerHTML" hx-sync="this:replace">
+          <div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" hx-get="/savings-backend/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML" hx-sync="this:replace">
             <div class="panel-header">
               <h2>AI Suggestion</h2>
+              <button type="button" class="btn-refresh" 
+                      hx-get="/savings-backend/ai-suggestion" 
+                      hx-target="#ai-suggestion-container" 
+                      hx-indicator="#ai-suggestion-container" 
+                      hx-swap="outerHTML">Refresh</button>
             </div>
             <div class="ai-suggestion-body" id="ai-suggestion">
-              <textarea class="ai-suggestion-textbox" name="suggestion" readonly placeholder="Waiting for AI suggestion..."></textarea>
+              <textarea class="ai-suggestion-textbox" name="suggestion" rows="3" readonly placeholder="Waiting for AI suggestion...">Waiting for AI suggestion...</textarea>
+              <div class="ai-suggestion-feedback-section">
+                <label for="ai-feedback-input">Feedback on this suggestion:</label>
+                <textarea id="ai-feedback-input" class="ai-suggestion-feedback-input" 
+                          name="feedback" rows="2" 
+                          placeholder="Waiting for AI suggestion..." 
+                          disabled readonly></textarea>
+                <div class="ai-suggestion-actions">
+                  <button type="button" class="btn-accept" disabled>✓ Accept</button>
+                  <button type="button" class="btn-cancel" disabled>✗ Reject</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -73,6 +89,7 @@
         if (el && text) {
           text.textContent = msg;
           el.classList.remove('hidden');
+          el.style.removeProperty('display');
         }
       }
 
@@ -80,32 +97,87 @@
         const el = document.getElementById('error-alert');
         if (el) {
           el.classList.add('hidden');
+          el.style.display = 'none';
         }
       }
 
       document.addEventListener('htmx:configRequest', function(evt) {
-        const row = evt.detail.elt.closest('tr');
+        const elt = evt.detail.elt;
+        const row = elt.closest('tr');
         if (row) {
           const inputs = row.querySelectorAll('input');
           for (const input of inputs) {
             if (!input.checkValidity()) {
-              input.reportValidity();
+              input.focus();
               showError('Please provide all required values before submitting.');
               evt.preventDefault();
               return;
             }
           }
         }
+
+        const suggestionContainer = elt.closest('#ai-suggestion-container');
+        if (suggestionContainer && (elt.classList.contains('btn-accept') || elt.classList.contains('btn-cancel'))) {
+          const suggestionBox = suggestionContainer.querySelector('.ai-suggestion-textbox');
+          const suggestionText = suggestionBox ? suggestionBox.value.trim() : '';
+          if (!suggestionText || suggestionText === 'Waiting for AI suggestion...' || suggestionText.startsWith('Error') || suggestionText === 'No current AI suggestion available.' || suggestionText.startsWith("You don't have")) {
+            showError('No valid suggestion available to accept or reject.');
+            evt.preventDefault();
+            return;
+          }
+
+          const feedbackInput = suggestionContainer.querySelector('#ai-feedback-input');
+          if (feedbackInput) {
+            const feedbackText = feedbackInput.value.trim();
+            if (!feedbackText) {
+              feedbackInput.focus();
+              showError('Please provide feedback explaining why you are accepting or rejecting this suggestion.');
+              evt.preventDefault();
+              return;
+            }
+          }
+        }
+
         hideError();
+      });
+
+      document.addEventListener('htmx:beforeRequest', function(evt) {
+        const elt = evt.detail.elt;
+        const container = elt.closest('#ai-suggestion-container');
+        if (container && (elt.classList.contains('btn-accept') || elt.classList.contains('btn-cancel') || elt.classList.contains('btn-refresh'))) {
+          const suggestionBox = container.querySelector('.ai-suggestion-textbox');
+          if (suggestionBox) suggestionBox.value = 'Waiting for AI suggestion...';
+          const feedbackInput = container.querySelector('#ai-feedback-input');
+          if (feedbackInput) {
+            feedbackInput.value = '';
+            feedbackInput.placeholder = 'Waiting for AI suggestion...';
+            feedbackInput.disabled = true;
+          }
+          container.querySelectorAll('button').forEach(function(b) {
+            b.disabled = true;
+          });
+        }
       });
 
       document.addEventListener('htmx:responseError', function(evt) {
         const status = evt.detail.xhr.status;
         const resp = evt.detail.xhr.responseText;
-        showError('Request failed (' + status + '): ' + (resp || 'Invalid request or server error'));
+        let msg = resp;
+        try {
+          const parsed = JSON.parse(resp);
+          if (parsed && parsed.error) {
+            msg = parsed.error;
+          }
+        } catch (e) {}
+        showError('Request failed (' + status + '): ' + (msg || 'Invalid request or server error'));
+        const refreshBtn = document.querySelector('#ai-suggestion-container .btn-refresh');
+        if (refreshBtn) refreshBtn.disabled = false;
       });
+
       document.addEventListener('htmx:sendError', function() {
         showError('Network error: Unable to communicate with the server.');
+        const refreshBtn = document.querySelector('#ai-suggestion-container .btn-refresh');
+        if (refreshBtn) refreshBtn.disabled = false;
       });
     </script>
   </body>

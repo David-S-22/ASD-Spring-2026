@@ -42,8 +42,10 @@ class Suggestion:
     id: int
     suggestion: str
     accepted: bool
+    feedback: Optional[str] = None
 
 @dataclass(frozen=True)
 class Feedback:
     id: int
     feedback: str
+    suggestion_id: Optional[int] = None

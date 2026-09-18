@@ -35,6 +35,17 @@ def format_planner_prompt(
     # Cap transactions at the latest 15 to keep prompt processing fast on CPU
     recent_txs = (transactions or [])[-15:]
 
+    past_suggestions = []
+    for s in (suggestions or []):
+        s_text = getattr(s, "suggestion", s.get("suggestion", "") if isinstance(s, dict) else "")
+        s_acc = getattr(s, "accepted", s.get("accepted", False) if isinstance(s, dict) else False)
+        s_fb = getattr(s, "feedback", s.get("feedback", None) if isinstance(s, dict) else None)
+        status = "ACCEPTED" if s_acc else "REJECTED"
+        if s_fb:
+            past_suggestions.append(f'[{status}] "{s_text}" -> Feedback: "{s_fb}"')
+        else:
+            past_suggestions.append(f'[{status}] "{s_text}"')
+
     tables = {
         "active_goals": [
             {
@@ -52,18 +63,13 @@ def format_planner_prompt(
             }
             for t in recent_txs
         ],
-        "past_suggestions": [
-            {
-                "suggestion": getattr(s, "suggestion", s.get("suggestion", "") if isinstance(s, dict) else ""),
-                "outcome": "Accepted by user" if getattr(s, "accepted", s.get("accepted", False) if isinstance(s, dict) else False) else "Rejected by user",
-            }
-            for s in (suggestions or [])
-        ],
-        "user_feedback_rules": [
+        "past_suggestions": past_suggestions,
+        "general_user_preferences": [
             {
                 "rule": getattr(f, "feedback", f.get("feedback", "") if isinstance(f, dict) else ""),
             }
             for f in (feedbacks or [])
+            if getattr(f, "suggestion_id", f.get("suggestion_id") if isinstance(f, dict) else None) is None
         ],
     }
 
@@ -85,8 +91,9 @@ def generate_advice(
     if not system_prompt:
         system_prompt = (
             "You are a personal financial advisor speaking directly to the user in the second person ('you'). "
-            "Analyze the user's financial data (goals, transactions, past suggestions, feedback rules) "
+            "Analyze the user's financial data (active goals, recent transactions, past suggestions paired with feedback, general feedback rules) "
             "and deliver 1 or 2 plain text advice sentences directly addressing the user. "
+            "Learn from accepted suggestions and user reasoning to propose aligned advice, never repeat rejected strategies or ideas that conflict with user reasoning, and respect universal constraints from general feedback rules. "
             "Do not include any intro, preamble, or meta-commentary (such as 'Based on the user's financial data, here are two advice sentences:'). "
             "Start immediately with the advice itself."
         )
