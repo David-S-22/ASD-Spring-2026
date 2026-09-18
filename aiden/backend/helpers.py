@@ -1,4 +1,3 @@
-import os
 from dataclasses import is_dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -86,6 +85,3 @@ def deserialise_datetime_or_throw(value: str) -> datetime:
         pass
 
     raise ValueError(f"Unsupported datetime format: {value!r}")
-
-def get_env(name: str) -> str:
-    return os.environ[name]
