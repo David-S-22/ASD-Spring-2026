@@ -1,6 +1,13 @@
 <tr data-id="{{ feedback.id }}">
     <td class="cell-id">{{ feedback.id }}</td>
     <td><input type="text" name="feedback" value="{{ feedback.feedback }}" required></td>
+    <td class="cell-suggestion">
+        {% if feedback.suggestion_id %}
+        <span class="badge badge-suggestion">#{{ feedback.suggestion_id }}</span>
+        {% else %}
+        <span class="badge badge-general">General</span>
+        {% endif %}
+    </td>
     <td class="cell-actions">
         <button type="button" 
                 class="btn-accept" 
@@ -18,4 +25,3 @@
                 hx-swap="outerHTML">✗</button>
     </td>
 </tr>
-
