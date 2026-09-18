@@ -23,10 +23,10 @@ def load_chunks():
     """Return every chunk the RAG server may cite for this feature. Raise on failure — refresh
     reports the error under your feature name and the other features are unaffected."""
     return [
-        # tier 1: one plain sentence per row from YOUR database API (:600x), columns as metadata
+        # Step 1: one plain sentence per row from YOUR database API (:600x), columns as metadata
         corpus.row_chunk(FEATURE, "goal", 3, "Goal #3 Holiday: target $1,200.00, due 2026-12-20.",
                          name="Holiday", due="2026-12-20", label="Goal #3 Holiday"),
-        # tier 2: your approved docs, split by heading with doc/section extracted
+        # Step 2: approved docs, split by heading with doc/section extracted
         # *corpus.doc_chunks(config.REPO_ROOT / "docs/release-0/<you>/api.md", FEATURE),
     ]
 
