@@ -26,9 +26,9 @@ def _where(raw):
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
-@app.errorhandler(rag.ModelUnavailable)
-def model_unavailable(exc):
-    return jsonify({"status": "error", "error": "model_unavailable", "detail": str(exc)}), 502
+@app.errorhandler(rag.EmbeddingUnavailable)
+def embedding_unavailable(exc):
+    return jsonify({"status": "error", "error": "embedding_unavailable", "detail": str(exc)}), 502
 
 
 @app.errorhandler(ValueError)
@@ -38,7 +38,7 @@ def bad_request(exc):
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "service": "rag-server", "embed_model": config.EMBED_MODEL,
+    return jsonify({"status": "ok", "service": "rag-server", "embed_model": rag.EMBED_MODEL,
                     "max_distance": config.MAX_DISTANCE, "features": rag.indexed_features()})
 
 
@@ -85,5 +85,5 @@ def delete_chunks():
 
 
 if __name__ == "__main__":
-    print(f"RAG server on http://{config.HOST}:{config.PORT} · embed {config.EMBED_MODEL} · indexed {rag.indexed_features()}")
+    print(f"RAG server on http://{config.HOST}:{config.PORT} · embed {rag.EMBED_MODEL} · indexed {rag.indexed_features()}")
     app.run(host=config.HOST, port=config.PORT)

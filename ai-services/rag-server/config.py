@@ -15,12 +15,8 @@ HOST = os.environ.get("RAG_HOST", "127.0.0.1")
 CHROMA_DIR = os.environ.get("RAG_CHROMA_DIR", str(BASE_DIR / "chroma"))   # Chroma's own on-disk store (gitignored)
 AUDIT_FILE = BASE_DIR / "audit.jsonl"                                       # one line per tool call (gitignored)
 
-# The Compose 'ollama' service publishes 11434 on the host, so localhost works from here.
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-# Chroma calls this model to turn text into vectors. It must be in OLLAMA_PULL_MODELS in
-# docker-compose.yml (or: docker exec ollama ollama pull nomic-embed-text).
-EMBED_MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")
-EMBED_TIMEOUT = int(os.environ.get("RAG_EMBED_TIMEOUT", "60"))
+# Embeddings: Chroma's own bundled model (all-MiniLM-L6-v2 via onnxruntime, both already chromadb
+# dependencies). Downloaded once into ~/.cache/chroma/ on first use; no Ollama model is involved.
 
 DEFAULT_K = int(os.environ.get("RAG_K", "5"))
 # From lecture notes; the recommended use is the Cosine distance from benchmark provided where (0 = identical, 1 = unrelated). 

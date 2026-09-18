@@ -23,13 +23,17 @@ The server binds to the loopback interface on purpose: containers cannot reach `
 ## Run it
 
 ```
-docker compose up -d                  # the ollama service publishes :11434 on the host
-docker exec ollama ollama pull nomic-embed-text   # once per machine — or add it to OLLAMA_PULL_MODELS
 cd ai-services/rag-server
-pip install -r requirements.txt
+pip install -r requirements.txt       # flask, requests, chromadb
 python server.py                      # http://localhost:5003
-python ../../sophia/rag/bills.py      # each feature pushes its own corpus
+python ../../sophia/rag/bills.py      # each feature pushes its own corpus (needs its database up)
 ```
+
+Embeddings are Chroma's own bundled model (all-MiniLM-L6-v2, run through onnxruntime, both already
+chromadb dependencies). The first ingest downloads it once (~80 MB, into `~/.cache/chroma/`); after
+that the server works offline. The server does not use Ollama at all — Ollama is only what the
+feature backends generate with. The same model embeds every feature's chunks and every query,
+which is what makes the distances comparable.
 
 Not a Compose service (the assessment requires the RAG server to stay non-containerised), and
 nothing in Compose points at it: the only client is the MCP server on the same host, configured
@@ -71,6 +75,9 @@ insufficient_context  true when nothing is within RAG_MAX_DISTANCE
 ```
 
 `where` is any Chroma metadata filter, e.g. `{"record": "dispute"}`, `{"tier": 1}`, `{"bill_id": 12}`.
+
+Errors: a bad request (missing fields, non-scalar metadata, bad `where`) is a 400 `bad_request`;
+the embedding model failing to load (first run with no internet) is a 502 `embedding_unavailable`.
 
 ## The one access point: the MCP context tool
 
@@ -119,14 +126,14 @@ chunks), never the raw `results`.
 - `rag.py` — store and retrieve over Chroma: per-feature collections, `ingest`, `retrieve_context`
   (Chroma `query` flattened into rows + the distance gate, citations and confidence), `chunks`,
   `delete_feature`. No chunking, no model call.
-- `config.py` — every setting, read from env with a localhost default (port, bind address, Ollama URL,
-  embed model, `RAG_MAX_DISTANCE`). Change things here, nowhere else.
+- `config.py` — every setting, read from env with a localhost default (port, bind address, Chroma
+  directory, `RAG_MAX_DISTANCE`). Change things here, nowhere else.
 - `eval.py` — runs one feature's `benchmarks.json` against the running server and prints P@5 / R@5 and
   the insufficient-context check. This is the retrieval evidence for the report and how you tune
-  `RAG_MAX_DISTANCE`. Needs Ollama up and the feature's corpus pushed.
-- `tests/test_rag_rules.py` — pytest, no Chroma or Ollama needed: the confidence rule, the distance
+  `RAG_MAX_DISTANCE`. Needs the server up and the feature's corpus pushed.
+- `tests/test_rag_rules.py` — pytest, no Chroma needed: the confidence rule, the distance
   gate, the bundle shape, the ingest validation.
-- `requirements.txt` — flask, requests, chromadb, ollama (Chroma's Ollama embedding function uses it).
+- `requirements.txt` — flask, requests, chromadb. Nothing else; the embedding model comes with chromadb.
 - `.gitignore` — the generated files: `chroma/` (the vector store) and `audit.jsonl` (one line per call).
 
 ## Add your feature (everything lives in your own folder)

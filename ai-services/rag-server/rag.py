@@ -5,9 +5,10 @@ chunked and what metadata they carry, and pushes the result to this server (POST
 server keeps one Chroma collection per feature ("rag_<feature>"), so features are indexed and
 searched independently and never see each other's rows.
 
-Chroma owns the vectors: it calls Ollama to embed (embedding_function), stores documents +
-metadata, finds the nearest chunks (query_texts), filters on metadata (where) and persists to
-disk. This file adds only what a vector store has no opinion on:
+Chroma owns the vectors: it embeds with its own bundled model (all-MiniLM-L6-v2, downloaded once
+on first use — no Ollama involved), stores documents + metadata, finds the nearest chunks
+(query_texts), filters on metadata (where) and persists to disk. This file adds only what a vector
+store has no opinion on:
   ingest(feature, chunks, replace)   accept a feature's chunks (Chroma's own contract: id, text, flat metadata)
   retrieve_context(...)              Chroma's query() flattened into rows, plus the three things every caller
                                      needs that depend on the retrieval result alone: citations, a confidence
@@ -20,18 +21,19 @@ from datetime import datetime, timezone
 
 import chromadb
 from chromadb.errors import ChromaError
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 
 import config
 
 _client = chromadb.PersistentClient(path=config.CHROMA_DIR)
-_embed = OllamaEmbeddingFunction(url=config.OLLAMA_URL, model_name=config.EMBED_MODEL, timeout=config.EMBED_TIMEOUT)
 
+EMBED_MODEL = "chroma default (all-MiniLM-L6-v2)"   # informational — Chroma picks it when no embedding_function is given
 SCALARS = (str, int, float, bool)
 
 
-class ModelUnavailable(Exception):
-    """Ollama could not be reached or refused the request (server.py turns this into a 502)."""
+class EmbeddingUnavailable(Exception):
+    """Chroma's embedding model could not be loaded (server.py turns this into a 502). The first run
+    downloads all-MiniLM-L6-v2 (~80 MB) into ~/.cache/chroma/, so this is almost always "no internet
+    on first start"; afterwards it works offline."""
 
 
 def collection_name(feature):
@@ -39,9 +41,9 @@ def collection_name(feature):
 
 
 def collection(feature):
-    """The feature's own collection. Cosine space so distances mean the same thing across runs."""
-    return _client.get_or_create_collection(collection_name(feature), embedding_function=_embed,
-                                            metadata={"hnsw:space": "cosine"})
+    """The feature's own collection, embedded by Chroma's default model. Cosine space so distances
+    mean the same thing across runs."""
+    return _client.get_or_create_collection(collection_name(feature), metadata={"hnsw:space": "cosine"})
 
 
 def indexed_features():
@@ -50,16 +52,13 @@ def indexed_features():
     for col in _client.list_collections():
         name = col.name if hasattr(col, "name") else str(col)
         if name.startswith("rag_"):
-            counts[name[len("rag_"):]] = _client.get_collection(name, embedding_function=_embed).count()
+            counts[name[len("rag_"):]] = _client.get_collection(name).count()
     return counts
 
 
-def _require_model():
-    """Fail fast with one clear error when Ollama is down, instead of a Chroma stack trace per chunk."""
-    try:
-        _embed(["ping"])
-    except Exception as exc:
-        raise ModelUnavailable(f"embedding model {config.EMBED_MODEL} at {config.OLLAMA_URL}: {exc}") from exc
+def _embedding_failed(exc):
+    return EmbeddingUnavailable(f"Chroma's embedding model (all-MiniLM-L6-v2) could not be loaded — the first "
+                                f"run downloads it, so check internet access and try again: {exc}")
 
 
 def _rows(ids, documents, metadatas, distances=None):
@@ -102,16 +101,20 @@ def ingest(feature, chunks, replace=False):
     upserts, so several pushes can add up. The 'feature' metadata is set for you."""
     started = time.time()
     _validate(feature, chunks)
-    _require_model()
     if replace:
         try:
             _client.delete_collection(collection_name(feature))
         except Exception:
             pass
     col = collection(feature)
-    col.upsert(ids=[c["id"] for c in chunks],
-               documents=[c["text"] for c in chunks],
-               metadatas=[{**(c.get("metadata") or {}), "feature": feature} for c in chunks])
+    try:
+        col.upsert(ids=[c["id"] for c in chunks],
+                   documents=[c["text"] for c in chunks],
+                   metadatas=[{**(c.get("metadata") or {}), "feature": feature} for c in chunks])
+    except ChromaError as exc:                      # e.g. a metadata value Chroma rejects → 400
+        raise ValueError(str(exc)) from exc
+    except Exception as exc:                        # the embedding model itself → 502
+        raise _embedding_failed(exc) from exc
     result = {"status": "success", "feature": feature, "received": len(chunks), "replace": replace, "indexed": col.count()}
     _audit("ingest", {"feature": feature, "received": len(chunks), "replace": replace}, {"indexed": col.count()}, started)
     return result
@@ -163,8 +166,8 @@ def retrieve_context(query, feature, k=config.DEFAULT_K, where=None):
                 found = col.query(query_texts=[query], n_results=max(1, min(k, col.count())), where=where or None)
             except ChromaError as exc:                  # a bad where-filter from the caller → 400
                 raise ValueError(f"bad where filter {where!r}: {exc}") from exc
-            except Exception as exc:                    # Ollama down while embedding the query → 502
-                raise ModelUnavailable(f"embedding model {config.EMBED_MODEL}: {exc}") from exc
+            except Exception as exc:                    # the embedding model itself → 502
+                raise _embedding_failed(exc) from exc
             results = _rows(found["ids"][0], found["documents"][0], found["metadatas"][0], found["distances"][0])
     relevant = [r for r in results if r["distance"] <= config.MAX_DISTANCE]
     output = {
