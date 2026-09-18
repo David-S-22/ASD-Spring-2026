@@ -147,6 +147,7 @@ services:
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
       OLLAMA_MODEL: qwen2.5:3b
+      MCP_SERVER_URL: http://host.docker.internal:8000/mcp
     depends_on:
       anomalies-db:
         condition: service_started
