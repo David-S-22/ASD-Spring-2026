@@ -9,6 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import janelle.database.seed as database_seed
+import janelle.database.app as database_app
+import janelle.database.anomalies as database_anomalies
 from janelle.backend.services.chat_service import expected_transaction_header
 from janelle.database.app import setup_app
 from janelle.database.models import Category, CategoryCorrection, Transaction, db
@@ -29,6 +31,18 @@ def database_client(tmp_path: Path):
 
 	with application.test_client() as client:
 		yield client, database_path
+
+
+@fixture(autouse=True)
+def anomaly_cleanup_calls(monkeypatch):
+	"""Record anomaly cleanup calls and prevent real network requests in tests."""
+	calls = []
+
+	def record(transaction_id):
+		calls.append(transaction_id)
+
+	monkeypatch.setattr(database_app, "delete_anomaly_by_transaction_id", record)
+	return calls
 
 
 def get_connection(database_path):
@@ -407,6 +421,108 @@ def test_conditional_delete_rejects_raced_transaction(database_client):
 	assert response.status_code == 409
 	assert response.get_json()["code"] == "stale_preview"
 	assert client.get(f"/transactions/{created['id']}").status_code == 200
+
+
+def test_delete_transaction_triggers_anomaly_cleanup(
+	database_client,
+	anomaly_cleanup_calls,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Cleanup on delete"),
+	).get_json()
+
+	response = client.delete(f"/transactions/{created['id']}")
+
+	assert response.status_code == 204
+	assert anomaly_cleanup_calls == [created["id"]]
+
+
+def test_conditional_delete_triggers_anomaly_cleanup(
+	database_client,
+	anomaly_cleanup_calls,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Cleanup on conditional delete"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+
+	response = client.delete(
+		f"/transactions/{created['id']}",
+		headers={"X-Expected-Transaction": expected_transaction_header(versioned)},
+	)
+
+	assert response.status_code == 204
+	assert anomaly_cleanup_calls == [created["id"]]
+
+
+def test_stale_conditional_delete_skips_anomaly_cleanup(
+	database_client,
+	anomaly_cleanup_calls,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/transactions",
+		json=transaction_payload(merchant="Stale delete"),
+	).get_json()
+	versioned = client.get(
+		f"/transactions/{created['id']}?_include_version=true"
+	).get_json()
+	stale_header = expected_transaction_header(versioned)
+	assert client.patch(
+		f"/transactions/{created['id']}",
+		json={"description": "Changed after preview"},
+	).status_code == 200
+
+	response = client.delete(
+		f"/transactions/{created['id']}",
+		headers={"X-Expected-Transaction": stale_header},
+	)
+
+	assert response.status_code == 409
+	assert anomaly_cleanup_calls == []
+
+
+def test_delete_missing_transaction_skips_anomaly_cleanup(
+	database_client,
+	anomaly_cleanup_calls,
+):
+	client, _database_path = database_client
+
+	response = client.delete("/transactions/999999")
+
+	assert response.status_code == 404
+	assert anomaly_cleanup_calls == []
+
+
+def test_anomaly_cleanup_request_targets_anomalies_database(monkeypatch):
+	from unittest.mock import Mock
+
+	delete = Mock(return_value=Mock(status_code=204))
+	monkeypatch.setattr(database_anomalies.requests, "delete", delete)
+
+	database_anomalies.delete_anomaly_by_transaction_id(42)
+
+	delete.assert_called_once_with(
+		f"{database_anomalies.ANOMALIES_DB_URL}/by-transaction/42",
+		timeout=database_anomalies.ANOMALIES_TIMEOUT_SECONDS,
+	)
+
+
+def test_anomaly_cleanup_swallows_request_errors(monkeypatch):
+	from requests import RequestException
+
+	def raise_error(*_args, **_kwargs):
+		raise RequestException("boom")
+
+	monkeypatch.setattr(database_anomalies.requests, "delete", raise_error)
+
+	database_anomalies.delete_anomaly_by_transaction_id(42)
 
 
 def test_transaction_create_records_ai_category_override_atomically(

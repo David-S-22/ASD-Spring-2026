@@ -86,6 +86,8 @@ services:
       FLASK_ENV: production
       PORT: 6001
       DB_PATH: /app/data/transactions.db
+      ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
+      ANOMALIES_TIMEOUT_SECONDS: 10
     volumes:
       - transactions_data:/app/data
 
@@ -163,6 +165,13 @@ services:
       FLASK_ENV: production
       PORT: 6004
       DB_PATH: /app/data/anomalies.db
+      TRANSACTIONS_DB_URL: http://transactions-db:6001
+      TRANSACTIONS_TIMEOUT_SECONDS: 10
+      RECONCILE_MAX_RETRIES: 30
+      RECONCILE_RETRY_DELAY_SECONDS: 2
+    depends_on:
+      transactions-db:
+        condition: service_started
 
   budgets-frontend:
     build: ./ethan/frontend

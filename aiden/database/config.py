@@ -41,13 +41,36 @@ class _Config:
     def DB_PATH(self) -> str:
         return _resolve("DB_PATH", str)
 
+    @property
+    def TRANSACTIONS_DB_URL(self) -> str:
+        return _resolve("TRANSACTIONS_DB_URL", str)
+
+    @property
+    def TRANSACTIONS_TIMEOUT_SECONDS(self) -> float:
+        return _resolve("TRANSACTIONS_TIMEOUT_SECONDS", float)
+
+    @property
+    def RECONCILE_MAX_RETRIES(self) -> int:
+        return _resolve("RECONCILE_MAX_RETRIES", int)
+
+    @property
+    def RECONCILE_RETRY_DELAY_SECONDS(self) -> float:
+        return _resolve("RECONCILE_RETRY_DELAY_SECONDS", float)
+
     def check_all(self) -> None:
         """Resolve every configured variable, raising if any is missing or invalid.
 
         Errors are aggregated so a single call reports every problem at once.
         """
         errors = []
-        for name in ("PORT", "DB_PATH"):
+        for name in (
+            "PORT",
+            "DB_PATH",
+            "TRANSACTIONS_DB_URL",
+            "TRANSACTIONS_TIMEOUT_SECONDS",
+            "RECONCILE_MAX_RETRIES",
+            "RECONCILE_RETRY_DELAY_SECONDS",
+        ):
             try:
                 getattr(self, name)
             except RuntimeError as exc:
