@@ -118,7 +118,7 @@ chunks), never the raw `results`.
 - `requirements.txt` — flask, requests, chromadb, ollama (Chroma's Ollama embedding function uses it).
 - `.gitignore` — the generated files: `chroma/` (the vector store) and `audit.jsonl` (one line per call).
 
-## Add your feature (15 minutes)
+## How to add RAG feature
 
 1. Copy `sources/_template.py` to `sources/<feature>.py`; set `FEATURE`.
 2. In `load_chunks()`, fetch your rows from your database API and write one plain sentence per row
