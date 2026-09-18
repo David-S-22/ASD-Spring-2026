@@ -133,8 +133,6 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         feedbacks = resp.json(object_hook=object_to_hook)
         return render_template("feedback-table.jinja", feedbacks=feedbacks), 200
 
-    get_feedback_table = get_feedback
-
     @app.route("/feedback", methods=["POST"])
     def create_feedback():
         payload = request.get_json(silent=True) or request.form.to_dict()
