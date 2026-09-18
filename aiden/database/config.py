@@ -2,5 +2,5 @@
 import os
 
 
-PORT = int(os.environ["PORT"])
-DB_PATH = os.environ["DB_PATH"]
+PORT = int(os.environ.get("PORT", "6004"))
+DB_PATH = os.environ.get("DB_PATH", "/app/data/anomalies.db")
