@@ -27,7 +27,8 @@ class Suggestion(db.Model):
     accepted: Mapped[bool] = mapped_column(nullable=False)
 
     def to_dto(self):
-        return dto.Suggestion(self.id, self.suggestion, self.accepted)
+        feedback = self.feedbacks[0].feedback if hasattr(self, "feedbacks") and self.feedbacks else None
+        return dto.Suggestion(self.id, self.suggestion, self.accepted, feedback)
 
 @dataclass
 class Feedback(db.Model):
