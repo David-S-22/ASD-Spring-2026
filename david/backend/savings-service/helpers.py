@@ -37,9 +37,14 @@ def object_to_hook(d: dict):
             id=d.get("id"),
             suggestion=d["suggestion"],
             accepted=accepted_val,
+            feedback=d.get("feedback"),
         )
     if "feedback" in d:
-        return dto.Feedback(id=d.get("id"), feedback=d["feedback"])
+        return dto.Feedback(
+            id=d.get("id"),
+            feedback=d["feedback"],
+            suggestion_id=d.get("suggestion_id"),
+        )
     return d
 
 

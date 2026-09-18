@@ -2,7 +2,7 @@ import os
 import requests
 from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
-from .helpers import fetch_suggestions, fetch_transactions, object_to_hook, try_parse_bool
+from .helpers import fetch_transactions, object_to_hook, try_parse_bool
 from .ollama_service import generate_savings_advice
 
 
@@ -133,6 +133,8 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         feedbacks = resp.json(object_hook=object_to_hook)
         return render_template("feedback-table.jinja", feedbacks=feedbacks), 200
 
+    get_feedback_table = get_feedback
+
     @app.route("/feedback", methods=["POST"])
     def create_feedback():
         payload = request.get_json(silent=True) or request.form.to_dict()
@@ -193,20 +195,45 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         has_transactions = len(transactions) > 0
         payload = request.get_json(silent=True) or request.form.to_dict()
         suggestion_text = payload.get("suggestion", "").strip() if payload else ""
+        feedback_text = payload.get("feedback", "").strip() if payload else ""
         accepted_raw = request.args.get("accepted") if "accepted" in request.args else (payload.get("accepted") if payload else None)
         accepted = try_parse_bool(accepted_raw)
 
-        if suggestion_text and suggestion_text != "No current AI suggestion available." and not suggestion_text.startswith("Error") and not suggestion_text.startswith("You don't have") and accepted is not None:
+        if (
+            suggestion_text
+            and suggestion_text != "No current AI suggestion available."
+            and not suggestion_text.startswith("Error")
+            and not suggestion_text.startswith("You don't have")
+            and accepted is not None
+        ):
             try:
                 resp = requests.post(
                     f"{db_url}/suggestion",
                     json={"suggestion": suggestion_text, "accepted": accepted},
                 )
                 resp.raise_for_status()
-            except Exception as e:
-                app.logger.error(f"Error saving suggestion: {e}")
+                saved_suggestion = resp.json(object_hook=object_to_hook)
+                suggestion_id = (
+                    getattr(saved_suggestion, "id", None)
+                    if hasattr(saved_suggestion, "id")
+                    else resp.json().get("id")
+                )
 
-        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
+                if feedback_text and suggestion_id is not None:
+                    fb_resp = requests.post(
+                        f"{db_url}/feedback",
+                        json={"feedback": feedback_text, "suggestion_id": suggestion_id},
+                    )
+                    fb_resp.raise_for_status()
+            except Exception as e:
+                app.logger.error(f"Error saving suggestion action: {e}")
+
+        next_suggestion = generate_savings_advice(db_url, tx_url)
+        return make_response(
+            render_template("ai-suggestion.jinja", suggestion=next_suggestion, has_transactions=has_transactions),
+            200,
+            {"HX-Trigger": "suggestionChanged, feedbackChanged"},
+        )
 
     return app
 
