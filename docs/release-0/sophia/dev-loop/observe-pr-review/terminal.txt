@@ -1,0 +1,238 @@
+DEVELOPMENT-LOOP RUN RECORD — OBSERVE — Review the merged Bills PRs against the spec, criteria and agreements (29 Aug 2026)
+Session id      : d241321a-f67c-42d4-a5fb-70c387ffb249
+Session start   : 2026-08-26T05:46:01.422Z  (UTC; Sydney is +10:00)
+Session end     : 2026-08-29T05:38:18.214Z
+Prompt issued   : 2026-08-29T03:50:06.706Z
+main at start   : b0751bc Feat: Setting up savings frontend (#55)  (inferred: newest main commit before the prompt timestamp)
+Condensed from the session transcript: the prompt as issued, each tool call as one line, each
+phase gate as it occurred, and the closing summary. Tool outputs over ten lines are elided.
+Machine paths are shown as ~/… or repo-relative; other people's names are replaced.
+Note            : Read-only session: its output is findings.md beside this file.
+Note            : the session began 4 human turn(s) earlier with unrelated repository housekeeping; the record starts at the prompt.
+==============================================================================
+[03:50Z] USER PROMPT (verbatim):
+Context
+I am Sophia Nguyen (GitHub/Discord: zfere, commits authored as
+"Sophia Nguyen"), Student 5, Bills List & Dispute Assistant, in the UTS
+41026 team repo github.com/David-S-22/ASD-Spring-2026. You (in earlier
+sessions) have a session notes <earlier session notes> — read it first, and
+read the two most recent notes in
+~/notes/sessions\ before anything
+else (workspace rule).
+The job: review my recent merged PRs — not my teammates' — against
+(1) the Release 0 specification, (2) the assessment criteria/rubric, both
+as stored in this workspace, and (3) the team's charter/agreements, and
+report every deviation with a verbatim quote of the requirement it
+deviates from. This is a pre-submission self-audit: the showcase is
+Fri 4 Sep and the technical report is due Sun 6 Sep, so I want to find
+anything a marker would find, first.
+Sources of truth — locate and rank them before reviewing
+The spec itself:
+the project specification PDF
+(a sibling .txt extraction should exist next to it; if a claim is
+load-bearing and the .txt looks thin, say so rather than trusting it —
+image-heavy pages extract as headings only). Also search the subject materials
+for any Release 0 assessment/rubric/criteria page or marking guide
+(dir /s + grep for "rubric", "criteria", "marking", "Release 0") —
+the subject's published materials pages are saved there as markdown. The spec PDF and any rubric
+are primary; quote them.
+The local notes digest: ~/notes/41026_release0-brief.md
+— secondary; use it as a map of what to look for, but quote the primary
+source wherever the two differ, and list any differences you notice.
+Team charter / team agreements. Search the local notes for an ASD/41026
+team charter (grep local notes\ for "charter" and check
+~/notes/). Careful: a Team Charter also exists for
+the OTHER subject (31272, project management) — that is NOT this team
+and must not be used. If no 41026-specific charter document exists, say
+so plainly and use the documented team agreements instead, citing each:
+41026_registration-form-submitted.md (the signed source of truth:
+feature allocation, ports, topic) and the decisions recorded in
+~/notes/convo\*_chat-takeaways.md (per-service
+requirements ownership; shared DTOs with JSON-over-HTTP as the actual
+contract; Flask-SQLAlchemy adopted team-wide 22 Aug; folder naming
+<name>/; proposed-but-unratified: shared/ changes via PR with
+consumers tagged). Label anything drawn from an unratified proposal
+as such — a deviation from a proposal is not a deviation.
+The PRs under review
+git checkout main && git pull, record head. The review set is every
+squash-merge on main authored by Sophia Nguyen since 73178a4
+(23 Aug) — as of 29 Aug that is at least: #47 (docs truth pass), #49
+(F4 link handoff + config slim-down), #50 (integration-edge tests), #51
+(Sophia-CI docker-health), plus the B2 pure-reads PR and possibly a
+test-consolidation PR if they have merged by the time you run. List what
+you actually find with git log --format='%h %s' --author="Sophia" 73178a4..HEAD
+and review that list. For each, read the full squash diff
+(git show <sha>), not just the message. Where a criterion concerns the
+cumulative state (repo structure, CRUD completeness), judge the current
+sophia/** tree on head, and use the PR set to explain how it got there.
+Review dimensions — every finding quotes its source verbatim
+A. Spec compliance (per-student obligations). For each spec
+requirement, verdict MET / PARTIAL / NOT MET / N-A with evidence (file
+path, route, commit, or run URL). At minimum check: three microservices
+(FE/BE/DB) with Dockerfiles and compose services · full CRUD through
+frontend and backend · ≥10 records per table (count the seeds) · FE → BE →
+Ollama flow with an approved model, local only, no MCP/RAG · Plan → Act →
+Observe → Adapt demonstrable (versioned dispute drafts) · own CI workflow
+file and what it runs · own commit history (meaningful messages, work via
+branches and PRs — sample my commit messages across the set) · feature
+reachable from the unified home page + shared CSS (expect NOT MET at the
+team level — attribute it correctly as a team gap, not a Bills PR defect,
+and note what Bills did instead) · repository structure per §7.1 including
+the student-N/ naming question (folder is sophia/, workflow
+Sophia-CI.yml — the known, team-conventional deviation; quote the spec
+line it deviates from so the report can declare it deliberately).
+B. Assessment criteria / rubric. If a rubric or criteria page exists
+in the subject materials walk it criterion by criterion for the Bills slice and
+flag anything the recent PRs weakened or left unevidenced (e.g. stale
+numbers in README, evidence URLs not yet updated after #51 changed CI).
+If no rubric document exists, say so and skip — do not invent criteria.
+C. Team charter / agreements deviations (Bills only). Judge my PRs
+against each documented agreement: dependency ownership (nothing installs
+from root requirements.txt — verify for the Bills stack) ·
+JSON-over-HTTP as the cross-feature contract (did any PR quietly import
+shared/backend/dto.py? expected: no, adoption is a separate gated task) ·
+Flask-SQLAlchemy team adoption vs Bills' raw sqlite3 (decided deviation,
+D1 = R1 — record it as declared, quote the decision) · port allocation
+3005/5005/6005 per the signed form · folder-naming convention · anything
+in the PRs that touched paths outside my agreed scope (git diff --stat
+each merge; expected: sophia/, my compose blocks, Sophia-CI.yml,
+docs/release-0/sophia/ only — flag any file outside that set).
+D. Report-readiness gaps. Anything the PRs promised that the R0
+report will need and doesn't have yet: current test count/coverage
+consistency across README, docs and reality; a Sophia-CI run-on-main URL
+newer than the workflow's docker-health change; screenshots that predate
+the recent UI changes (the handoff form and deep links post-date the
+12-shot set).
+Rules
+Repo is read-only. No branches, no commits, no pushes, no PR
+comments. If you find a defect, it goes in the note — I decide what
+happens next.
+Every finding cites: the verbatim requirement text + its source file,
+and the evidence (path/commit/line). No finding without both. Where a
+requirement is ambiguous, say "ambiguous — tutor question" rather than
+ruling.
+Separate the tiers: (a) genuine spec/criteria gaps in MY work,
+(b) declared deviations that just need a justification sentence in the
+report, (c) team-level gaps not attributable to Bills, (d) charter/
+agreement notes. Don't inflate (b)–(d) into (a).
+Tone of the written note: factual and constructive — findings as fixes
+and polish with effort estimates, strongest compliance points first so
+the note doubles as report material.
+Concurrent-work rule: note the head SHA the review ran against;
+teammates are pushing actively, so date-stamp everything.
+Output
+Write the review to
+~/notes/41026_bills-pr-review-vs-spec.md:
+header (date, head SHA, PR set reviewed, sources used and their rank) →
+compliance table for dimension A → findings by tier with quotes and
+evidence → charter/agreements section (naming exactly which documents
+served as "charter", and stating explicitly if no 41026 charter exists) →
+a short "sentences ready for the report" block (the declared-deviation
+justifications, ready to paste) → open tutor questions. Then write a
+session note (2026-MM-DD_bills-pr-review.md) from the session template —
+decisions and state changes, under a page. Give me a one-screen summary
+in chat: counts per tier and the two or three findings that matter most.
+------------------------------------------------------------------------------
+[03:50Z]  [Glob] *.md
+    ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    ~\.claude\projects\<project-dir>\memory\asd-r0-independent-marking.md
+    ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    ~\.claude\projects\<project-dir>\memory\MEMORY.md
+[03:50Z]  [Read] ~/notes/sessions\2026-08-28_bills-tier-a.md
+    [… 27 lines …]
+[03:50Z]  [Read] ~/notes/sessions\2026-08-26_bills-r0-improvement-plan.md
+    [… 49 lines …]
+[03:50Z]  [Bash] cd "." && git status --short && git checkout main && git pull --ff-only && git log -1 --format...
+    [… 23 lines …]
+[03:50Z]  [Read] ~\.claude\projects\<project-dir>\memory\<earlier session notes>.md
+    [… 20 lines …]
+[03:50Z]  [Read] ~\.claude\projects\<project-dir>\memory\asd-r0-independent-marking.md
+    [… 16 lines …]
+[03:50Z]  [Grep] rubric|marking|criteria|assessment
+    [… 16 lines …]
+[03:51Z]  [Grep] Release 0
+    Found 3 files
+[03:51Z]  [Read] ~/notes/41026_release0-brief.md
+    [… 171 lines …]
+[03:51Z]  [Grep] charter
+    [… 75 lines …]
+[03:51Z]  [Glob] 10-Subjects/41026/**/*.md
+    [… 53 lines …]
+[03:51Z]  [Glob] 08 Week 6 - Project Release 0 Review Showcase (20%) — In-Class/*
+[03:51Z]  [Read] ~/notes/41026_registration-form-submitted.md
+    [… 186 lines …]
+[03:51Z]  [Read] ~/notes/convo\41026_new-group_project-chat-takeaways.md
+    [… 52 lines …]
+[03:51Z]  [Read] ~/notes/convo\41026_poc-and-shared-shell_chat-takeaways.md
+    [… 81 lines …]
+[03:51Z]  [Read] ~/notes/convo\41026_ci-contracts-and-architecture_chat-takeaways.md
+    [… 130 lines …]
+[03:51Z]  [Read] ~/notes/convo\41026_shared-dtos_chat-takeaways.md
+    [… 98 lines …]
+[03:52Z]  [Bash] cd "." && for s in 71e063c cdd23bf 41b9e05 5ccfc5d 3da70ab; do echo "=== $s ==="; git show --s...
+    [… 74 lines …]
+[03:52Z]  [Bash] cd "." && git show 5ccfc5d --format="" && git show cdd23bf --format="" -- docker-compose.yml s...
+    [… 94 lines …]
+[03:52Z]  [Bash] cd "." && git show 71e063c --format="" && git show 3da70ab --format="" -- sophia/database/init...
+    [… 263 lines …]
+[03:52Z]  [Bash] cd "." && git show cdd23bf --format="" -- sophia/backend/routes/fragments.py sophia/backend/te...
+    [… 219 lines …]
+[03:53Z]  [Bash] cd "." && "~/.venvs/asd-2026/Scripts/python.exe" -m pytest sophia/test -q --cov=so...
+[03:53Z]  [Bash] cd "." && ls sophia sophia/backend sophia/database sophia/frontend && echo === && ls docs/rele...
+    [… 30 lines …]
+    [… 66 lines …]
+[03:53Z]  [Read] .\sophia\database\seed.py
+    [… 169 lines …]
+[03:53Z]  [Read] .\david\frontend\index.html
+    [… 13 lines …]
+[03:53Z]  [Read] .\docker-compose.yml
+    [… 107 lines …]
+[03:53Z]  [Grep] passed|actions/runs|coverage
+    142:108 passed; coverage 81% across `sophia/backend` (measured 28 Aug 2026).
+    176:<https://github.com/David-S-22/ASD-Spring-2026/actions/runs/32573962576>
+[03:53Z]  [Grep] @bp\.(get|post|put|delete|patch)
+    [… 51 lines …]
+[03:53Z]  [Read] .\.github\workflows\Sophia-CI.yml
+[03:53Z]  [Read] .\sophia\frontend\nginx.conf
+    [… 20 lines …]
+    [… 51 lines …]
+[03:53Z]  [Bash] cd "." && ls .github/workflows && ls | head -20 && (test -f requirements.txt && echo "root req...
+    [… 18 lines …]
+[03:54Z]  [Grep] 108|81\s?%|81%
+    [… 16 lines …]
+[03:54Z]  [Grep] r0-0|r0-1
+    26:`r0-02` (add-bill toast), `r0-05`/`r0-06` (dispute draft, version 2, sent),
+    27:`r0-08`/`r0-09` (GitHub Actions), `r0-10`/`r0-11` (compose ps, health).
+[03:54Z]  [Bash] cd "." && gh pr view 52 --json headRefName,headRefOid,mergedAt --template '{{.headRefName}} {{...
+    chore/bills-review-cleanups 184d50342454e60154f75b67d35421882227a7bf merged 2026-08-29T02:51:02Z
+[03:54Z]  [Grep] shared
+    sophia\backend\services\bills.py:1:"""Bill CRUD and enrichment, shared by /api/bills and /ui/bills."""
+    sophia\backend\services\calendar.py:1:"""Calendar month parsing shared by /api/calendar*, /api/calendar, and /ui/calendar."""
+    sophia\backend\services\__init__.py:1:"""Business-logic layer shared by the JSON (/api/*) and HTML (/ui/*) routes.
+    sophia\backend\routes\fragments.py:4:services module (shared with /api/*) does the actual work, this module only
+    sophia\backend\engine\__init__.py:3:Exposes the core dataclasses shared across the engine modules and the
+    sophia\backend\services\payments.py:1:"""Payment CRUD, shared by /api/payments and /ui/payments. Recomputes the owning bill's status."""
+    sophia\backend\services\disputes.py:1:"""Dispute CRUD and AI-drafted letters, shared by /api/disputes and /ui/disputes."""
+    sophia\backend\services\chat.py:1:"""Chat resolution and apply, shared by /api/chat(/apply) and /ui/chat(/apply).
+[03:54Z]  [Bash] cd "." && ls -A ai-services scripts shared shared/backend student-3 janelle 2>/dev/null
+    [… 17 lines …]
+[03:57Z]  [Write] ~/notes/41026_bills-pr-review-vs-spec.md
+    File created successfully at: ~/notes/41026_bills-pr-review-vs-spec.md (file state is current in your context — no need to Read it back)
+[03:57Z]  [Write] ~/notes/sessions\2026-08-29_bills-pr-review.md
+    File created successfully at: ~/notes/sessions\2026-08-29_bills-pr-review.md (file state is current in your context — no need to Read it back)
+
+==============================================================================
+CLOSING SUMMARY (assistant, verbatim):
+Audit done — review written to [41026_bills-pr-review-vs-spec.md](../../~/notes/41026_bills-pr-review-vs-spec.md), session note to [2026-08-29_bills-pr-review.md](../../~/notes/sessions/2026-08-29_bills-pr-review.md). Ran read-only against head `b0751bc` (29 Aug, 1:30 pm); review set was your five merges since 23 Aug: #47, #49, #50, #51, #52 (#56 is still an unmerged draft and was excluded — and yes, `refactor/bills-pure-reads` and `chore/bills-review-cleanups` were left untouched).
+
+**Headline: nothing in the five PRs breaks a spec obligation.** Every §2.2 individual requirement is MET on head — I re-ran the suite (147 passed / 86%), counted the seeds (12/38/10/13/10, all tables ≥10), and verified CRUD through both layers, approved models, the versioned PAOA dispute loop, and the CI docker-health job. Scope was clean on all five: only `sophia/**`, your docs, `Sophia-CI.yml`, and the bills-backend compose block.
+
+**Counts per tier:** (a) 4 genuine gaps · (b) 5 declared deviations, sentences drafted and ready to paste · (c) 5 team-level gaps · (d) 6 agreement notes.
+
+The three findings that matter most:
+
+1. **Every committed evidence number is stale after #50.** `sophia/README.md:142` still says "108 passed; coverage 81%" (reality: 147/86%), the evidence file is literally named `pytest-108-passed.txt`, and the Actions URL at README:176 is the 22 Aug run — predating both the new tests and the docker-health job it's meant to evidence. A marker who runs pytest sees the mismatch in the first minute. Merging #56 fixes the README; the URL, txt, and r0-07 screenshot need ~20 min after that.
+2. **Screenshots are 7 of 13, all dated 22 Aug — nothing shows the #49 work.** The handoff prefill form, evidence note, and deep links exist in no capture, and they're your best integration evidence. One session on the final build (~45–60 min).
+3. **Two source-of-truth corrections for the report:** no Release 0 rubric exists anywhere published for the subject (so your 26 Aug "check rubric for consistency wording" action has nothing to check), and **the signed registration form contains no port table** — 3005/5005/6005 is chat-convention, so don't cite the form for ports.
+
+Bonus: one new minor defect found in #49's diff — `amount=nan` or `inf` in the handoff link 500s instead of 422ing (`fragments.py`, `_parse_handoff_subscription`). Fifteen-minute fix or a known-issues line, your call.
