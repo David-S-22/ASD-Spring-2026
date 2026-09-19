@@ -8,6 +8,7 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
+      - "ai-services/rag-server/**"
   push:
     branches:
       - "main"
@@ -15,6 +16,7 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
+      - "ai-services/rag-server/**"
 
 jobs:
   test:
@@ -29,6 +31,19 @@ jobs:
         run: pip install -r sophia/requirements.txt
       - name: Run tests
         run: python -m pytest sophia/test -q --cov=sophia/backend --cov-report=term
+
+  rag: # Check bills retrieval through the shared RAG server code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r sophia/requirements.txt -r ai-services/rag-server/requirements.txt
+      - name: Run RAG tests
+        run: python -m pytest sophia/rag -q
 
   docker-health: # Check bills container health after startup
     runs-on: ubuntu-latest
