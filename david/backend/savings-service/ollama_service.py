@@ -173,7 +173,7 @@ def generate_advice(
                 ),
             },
         ],
-        temperature=0.3,
+        temperature=0.4,
     )
     return (advice_resp.choices[0].message.content or "").strip()
 
