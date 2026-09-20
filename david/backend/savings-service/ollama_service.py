@@ -169,7 +169,7 @@ def generate_advice(
                 "content": (
                     f"{user_data}\n\n"
                     f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(transactions, indent=2)}\n\n"
-                    "Deliver 1 or 2 direct savings advice sentences that help the user reduce expenses toward an active goal, starting immediately with the first word of the advice."
+                    "Deliver 1 or 2 natural, well-phrased savings advice sentences that help the user reduce expenses toward an active goal, starting immediately with the first word of the advice."
                 ),
             },
         ],
