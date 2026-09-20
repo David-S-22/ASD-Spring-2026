@@ -80,13 +80,3 @@ def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
         pass
     return []
 
-
-def fetch_transactions(transactions_db_url: str) -> List[dto.Transaction]:
-    try:
-        resp = requests.get(f"{transactions_db_url.rstrip('/')}/transactions")
-        if resp.ok:
-            return resp.json(object_hook=object_to_hook)
-    except Exception:
-        pass
-    return []
-

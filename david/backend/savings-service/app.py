@@ -2,7 +2,7 @@ import os
 import requests
 from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
-from .helpers import fetch_transactions, object_to_hook, try_parse_bool
+from .helpers import object_to_hook, try_parse_bool
 from .ollama_service import generate_savings_advice
 
 
@@ -182,15 +182,11 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        transactions = fetch_transactions(tx_url)
-        has_transactions = len(transactions) > 0
-        suggestion = generate_savings_advice(db_url, tx_url)
-        return render_template("ai-suggestion.jinja", suggestion=suggestion, has_transactions=has_transactions), 200
+        suggestion = generate_savings_advice(db_url)
+        return render_template("ai-suggestion.jinja", suggestion=suggestion), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
     def action_ai_suggestion():
-        transactions = fetch_transactions(tx_url)
-        has_transactions = len(transactions) > 0
         payload = request.get_json(silent=True) or request.form.to_dict()
         suggestion_text = payload.get("suggestion", "").strip() if payload else ""
         feedback_text = payload.get("feedback", "").strip() if payload else ""
@@ -235,7 +231,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
             return jsonify({"error": f"Failed to save suggestion decision: {str(e)}"}), 500
 
         return make_response(
-            render_template("ai-suggestion.jinja", suggestion=None, has_transactions=has_transactions, loading=True),
+            render_template("ai-suggestion.jinja", suggestion=None, loading=True),
             200,
             {"HX-Trigger": "suggestionChanged, feedbackChanged"},
         )
