@@ -42,7 +42,7 @@ def get_feedbacks() -> List[Feedback]:
         Feedback(id=5, feedback="Do not suggest cancelling Spotify as I listen to music during study sessions."),
         Feedback(id=6, feedback="I am happy to cook more at home and buy supermarket house brands."),
         Feedback(id=7, feedback="I prefer walking or public transport rather than ridesharing services like Uber."),
-        Feedback(id=8, feedback="Keep suggestions focused on recurring subscriptions and dining expenses."),
+        Feedback(id=8, feedback="I want to reduce unnecessary recurring subscriptions where possible."),
         Feedback(id=9, feedback="I cannot change electricity providers because utilities are managed by my landlord."),
         Feedback(id=10, feedback="I am willing to cut down on daily cafe coffees during the work week."),
     ]
