@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 import json
 import os
 import pathlib
@@ -6,12 +7,12 @@ from typing import Any, List
 from fastmcp import Client
 from openai import OpenAI
 from shared.backend import dto
-from .helpers import fetch_feedbacks, fetch_goals, fetch_suggestions
+from .helpers import fetch_categories, fetch_feedbacks, fetch_goals, fetch_suggestions
 MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8000/mcp")
 url = os.environ.get("OLLAMA_URL", "http://localhost:11434/v1")
 timeout = float(os.environ.get("OLLAMA_TIMEOUT", "180"))
 model = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
-tool_model = os.environ.get("OLLAMA_TOOL_MODEL", "qwen2.5:3b")
+search_model = os.environ.get("OLLAMA_TOOL_MODEL", "qwen2.5:3b")
 
 client = OpenAI(base_url=url, api_key="ollama", timeout=timeout)
 
@@ -68,33 +69,6 @@ def format_planner_prompt(
     return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
 
 
-SEARCH_TRANSACTIONS_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "search_transactions",
-        "description": "Search and filter user transactions by date range and optional category name to identify spending patterns and recurring bills.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "start_date": {
-                    "type": "string",
-                    "description": "Earliest transaction date (YYYY-MM-DD). Use 3-6 months back or user-specified range to detect recurring bills.",
-                },
-                "end_date": {
-                    "type": "string",
-                    "description": "Latest transaction date (YYYY-MM-DD).",
-                },
-                "category_name": {
-                    "type": "string",
-                    "description": "Optional category filter name.",
-                },
-            },
-            "required": ["start_date", "end_date"],
-        },
-    },
-}
-
-
 def call_mcp_server(name: str, arguments: dict) -> list:
     """Invokes a tool on the MCP server using FastMCP Client."""
     async def _call():
@@ -105,6 +79,70 @@ def call_mcp_server(name: str, arguments: dict) -> list:
     return asyncio.run(_call())
 
 
+def fetch_mcp_tools() -> list[dict]:
+    """Fetches tool definitions dynamically from the FastMCP server and converts them to OpenAI format."""
+    async def _fetch():
+        async with Client(MCP_SERVER_URL) as client:
+            tools = await client.list_tools()
+            return [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.input_schema,
+                    },
+                }
+                for tool in tools
+            ]
+
+    try:
+        return asyncio.run(_fetch())
+    except Exception:
+        return []
+
+
+def generate_transaction_search_args(feedbacks: List[dto.Feedback]) -> dict:
+    tools = fetch_mcp_tools()
+    if not tools:
+        return {}
+
+    categories = fetch_categories()
+    today_str = os.environ.get("DEMO_TODAY", date.today().isoformat())
+    feedback_text = "\n".join(f"- {f.feedback}" for f in feedbacks if getattr(f, "feedback", None))
+    category_guideline = f"Valid categories are: {', '.join(categories)}. " if categories else ""
+    search_prompt = (
+        f"Today is {today_str}. Call search_transactions to inspect transactions.\n"
+        "Guidelines:\n"
+        "- Dates: If user feedback specifies a timeframe, adhere strictly to that preference; otherwise use a 3 to 6 month date range up to today.\n"
+        f"- Categories: {category_guideline}"
+        "Do NOT specify category_name unless the user explicitly requested to focus on a valid category in their feedback. "
+        "Merchants (such as Spotify, Netflix, Anytime Fitness) are NOT category names. "
+        "If no valid category preference was requested by the user, omit category_name completely so all transactions are retrieved."
+    )
+    if feedback_text:
+        search_prompt += f"\nUser feedback preferences:\n{feedback_text}"
+
+    if categories:
+        for t in tools:
+            if t.get("function", {}).get("name") == "search_transactions":
+                t["function"]["parameters"].setdefault("properties", {}).setdefault("category_name", {})["enum"] = categories
+
+    resp = client.chat.completions.create(
+        model=search_model,
+        messages=[{"role": "user", "content": search_prompt}],
+        tools=tools,
+        tool_choice="required",
+        temperature=0.2,
+    )
+
+    tool_call = resp.choices[0].message.tool_calls[0]
+    tool_args = json.loads(tool_call.function.arguments)
+    if categories and tool_args.get("category_name") not in categories:
+        tool_args.pop("category_name", None)
+    return {k: v for k, v in tool_args.items() if v is not None and v != ""}
+
+
 def generate_advice(
     goals: List[dto.Goal],
     suggestions: List[dto.Suggestion],
@@ -113,24 +151,12 @@ def generate_advice(
     user_data = format_planner_prompt(goals, suggestions, feedbacks)
 
     # 1. Lower parameter model (qwen2.5:3b) determines dates and calls search_transactions tool
-    feedback_text = "\n".join(f"- {f.feedback}" for f in feedbacks if getattr(f, "feedback", None))
-    tool_prompt = "Call search_transactions with a 3 to 6 month date range to inspect transactions for recurring bills and habits."
-    if feedback_text:
-        tool_prompt += f"\nUser feedback timeframe preferences:\n{feedback_text}"
-
-    tool_resp = client.chat.completions.create(
-        model=tool_model,
-        messages=[{"role": "user", "content": tool_prompt}],
-        tools=[SEARCH_TRANSACTIONS_TOOL],
-        tool_choice="required",
-        temperature=0.2,
-    )
-
-    tool_call = tool_resp.choices[0].message.tool_calls[0]
-    tool_args = json.loads(tool_call.function.arguments)
+    search_args = generate_transaction_search_args(feedbacks)
 
     # 2. Call the MCP server over HTTP
-    transactions = call_mcp_server("search_transactions", tool_args)
+    transactions = call_mcp_server("search_transactions", search_args)
+    if not transactions:
+        return "You don't have any transactions yet. Add transactions using the transactions tab."
 
     # 3. 8B model generates the final advice sentences
     system_prompt = load_prompt("savings_prompt.txt")
@@ -143,11 +169,11 @@ def generate_advice(
                 "content": (
                     f"{user_data}\n\n"
                     f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(transactions, indent=2)}\n\n"
-                    "Deliver 1 or 2 direct advice sentences starting immediately with the first word of the advice."
+                    "Deliver 1 or 2 direct savings advice sentences that help the user reduce expenses toward an active goal, starting immediately with the first word of the advice."
                 ),
             },
         ],
-        temperature=0.6,
+        temperature=0.3,
     )
     return (advice_resp.choices[0].message.content or "").strip()
 

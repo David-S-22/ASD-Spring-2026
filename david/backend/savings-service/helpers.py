@@ -1,7 +1,10 @@
+import os
 from typing import Any, List, Optional
 import requests
 from dateutil import parser
 from shared.backend import dto
+
+TRANSACTIONS_DB_URL = os.environ.get("TRANSACTIONS_DB_URL", "http://localhost:6001")
 
 def try_parse_bool(value: Any) -> Optional[bool]:
     if isinstance(value, bool):
@@ -45,6 +48,12 @@ def object_to_hook(d: dict):
             feedback=d["feedback"],
             suggestion_id=d.get("suggestion_id"),
         )
+    if "name" in d and "id" in d and ("type" in d or "cost" not in d):
+        return dto.Category(
+            id=d.get("id"),
+            name=d["name"],
+            type=d.get("type"),
+        )
     return d
 
 
@@ -79,4 +88,21 @@ def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
     except Exception:
         pass
     return []
+
+
+def fetch_categories() -> List[str]:
+    try:
+        resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/categories", timeout=5)
+        if resp.ok:
+            data = resp.json(object_hook=object_to_hook)
+            categories = []
+            for item in data:
+                name = getattr(item, "name", item.get("name") if isinstance(item, dict) else None)
+                if name and name.strip() and name.strip().lower() != "uncategorised":
+                    categories.append(name.strip())
+            return categories
+    except Exception:
+        pass
+    return []
+
 
