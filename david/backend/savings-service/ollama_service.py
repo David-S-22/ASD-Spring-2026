@@ -8,6 +8,7 @@ from fastmcp import Client
 from openai import OpenAI
 from shared.backend import dto
 from .helpers import fetch_categories, fetch_feedbacks, fetch_goals, fetch_suggestions
+
 MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8000/mcp")
 url = os.environ.get("OLLAMA_URL", "http://localhost:11434/v1")
 timeout = float(os.environ.get("OLLAMA_TIMEOUT", "180"))
@@ -20,9 +21,7 @@ client = OpenAI(base_url=url, api_key="ollama", timeout=timeout)
 def load_prompt(prompt_name: str) -> str:
     filename = prompt_name if prompt_name.endswith(".txt") else f"{prompt_name}.txt"
     prompt_path = pathlib.Path(__file__).resolve().parent.parent / "prompts" / filename
-    if prompt_path.is_file():
-        return prompt_path.read_text(encoding="utf-8").strip()
-    return ""
+    return prompt_path.read_text(encoding="utf-8").strip()
 
 
 def format_planner_prompt(
@@ -109,19 +108,27 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback]) -> dict:
 
     categories = fetch_categories()
     today_str = os.environ.get("DEMO_TODAY", date.today().isoformat())
-    feedback_text = "\n".join(f"- {f.feedback}" for f in feedbacks if getattr(f, "feedback", None))
-    category_guideline = f"Valid categories are: {', '.join(categories)}. " if categories else ""
-    search_prompt = (
-        f"Today is {today_str}. Call search_transactions to inspect transactions.\n"
-        "Guidelines:\n"
-        "- Dates: If user feedback specifies a timeframe, adhere strictly to that preference; otherwise use a 3 to 6 month date range up to today.\n"
-        f"- Categories: {category_guideline}"
-        "Do NOT specify category_name unless the user explicitly requested to focus on a valid category in their feedback. "
-        "Merchants (such as Spotify, Netflix, Anytime Fitness) are NOT category names. "
-        "If no valid category preference was requested by the user, omit category_name completely so all transactions are retrieved."
+    category_guideline = ", ".join(categories) if categories else "None"
+
+    latest_feedback = (
+        feedbacks[-1].feedback.strip()
+        if feedbacks and getattr(feedbacks[-1], "feedback", None)
+        else "None"
     )
-    if feedback_text:
-        search_prompt += f"\nUser feedback preferences:\n{feedback_text}"
+    older_lines = [
+        f"- {f.feedback.strip()}"
+        for f in (feedbacks[:-1] if feedbacks else [])
+        if getattr(f, "feedback", None) and str(f.feedback).strip()
+    ]
+    background_preferences = "\n".join(older_lines) if older_lines else "None"
+
+    prompt_template = load_prompt("search_prompt.txt")
+    search_prompt = prompt_template.format(
+        today=today_str,
+        category_guideline=category_guideline,
+        latest_feedback=latest_feedback,
+        background_preferences=background_preferences,
+    ).strip()
 
     if categories:
         for t in tools:
@@ -133,13 +140,15 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback]) -> dict:
         messages=[{"role": "user", "content": search_prompt}],
         tools=tools,
         tool_choice="required",
-        temperature=0.2,
+        temperature=0.0,
     )
 
     tool_call = resp.choices[0].message.tool_calls[0]
     tool_args = json.loads(tool_call.function.arguments)
+
     if categories and tool_args.get("category_name") not in categories:
         tool_args.pop("category_name", None)
+
     return {k: v for k, v in tool_args.items() if v is not None and v != ""}
 
 
