@@ -88,6 +88,7 @@ services:
       DB_PATH: /app/data/transactions.db
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
       ANOMALIES_TIMEOUT_SECONDS: 10
+      SAVINGS_DB_URL: http://savings-db:6002
     volumes:
       - transactions_data:/app/data
 

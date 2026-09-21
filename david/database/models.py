@@ -35,8 +35,10 @@ class Feedback(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     feedback: Mapped[str] = mapped_column(nullable=False)
     suggestion_id: Mapped[Optional[int]] = mapped_column(db.ForeignKey("suggestion.id", ondelete="CASCADE"), nullable=True)
+    category_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    timeframe: Mapped[Optional[str]] = mapped_column(nullable=True)
     suggestion: Mapped[Optional["Suggestion"]] = db.relationship("Suggestion", backref=db.backref("feedbacks", cascade="all, delete-orphan"), foreign_keys=[suggestion_id])
 
     def to_dto(self):
-        return dto.Feedback(self.id, self.feedback, self.suggestion_id)
+        return dto.Feedback(self.id, self.feedback, self.suggestion_id, self.category_id, self.timeframe)
 

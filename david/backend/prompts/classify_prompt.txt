@@ -1,0 +1,12 @@
+Task: Determine if the user feedback is an active request to focus on a spending category and/or timeframe.
+Valid categories: {valid_categories}
+
+User feedback: "{feedback_text}"
+
+Guidelines:
+- If the user asks to focus on, investigate, or reduce spending in a specific category, set is_focus to true and category to the exact matching category name.
+- If it is general feedback, a negative constraint, or lifestyle rule (e.g. 'don't cancel X', 'keep Y', 'save money'), set is_focus to false and category to null.
+- Extract any timeframe (e.g. 'last month', '2 weeks'), or null.
+- If the user specifies a timeframe with a missing time unit (e.g. 'last 2', 'past 3', 'for 1'), infer and include the most appropriate time unit (e.g. '2 weeks', '3 months') so the timeframe is complete.
+
+Respond in JSON format: {{"is_focus": true/false, "category": "Name" or null, "timeframe": "timeframe" or null}}

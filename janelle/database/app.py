@@ -3,6 +3,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import requests
 from flask import Flask, jsonify, request
 from sqlalchemy import case, delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -381,6 +382,17 @@ def register_routes(application):
 			raise ApiError("category is in use", "category_in_use", 409)
 		db.session.delete(category)
 		db.session.commit()
+		try:
+			savings_db_url = os.environ.get(
+				"SAVINGS_DB_URL", "http://savings-db:6002"
+			).rstrip("/")
+			requests.delete(
+				f"{savings_db_url}/feedbacks",
+				params={"category_id": category_id},
+				timeout=float(os.environ.get("SAVINGS_TIMEOUT_SECONDS", "10")),
+			)
+		except requests.RequestException:
+			pass
 		return "", 204
 
 	@application.get("/category-corrections")

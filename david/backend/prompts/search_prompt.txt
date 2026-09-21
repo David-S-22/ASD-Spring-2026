@@ -1,12 +1,16 @@
 Today is {today}. Call search_transactions to inspect transactions.
 
-Latest User Feedback:
-"{latest_feedback}"
-
-Guidelines:
-- Category: If the latest feedback requests to focus on a specific spending area, set category_name to the matching category from: {category_guideline}.
-- Dates: If the latest feedback specifies a timeframe (e.g. 'last month', 'past 2 weeks'), calculate start_date and end_date relative to today; otherwise use a 3 to 6 month date range up to today.
-- If no category is requested in the latest feedback, omit category_name so all transactions are retrieved.
+Category & Timeframe Feedback (Newest to Oldest):
+{category_timeframe_feedback}
 
 Background Preferences:
 {background_preferences}
+
+Valid Categories:
+{valid_categories}
+
+Guidelines:
+- The category & timeframe feedback list is ordered from newest to oldest (newer feedback is listed first and takes priority).
+- If recent feedback specifies a category to focus on, set category_name to the matching valid category from Valid Categories. If no specific category focus is requested, omit category_name so all transactions are retrieved.
+- If recent feedback specifies a timeframe (e.g. 'past 2 weeks', 'last month'), calculate start_date and end_date relative to today based on that timeframe; otherwise use a 3 to 6 month date range up to today.
+- When multiple feedback entries specify categories or timeframes, prioritize the newer feedback first.

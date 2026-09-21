@@ -47,6 +47,8 @@ def object_to_hook(d: dict):
             id=d.get("id"),
             feedback=d["feedback"],
             suggestion_id=d.get("suggestion_id"),
+            category_id=d.get("category_id"),
+            timeframe=d.get("timeframe"),
         )
     if "name" in d and "id" in d and ("type" in d or "cost" not in d):
         return dto.Category(
@@ -90,16 +92,22 @@ def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
     return []
 
 
-def fetch_categories() -> List[str]:
+def fetch_categories(tx_url: Optional[str] = None) -> List[dto.Category]:
+    url = (tx_url or TRANSACTIONS_DB_URL).rstrip("/")
     try:
-        resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/categories", timeout=5)
+        resp = requests.get(f"{url}/categories", timeout=5)
         if resp.ok:
             data = resp.json(object_hook=object_to_hook)
             categories = []
             for item in data:
-                name = getattr(item, "name", item.get("name") if isinstance(item, dict) else None)
-                if name and name.strip() and name.strip().lower() != "uncategorised":
-                    categories.append(name.strip())
+                if isinstance(item, dto.Category):
+                    category = item
+                elif isinstance(item, dict) and "id" in item and "name" in item:
+                    category = dto.Category(id=item["id"], name=item["name"], type=item.get("type"))
+                else:
+                    continue
+                if category.name and category.name.strip().lower() != "uncategorised":
+                    categories.append(category)
             return categories
     except Exception:
         pass

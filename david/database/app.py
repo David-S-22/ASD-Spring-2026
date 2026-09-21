@@ -47,7 +47,7 @@ def setup_app(database_path) -> Flask:
         return jsonify(db.get_or_404(Feedback, id).to_dto())
 
     @app.route("/goal", methods=["POST"])
-    def add_goal_route():
+    def add_goal():
         payload = request.get_json()
 
         if "name" not in payload:
@@ -69,7 +69,7 @@ def setup_app(database_path) -> Flask:
 
 
     @app.route("/suggestion", methods=["POST"])
-    def add_suggestion_route():
+    def add_suggestion():
         payload = request.get_json()
 
         if not payload or "suggestion" not in payload:
@@ -89,7 +89,7 @@ def setup_app(database_path) -> Flask:
 
 
     @app.route("/feedback", methods=["POST"])
-    def add_feedback_route():
+    def add_feedback():
         payload = request.get_json()
 
         if "feedback" not in payload:
@@ -105,9 +105,19 @@ def setup_app(database_path) -> Flask:
             if not suggestion:
                 return abort(404)
 
+        category_id = payload.get("category_id")
+        if category_id is not None:
+            category_id = int(category_id)
+
+        timeframe = payload.get("timeframe")
+        if timeframe is not None:
+            timeframe = str(timeframe).strip() or None
+
         feedback = Feedback(
             feedback=payload["feedback"],
             suggestion_id=suggestion_id,
+            category_id=category_id,
+            timeframe=timeframe,
         )
         db.session.add(feedback)
         db.session.commit()
@@ -121,10 +131,19 @@ def setup_app(database_path) -> Flask:
             return abort(404)
 
         updated_feedback = request.get_json() or {}
-        if "feedback" not in updated_feedback:
+        if "feedback" not in updated_feedback and "category_id" not in updated_feedback and "timeframe" not in updated_feedback:
             return jsonify({"error": "Missing feedback field"}), 400
 
-        feedback_to_update.feedback = updated_feedback["feedback"]
+        if "feedback" in updated_feedback:
+            feedback_to_update.feedback = updated_feedback["feedback"]
+
+        if "category_id" in updated_feedback:
+            raw_category = updated_feedback["category_id"]
+            feedback_to_update.category_id = int(raw_category) if raw_category is not None else None
+
+        if "timeframe" in updated_feedback:
+            feedback_to_update.timeframe = updated_feedback["timeframe"]
+
         db.session.commit()
         return jsonify(feedback_to_update.to_dto()), 200
 
@@ -174,7 +193,7 @@ def setup_app(database_path) -> Flask:
 
 
     @app.route("/goal/<int:id>", methods=["DELETE"])
-    def delete_goal_route(id: int):
+    def delete_goal(id: int):
         goal = db.session.get(Goal, id)
         if goal is None:
             return abort(404)
@@ -185,7 +204,7 @@ def setup_app(database_path) -> Flask:
 
 
     @app.route("/suggestion/<int:id>", methods=["DELETE"])
-    def delete_suggestion_route(id: int):
+    def delete_suggestion(id: int):
         suggestion = db.session.get(Suggestion, id)
         if suggestion is None:
             return abort(404)
@@ -196,7 +215,7 @@ def setup_app(database_path) -> Flask:
 
 
     @app.route("/feedback/<int:id>", methods=["DELETE"])
-    def delete_feedback_route(id: int):
+    def delete_feedback_by_id(id: int):
         feedback = db.session.get(Feedback, id)
         if feedback is None:
             return abort(404)
@@ -204,6 +223,18 @@ def setup_app(database_path) -> Flask:
         db.session.delete(feedback)
         db.session.commit()
         return "", 204
+
+
+    @app.route("/feedbacks", methods=["DELETE"])
+    def delete_feedbacks_by_category():
+        category_id = request.args.get("category_id")
+        if category_id is not None:
+            db.session.execute(
+                db.delete(Feedback).where(Feedback.category_id == int(category_id))
+            )
+            db.session.commit()
+            return "", 204
+        return jsonify({"error": "No filter provided"}), 400
 
     return app
 
