@@ -4,7 +4,7 @@ from flask import Flask, jsonify, request
 
 from corpus import refresh
 from database import client
-from query import MODELS, ask, retrieve
+from query import MODELS, ask, retrieve, review
 
 app = Flask(__name__)
 PORT = int(os.getenv("RAG_PORT", "5003"))
@@ -43,6 +43,13 @@ def answer_route():
     """Answer the question from a feature's documents with the model for the chosen role."""
     body = request.get_json()
     return jsonify(ask(body["feature"], body["question"], body.get("k", 3), body.get("role", "generation")))
+
+
+@app.post("/review")
+def review_route():
+    """Check an answer against a feature's documents with the review model."""
+    body = request.get_json()
+    return jsonify(review(body["feature"], body["question"], body["answer"], body.get("k", 3)))
 
 
 if __name__ == "__main__":

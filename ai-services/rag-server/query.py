@@ -20,6 +20,14 @@ answer_prompt = ChatPromptTemplate.from_template(
     "Question: {question}"
 )
 
+review_prompt = ChatPromptTemplate.from_template(
+    "Check the answer against the context below.\n"
+    "Say whether the context supports the answer, and point out any part of the answer the context does not support.\n\n"
+    "Context:\n{context}\n\n"
+    "Question: {question}\n\n"
+    "Answer: {answer}"
+)
+
 
 def retrieve(feature, question, k=3, where=None):
     """Return the k documents closest to the question, each paired with its distance."""
@@ -45,3 +53,12 @@ def ask(feature, question, k=3, role="generation"):
         "model": MODELS[role],
         "sources": [document.id for document in documents],
     }
+
+
+def review(feature, question, answer, k=3):
+    """Check an answer against the retrieved documents with the review model."""
+    documents = [document for document, distance in retrieve(feature, question, k)]
+    llm = ChatOllama(model=MODELS["review"], base_url=OLLAMA_URL)
+    chain = review_prompt | llm
+    response = chain.invoke({"context": context_of(documents), "question": question, "answer": answer})
+    return {"review": response.content, "model": MODELS["review"], "sources": [document.id for document in documents]}

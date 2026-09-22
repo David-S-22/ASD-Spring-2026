@@ -72,3 +72,11 @@ def test_answer_role_picks_the_model_for_that_role(http, monkeypatch):
     monkeypatch.setattr(query, "ChatOllama", fake)
     http.post("/answer", json={"feature": FEATURE, "question": "Which bill is overdue?", "role": "reasoning"})
     assert used == [(query.MODELS["reasoning"], True)]
+
+
+def test_review_returns_the_review_and_sources(http):
+    """A review carries the review model's reply, the model used and the retrieved ids."""
+    body = http.post("/review", json={"feature": FEATURE, "question": "Which bill is overdue?", "answer": "The internet bill."}).get_json()
+    assert body["review"] == "fake reply"
+    assert body["model"] == query.MODELS["review"]
+    assert body["sources"][0] == "a"
