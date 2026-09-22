@@ -35,6 +35,7 @@ def test_retrieve_returns_the_closest_document_with_its_distance(http):
     """The overdue question finds the internet bill first."""
     body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "k": 1}).get_json()
     assert body["results"][0]["id"] == "a"
+    assert body["results"][0]["text"] == DOCUMENTS[0]
     assert body["results"][0]["distance"] >= 0
 
 
