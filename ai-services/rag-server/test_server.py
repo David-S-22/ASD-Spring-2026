@@ -45,3 +45,30 @@ def test_retrieve_where_filters_on_metadata(http):
     """A where filter keeps only documents whose metadata matches."""
     body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "where": {"topic": "music"}}).get_json()
     assert [result["id"] for result in body["results"]] == ["b"]
+
+
+def test_health_names_the_model_roles(http):
+    """Health lists the three model roles."""
+    body = http.get("/health").get_json()
+    assert set(body["models"]) == {"generation", "review", "reasoning"}
+
+
+def test_answer_uses_the_generation_model_by_default(http):
+    """An answer carries the reply, the model used and the retrieved ids."""
+    body = http.post("/answer", json={"feature": FEATURE, "question": "Which bill is overdue?"}).get_json()
+    assert body["answer"] == "fake reply"
+    assert body["model"] == query.MODELS["generation"]
+    assert body["sources"][0] == "a"
+
+
+def test_answer_role_picks_the_model_for_that_role(http, monkeypatch):
+    """Asking with the reasoning role builds the reasoning model with reasoning turned on."""
+    used = []
+
+    def fake(**kwargs):
+        used.append((kwargs["model"], kwargs["reasoning"]))
+        return FakeListChatModel(responses=["fake reply"])
+
+    monkeypatch.setattr(query, "ChatOllama", fake)
+    http.post("/answer", json={"feature": FEATURE, "question": "Which bill is overdue?", "role": "reasoning"})
+    assert used == [(query.MODELS["reasoning"], True)]
