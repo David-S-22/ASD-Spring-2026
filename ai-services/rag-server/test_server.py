@@ -1,0 +1,45 @@
+import pytest
+
+from database import client
+from server import app
+
+FEATURE = "servertest"
+IDS = ["a", "b", "c"]
+DOCUMENTS = ["The internet bill is overdue.", "Spotify is a music subscription.", "Rent is paid on the first of the month."]
+METADATAS = [{"topic": "bills"}, {"topic": "music"}, {"topic": "bills"}]
+
+
+@pytest.fixture
+def http():
+    """A test client over a small refreshed corpus."""
+    test_client = app.test_client()
+    test_client.post("/refresh", json={"feature": FEATURE, "ids": IDS, "documents": DOCUMENTS, "metadatas": METADATAS})
+    yield test_client
+    client.delete_collection(name=FEATURE)
+
+
+def test_health_lists_the_collection(http):
+    """Health names every collection in the store."""
+    body = http.get("/health").get_json()
+    assert body["ok"] is True
+    assert FEATURE in body["collections"]
+
+
+def test_refresh_replaces_the_documents(http):
+    """Refreshing with one document leaves exactly one document."""
+    body = http.post("/refresh", json={"feature": FEATURE, "ids": ["a"], "documents": ["Only one document now."]}).get_json()
+    assert body["total"] == 1
+
+
+def test_retrieve_returns_the_closest_document_with_its_distance(http):
+    """The overdue question finds the internet bill first."""
+    body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "k": 1}).get_json()
+    assert body["results"][0]["id"] == "a"
+    assert body["results"][0]["text"] == DOCUMENTS[0]
+    assert body["results"][0]["distance"] >= 0
+
+
+def test_retrieve_where_filters_on_metadata(http):
+    """A where filter keeps only documents whose metadata matches."""
+    body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "where": {"topic": "music"}}).get_json()
+    assert [result["id"] for result in body["results"]] == ["b"]

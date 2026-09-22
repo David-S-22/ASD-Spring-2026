@@ -43,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r sophia/requirements.txt -r ai-services/rag-server/requirements.txt
       - name: Run RAG tests
-        run: python -m pytest sophia/rag -q
+        run: python -m pytest sophia/rag ai-services/rag-server -q
 
   docker-health: # Check bills container health after startup
     runs-on: ubuntu-latest
