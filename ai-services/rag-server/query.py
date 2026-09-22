@@ -17,15 +17,15 @@ prompt = ChatPromptTemplate.from_template(
 )
 
 
-def retrieve(feature, question, k=3):
-    """Return the k documents in the feature's collection closest to the question."""
+def retrieve(feature, question, k=3, where=None):
+    """Return the k documents closest to the question, each paired with its distance."""
     vector_store = Chroma(client=client, collection_name=feature)
-    return vector_store.similarity_search(question, k=k)
+    return vector_store.similarity_search_with_score(question, k=k, filter=where)
 
 
 def ask(feature, question, k=3):
     """Answer the question using the documents retrieved for it."""
-    documents = retrieve(feature, question, k)
+    documents = [document for document, distance in retrieve(feature, question, k)]
     context = "\n".join(document.page_content for document in documents)
     llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
     chain = prompt | llm

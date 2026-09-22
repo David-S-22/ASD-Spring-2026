@@ -32,3 +32,16 @@ def test_refresh_replaces_the_documents(http):
     """Refreshing with one document leaves exactly one document."""
     body = http.post("/refresh", json={"feature": FEATURE, "ids": ["a"], "documents": ["Only one document now."]}).get_json()
     assert body["total"] == 1
+
+
+def test_retrieve_returns_the_closest_document_with_its_distance(http):
+    """The overdue question finds the internet bill first."""
+    body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "k": 1}).get_json()
+    assert body["results"][0]["id"] == "a"
+    assert body["results"][0]["distance"] >= 0
+
+
+def test_retrieve_where_filters_on_metadata(http):
+    """A where filter keeps only documents whose metadata matches."""
+    body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "where": {"topic": "music"}}).get_json()
+    assert [result["id"] for result in body["results"]] == ["b"]

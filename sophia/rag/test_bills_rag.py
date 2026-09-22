@@ -26,15 +26,23 @@ def test_add_documents_does_not_duplicate(feature):
 
 
 def test_retrieve_finds_the_overdue_bill(feature):
-    """The overdue question returns Home internet first."""
-    documents = query.retrieve(feature, "Which bill is overdue?", k=2)
-    assert documents[0].id == "bill-7"
+    """The overdue question returns Home internet first, with its distance."""
+    results = query.retrieve(feature, "Which bill is overdue?", k=2)
+    document, distance = results[0]
+    assert document.id == "bill-7"
+    assert distance >= 0
 
 
 def test_retrieve_finds_the_music_subscription(feature):
     """The music question returns Spotify first."""
-    documents = query.retrieve(feature, "How much is my music subscription?", k=2)
-    assert documents[0].id == "bill-3"
+    results = query.retrieve(feature, "How much is my music subscription?", k=2)
+    assert results[0][0].id == "bill-3"
+
+
+def test_retrieve_where_keeps_only_matching_metadata(feature):
+    """Filtering on type keeps bills out of a subscriptions-only search."""
+    results = query.retrieve(feature, "Which bill is overdue?", k=5, where={"type": "subscription"})
+    assert [document.metadata["type"] for document, distance in results] == ["subscription"] * 3
 
 
 def test_ask_returns_answer_and_sources(feature, monkeypatch):
