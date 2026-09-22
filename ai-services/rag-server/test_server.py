@@ -1,7 +1,5 @@
 import pytest
-from langchain_core.language_models import FakeListChatModel
 
-import query
 from database import client
 from server import app
 
@@ -12,9 +10,8 @@ METADATAS = [{"topic": "bills"}, {"topic": "music"}, {"topic": "bills"}]
 
 
 @pytest.fixture
-def http(monkeypatch):
-    """A test client over a small refreshed corpus, with model calls answered by a fake model."""
-    monkeypatch.setattr(query, "ChatOllama", lambda **kwargs: FakeListChatModel(responses=["fake reply"]))
+def http():
+    """A test client over a small refreshed corpus."""
     test_client = app.test_client()
     test_client.post("/refresh", json={"feature": FEATURE, "ids": IDS, "documents": DOCUMENTS, "metadatas": METADATAS})
     yield test_client
@@ -45,38 +42,3 @@ def test_retrieve_where_filters_on_metadata(http):
     """A where filter keeps only documents whose metadata matches."""
     body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "where": {"topic": "music"}}).get_json()
     assert [result["id"] for result in body["results"]] == ["b"]
-
-
-def test_health_names_the_model_roles(http):
-    """Health lists the three model roles."""
-    body = http.get("/health").get_json()
-    assert set(body["models"]) == {"generation", "review", "reasoning"}
-
-
-def test_answer_uses_the_generation_model_by_default(http):
-    """An answer carries the reply, the model used and the retrieved ids."""
-    body = http.post("/answer", json={"feature": FEATURE, "question": "Which bill is overdue?"}).get_json()
-    assert body["answer"] == "fake reply"
-    assert body["model"] == query.MODELS["generation"]
-    assert body["sources"][0] == "a"
-
-
-def test_answer_role_picks_the_model_for_that_role(http, monkeypatch):
-    """Asking with the reasoning role builds the reasoning model with reasoning turned on."""
-    used = []
-
-    def fake(**kwargs):
-        used.append((kwargs["model"], kwargs["reasoning"]))
-        return FakeListChatModel(responses=["fake reply"])
-
-    monkeypatch.setattr(query, "ChatOllama", fake)
-    http.post("/answer", json={"feature": FEATURE, "question": "Which bill is overdue?", "role": "reasoning"})
-    assert used == [(query.MODELS["reasoning"], True)]
-
-
-def test_review_returns_the_review_and_sources(http):
-    """A review carries the review model's reply, the model used and the retrieved ids."""
-    body = http.post("/review", json={"feature": FEATURE, "question": "Which bill is overdue?", "answer": "The internet bill."}).get_json()
-    assert body["review"] == "fake reply"
-    assert body["model"] == query.MODELS["review"]
-    assert body["sources"][0] == "a"

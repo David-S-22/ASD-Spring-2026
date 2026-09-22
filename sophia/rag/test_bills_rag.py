@@ -4,7 +4,6 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "ai-services", "rag-server"))
 
 import pytest
-from langchain_core.language_models import FakeListChatModel
 
 import query
 from bills_corpus import DOCUMENTS, IDS, METADATAS
@@ -43,11 +42,3 @@ def test_retrieve_where_keeps_only_matching_metadata(feature):
     """Filtering on type keeps bills out of a subscriptions-only search."""
     results = query.retrieve(feature, "Which bill is overdue?", k=5, where={"type": "subscription"})
     assert [document.metadata["type"] for document, distance in results] == ["subscription"] * 3
-
-
-def test_ask_returns_answer_and_sources(feature, monkeypatch):
-    """ask passes the model's reply through and lists the retrieved ids."""
-    monkeypatch.setattr(query, "ChatOllama", lambda **kwargs: FakeListChatModel(responses=["Home internet"]))
-    result = query.ask(feature, "Which bill is overdue?", k=2)
-    assert result["answer"] == "Home internet"
-    assert result["sources"][0] == "bill-7"

@@ -14,13 +14,3 @@ print(refreshed["total"], "documents stored")
 retrieved = requests.post(f"{RAG_SERVER_URL}/retrieve", json={"feature": FEATURE, "question": QUESTION, "k": 2}).json()
 for result in retrieved["results"]:
     print(result["id"], round(result["distance"], 3), result["text"])
-
-answered = requests.post(f"{RAG_SERVER_URL}/answer", json={"feature": FEATURE, "question": QUESTION}).json()
-print(answered)
-
-reviewed = requests.post(f"{RAG_SERVER_URL}/review", json={"feature": FEATURE, "question": QUESTION, "answer": answered["answer"]}).json()
-print(reviewed)
-
-reasoned = requests.post(f"{RAG_SERVER_URL}/answer", json={"feature": FEATURE, "question": QUESTION, "role": "reasoning"}).json()
-print(reasoned["answer"])
-print(reasoned["reasoning"][:300])
