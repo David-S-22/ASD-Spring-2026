@@ -12,7 +12,7 @@ print(total, "documents stored")
 
 question = "Which bill is overdue?"
 
-for document in retrieve("bills", question, k=2):
+for document, distance in retrieve("bills", question, k=2):
     print(document.id, document.page_content)
 
 print(ask("bills", question))
