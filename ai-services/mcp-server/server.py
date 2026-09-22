@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 mcp = FastMCP("Transactions")
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
+RAG_SERVER_URL = os.getenv("RAG_SERVER_URL", "http://localhost:5003")
 
 
 @mcp.resource("docs://readme", mime_type="text/markdown")
@@ -46,6 +47,51 @@ def search_transactions(
         params["category_name"] = category_name
 
     resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions", params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+
+
+@mcp.tool()
+def retrieve_context(feature: str, question: str, k: int = 3) -> dict:
+    """Return the documents in a feature's corpus that are closest to the question.
+
+    Args:
+        feature: Which feature's corpus to search, for example 'bills'.
+        question: The question to find supporting documents for.
+        k: How many documents to return.
+    """
+    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/retrieve", json={"feature": feature, "question": question, "k": k})
+    resp.raise_for_status()
+    return resp.json()
+
+
+@mcp.tool()
+def answer_question(feature: str, question: str, k: int = 3, role: str = "generation") -> dict:
+    """Answer a question from a feature's corpus and list the documents used.
+
+    Args:
+        feature: Which feature's corpus to answer from, for example 'bills'.
+        question: The question to answer.
+        k: How many documents to answer from.
+        role: Which model answers: 'generation' (default) or 'reasoning' for questions that need working out.
+    """
+    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/answer", json={"feature": feature, "question": question, "k": k, "role": role})
+    resp.raise_for_status()
+    return resp.json()
+
+
+@mcp.tool()
+def review_answer(feature: str, question: str, answer: str, k: int = 3) -> dict:
+    """Check whether an answer is supported by a feature's corpus.
+
+    Args:
+        feature: Which feature's corpus to check against, for example 'bills'.
+        question: The question the answer was written for.
+        answer: The answer to check.
+        k: How many documents to check against.
+    """
+    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/review", json={"feature": feature, "question": question, "answer": answer, "k": k})
     resp.raise_for_status()
     return resp.json()
 
