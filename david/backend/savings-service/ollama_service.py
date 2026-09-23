@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import pathlib
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from fastmcp import Client
 from openai import OpenAI
 
@@ -11,7 +11,7 @@ OLLAMA_API_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/v1")
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "180"))
 planner_model = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
 search_model = os.environ.get("OLLAMA_TOOL_MODEL", "qwen2.5:3b")
-classifier_model = os.environ.get("OLLAMA_CLASSIFIER_MODEL", "qwen2.5:0.5b")
+classifier_model = os.environ.get("OLLAMA_CLASSIFIER_MODEL", "qwen2.5:3b")
 
 client = OpenAI(base_url=OLLAMA_API_URL, api_key="ollama", timeout=OLLAMA_TIMEOUT)
 
@@ -32,31 +32,63 @@ def _format_messages(prompt: str, system_prompt: Optional[str] = None) -> list[d
     return messages
 
 
-def prompt_model(
+def prompt_text(
     prompt: str,
     model: str,
     system_prompt: Optional[str] = None,
-    json_mode: bool = False,
     temperature: float = 0.0,
-) -> Any:
-    """Sends a prompt to the AI model and returns its response (as text, or parsed as a JSON dictionary if json_mode=True)."""
+) -> str:
+    """Prompts the AI model to generate a plain-text response."""
     messages = _format_messages(prompt, system_prompt=system_prompt)
-    if json_mode:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            response_format={"type": "json_object"},
-        )
-        content = (resp.choices[0].message.content or "").strip()
-        return json.loads(content)
-
     resp = client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
     )
     return (resp.choices[0].message.content or "").strip()
+
+
+def prompt_json(
+    prompt: str,
+    model: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.0,
+) -> dict:
+    """Prompts the AI model with JSON mode enabled and parses the JSON response into a dict."""
+    messages = _format_messages(prompt, system_prompt=system_prompt)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        response_format={"type": "json_object"},
+    )
+    content = (resp.choices[0].message.content or "").strip()
+    return json.loads(content)
+
+
+def prompt_structured_schema(
+    prompt: str,
+    schema: dict,
+    model: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.0,
+) -> dict:
+    """Prompts the AI model with grammar-constrained JSON schema decoding and returns the parsed dict."""
+    messages = _format_messages(prompt, system_prompt=system_prompt)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "StructuredOutput",
+                "schema": schema,
+            },
+        },
+    )
+    content = (resp.choices[0].message.content or "").strip()
+    return json.loads(content)
 
 
 def generate_tool_call_arguments(

@@ -26,7 +26,7 @@ def get_suggestions() -> List[Suggestion]:
         Suggestion(id=4, suggestion="Switch your home internet plan from FibreLink 100Mbps to 50Mbps to save $20/month towards your New Laptop goal.", accepted=False),
         Suggestion(id=5, suggestion="Switch to buying store-brand pantry staples at Woolworths to save approximately $25/week on groceries.", accepted=True),
         Suggestion(id=6, suggestion="Brew coffee at home on weekdays instead of buying daily takeaway coffees to save around $20/week towards your Concert Tickets.", accepted=True),
-        Suggestion(id=7, suggestion="Audit your cloud storage subscriptions and cancel duplicate DriveBox tiers to save $2.99/month.", accepted=True),
+        Suggestion(id=7, suggestion="Review your cloud storage subscriptions and cancel your unused DriveBox plan to save $2.99 a month.", accepted=True),
         Suggestion(id=8, suggestion="Switch electricity providers to Sparkwell Energy's off-peak discount plan to reduce power bills by roughly $30/quarter.", accepted=False),
         Suggestion(id=9, suggestion="Take advantage of off-peak Opal fares on Fridays to save $10/week on your university commute.", accepted=True),
         Suggestion(id=10, suggestion="Pack your own lunch for university or work twice a week instead of buying takeout to save $30/week towards your Car Insurance goal.", accepted=True),

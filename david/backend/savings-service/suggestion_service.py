@@ -10,7 +10,7 @@ from .ollama_service import (
     generate_tool_call_arguments,
     load_prompt,
     planner_model,
-    prompt_model,
+    prompt_text,
     search_model,
 )
 
@@ -171,12 +171,34 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback]) -> dict:
     return {key: value for key, value in tool_args.items() if value is not None and value != ""}
 
 
+def _format_transactions_for_prompt(
+    transactions: list[dict],
+    category_map: dict[int, str],
+) -> list[dict]:
+    """Formats and enriches transactions with readable dates, amounts, and category names."""
+    formatted = []
+    for tx in (transactions or []):
+        item = {
+            "date": str(tx.get("date", ""))[:10],
+            "merchant": tx.get("merchant", ""),
+            "description": tx.get("description", ""),
+            "amount": _format_amount(tx.get("amount", 0)),
+        }
+        category_id = tx.get("category_id")
+        if category_id is not None and category_id in category_map:
+            item["category"] = category_map[category_id]
+        formatted.append(item)
+    return formatted
+
+
 def generate_advice(
     goals: List[dto.Goal],
     suggestions: List[dto.Suggestion],
     feedbacks: List[dto.Feedback],
 ) -> str:
     """Coordinates retrieval of transactions via MCP and prompts the planner model to generate savings advice."""
+    categories = fetch_categories()
+    category_map = {category.id: category.name for category in categories} if categories else {}
     user_data = format_planner_prompt(goals, suggestions, feedbacks)
 
     search_args = generate_transaction_search_args(feedbacks)
@@ -184,13 +206,18 @@ def generate_advice(
     if not transactions:
         return "You don't have any transactions yet. Add transactions using the transactions tab."
 
+    formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
+
     system_prompt = load_prompt("savings_prompt.txt")
     user_prompt = (
         f"{user_data}\n\n"
-        f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(transactions, indent=2)}\n\n"
-        "Deliver 1 or 2 natural, well-phrased savings advice sentences that help the user reduce expenses toward an active goal, starting immediately with the first word of the advice."
+        f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
+        "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
+        "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
+        "- Ground advice in specific merchants and amounts from retrieved transactions and connect to an exact active goal name.\n"
+        "- Do not repeat merchants in past_suggestions; follow user preferences and cadence rules."
     )
-    return prompt_model(
+    return prompt_text(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
