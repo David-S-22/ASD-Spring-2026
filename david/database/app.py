@@ -107,7 +107,10 @@ def setup_app(database_path) -> Flask:
 
         category_id = payload.get("category_id")
         if category_id is not None:
-            category_id = int(category_id)
+            try:
+                category_id = int(category_id)
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid category_id"}), 400
 
         timeframe = payload.get("timeframe")
         if timeframe is not None:
@@ -139,10 +142,17 @@ def setup_app(database_path) -> Flask:
 
         if "category_id" in updated_feedback:
             raw_category = updated_feedback["category_id"]
-            feedback_to_update.category_id = int(raw_category) if raw_category is not None else None
+            if raw_category is not None:
+                try:
+                    feedback_to_update.category_id = int(raw_category)
+                except (ValueError, TypeError):
+                    return jsonify({"error": "Invalid category_id"}), 400
+            else:
+                feedback_to_update.category_id = None
 
         if "timeframe" in updated_feedback:
-            feedback_to_update.timeframe = updated_feedback["timeframe"]
+            raw_timeframe = updated_feedback["timeframe"]
+            feedback_to_update.timeframe = str(raw_timeframe).strip() or None if raw_timeframe is not None else None
 
         db.session.commit()
         return jsonify(feedback_to_update.to_dto()), 200
@@ -229,8 +239,12 @@ def setup_app(database_path) -> Flask:
     def delete_feedbacks_by_category():
         category_id = request.args.get("category_id")
         if category_id is not None:
+            try:
+                cat_id_int = int(category_id)
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid category_id"}), 400
             db.session.execute(
-                db.delete(Feedback).where(Feedback.category_id == int(category_id))
+                db.delete(Feedback).where(Feedback.category_id == cat_id_int)
             )
             db.session.commit()
             return "", 204

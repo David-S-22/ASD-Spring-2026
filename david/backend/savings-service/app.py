@@ -143,6 +143,10 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
         category_id = payload.get("category_id")
         timeframe = payload.get("timeframe")
+        if category_id == "":
+            category_id = None
+        if timeframe == "":
+            timeframe = None
         if category_id is None and timeframe is None:
             categories = fetch_categories(tx_url)
             category_id, timeframe = classify_feedback(feedback.feedback, categories)
@@ -178,19 +182,27 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/feedback/<int:id>", methods=["PATCH"])
     def update_feedback(id: int):
-        payload = request.get_json(silent=True) or request.form.to_dict()
-        feedback_text = str(payload.get("feedback", "")).strip() if payload else ""
-        category_id = payload.get("category_id") if payload else None
-        timeframe = payload.get("timeframe") if payload else None
+        payload = request.get_json(silent=True) or request.form.to_dict() or {}
+        has_feedback = "feedback" in payload
+        feedback_text = str(payload.get("feedback", "")).strip() if has_feedback else ""
+        category_id = payload.get("category_id")
+        timeframe = payload.get("timeframe")
 
-        if feedback_text and "category_id" not in payload and "timeframe" not in payload:
+        if category_id == "":
+            category_id = None
+        if timeframe == "":
+            timeframe = None
+
+        if has_feedback and feedback_text and "category_id" not in payload and "timeframe" not in payload:
             categories = fetch_categories(tx_url)
             category_id, timeframe = classify_feedback(feedback_text, categories)
 
-        update_payload = {"feedback": feedback_text}
-        if "category_id" in payload or feedback_text:
+        update_payload = {}
+        if has_feedback:
+            update_payload["feedback"] = feedback_text
+        if "category_id" in payload or (has_feedback and feedback_text):
             update_payload["category_id"] = category_id
-        if "timeframe" in payload or feedback_text:
+        if "timeframe" in payload or (has_feedback and feedback_text):
             update_payload["timeframe"] = timeframe
 
         resp = requests.patch(f"{db_url}/feedback/{id}", json=update_payload)
@@ -222,7 +234,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        suggestion = generate_savings_advice(db_url)
+        suggestion = generate_savings_advice(db_url, tx_url=tx_url)
         return render_template("ai-suggestion.jinja", suggestion=suggestion), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
@@ -238,6 +250,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
             or suggestion_text == "No current AI suggestion available."
             or suggestion_text.startswith("Error")
             or suggestion_text.startswith("You don't have")
+            or suggestion_text.startswith("No transactions found")
         ):
             return jsonify({"error": "No valid suggestion available to accept or reject."}), 400
 

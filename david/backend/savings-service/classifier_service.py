@@ -1,6 +1,9 @@
+import logging
 from typing import List, Optional
 from shared.backend import dto
 from .ollama_service import classifier_model, load_prompt, prompt_structured_schema
+
+logger = logging.getLogger(__name__)
 
 
 def classify_feedback(feedback_text: str, categories: List[dto.Category]) -> tuple[Optional[int], Optional[str]]:
@@ -46,8 +49,9 @@ def classify_feedback(feedback_text: str, categories: List[dto.Category]) -> tup
             cat_val = data.get("category")
             matched_category = None
             if cat_val and str(cat_val).lower() != "null":
+                cat_clean = str(cat_val).strip().lower()
                 matched_category = next(
-                    (category for category in categories if category.name.lower() == str(cat_val).lower()),
+                    (category for category in categories if category.name.strip().lower() == cat_clean),
                     None,
                 )
             timeframe_val = data.get("timeframe")
@@ -60,7 +64,7 @@ def classify_feedback(feedback_text: str, categories: List[dto.Category]) -> tup
                 return matched_category.id, timeframe
             if timeframe:
                 return None, timeframe
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error classifying feedback '{feedback_text}': {e}")
 
     return None, None

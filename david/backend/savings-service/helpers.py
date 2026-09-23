@@ -1,8 +1,11 @@
+import logging
 import os
 from typing import Any, List, Optional
 import requests
 from dateutil import parser
 from shared.backend import dto
+
+logger = logging.getLogger(__name__)
 
 TRANSACTIONS_DB_URL = os.environ.get("TRANSACTIONS_DB_URL", "http://localhost:6001")
 
@@ -64,31 +67,31 @@ object_hook = object_to_hook
 
 def fetch_goals(db_url: str) -> List[dto.Goal]:
     try:
-        resp = requests.get(f"{db_url.rstrip('/')}/goals")
+        resp = requests.get(f"{db_url.rstrip('/')}/goals", timeout=5)
         if resp.ok:
             return resp.json(object_hook=object_to_hook)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching goals from {db_url}: {e}")
     return []
 
 
 def fetch_suggestions(db_url: str) -> List[dto.Suggestion]:
     try:
-        resp = requests.get(f"{db_url.rstrip('/')}/suggestions")
+        resp = requests.get(f"{db_url.rstrip('/')}/suggestions", timeout=5)
         if resp.ok:
             return resp.json(object_hook=object_to_hook)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching suggestions from {db_url}: {e}")
     return []
 
 
 def fetch_feedbacks(db_url: str) -> List[dto.Feedback]:
     try:
-        resp = requests.get(f"{db_url.rstrip('/')}/feedbacks")
+        resp = requests.get(f"{db_url.rstrip('/')}/feedbacks", timeout=5)
         if resp.ok:
             return resp.json(object_hook=object_to_hook)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching feedbacks from {db_url}: {e}")
     return []
 
 
@@ -109,8 +112,8 @@ def fetch_categories(tx_url: Optional[str] = None) -> List[dto.Category]:
                 if category.name and category.name.strip().lower() != "uncategorised":
                     categories.append(category)
             return categories
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching categories from {url}: {e}")
     return []
 
 
