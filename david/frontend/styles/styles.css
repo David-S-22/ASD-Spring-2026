@@ -289,7 +289,11 @@ button.btn-create,
 .app-container button.btn-create {
   background-color: #198754 !important;
   color: #ffffff !important;
-  padding: 4px 16px;
+  padding: 4px 14px;
+  min-width: 82px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button.btn-create:hover,
@@ -414,6 +418,47 @@ button.btn-refresh:hover,
 #ai-suggestion-container.htmx-request button,
 #ai-suggestion-container.htmx-request textarea {
   opacity: 0.5;
+  pointer-events: none;
+}
+
+.create-row.htmx-request,
+.create-row.htmx-request * {
+  cursor: wait !important;
+}
+
+.create-row.htmx-request input {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.create-row.htmx-request button.btn-create,
+.app-container .create-row.htmx-request button.btn-create {
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.create-row .btn-text-loading {
+  display: none;
+}
+
+.create-row.htmx-request .btn-text-default {
+  display: none;
+}
+
+.create-row.htmx-request .btn-text-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit-row.htmx-request,
+.edit-row.htmx-request * {
+  cursor: wait !important;
+}
+
+.edit-row.htmx-request input,
+.edit-row.htmx-request button {
+  opacity: 0.6;
   pointer-events: none;
 }
 
