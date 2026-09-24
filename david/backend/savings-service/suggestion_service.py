@@ -199,6 +199,55 @@ def _format_transactions_for_prompt(
     return formatted
 
 
+def _aggregate_spending_by_merchant(
+    transactions: list[dict],
+    category_map: dict[int, str],
+) -> list[dict]:
+    """Aggregates spending totals and transaction counts grouped by merchant."""
+    merchants: dict[str, dict[str, Any]] = {}
+    for tx in (transactions or []):
+        merchant = str(tx.get("merchant") or "Unknown").strip()
+        try:
+            amount = float(tx.get("amount", 0))
+        except (ValueError, TypeError):
+            amount = 0.0
+
+        category_id = tx.get("category_id")
+        category_name = None
+        if category_id is not None and category_id in category_map:
+            category_name = category_map[category_id]
+        elif "category" in tx:
+            category_name = tx.get("category")
+
+        if merchant not in merchants:
+            merchants[merchant] = {
+                "merchant": merchant,
+                "total_spent_raw": 0.0,
+                "transaction_count": 0,
+                "categories": set(),
+            }
+        merchants[merchant]["total_spent_raw"] += amount
+        merchants[merchant]["transaction_count"] += 1
+        if category_name:
+            merchants[merchant]["categories"].add(category_name)
+
+    sorted_merchants = sorted(
+        merchants.values(),
+        key=lambda m: m["total_spent_raw"],
+        reverse=True,
+    )
+
+    aggregated = []
+    for m in sorted_merchants:
+        aggregated.append({
+            "merchant": m["merchant"],
+            "total_spent": _format_amount(m["total_spent_raw"]),
+            "transaction_count": m["transaction_count"],
+            "category": ", ".join(sorted(m["categories"])) if m["categories"] else "Uncategorized",
+        })
+    return aggregated
+
+
 def generate_advice(
     goals: List[dto.Goal],
     suggestions: List[dto.Suggestion],
@@ -226,21 +275,25 @@ def generate_advice(
         return "You don't have any transactions yet. Add transactions using the transactions tab."
 
     formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
+    spending_summary = _aggregate_spending_by_merchant(transactions, category_map)
 
     system_prompt = load_prompt("savings_prompt.txt")
     user_prompt = (
         f"{user_data}\n\n"
+        f"Pre-Calculated Spending Summary by Merchant:\n{json.dumps(spending_summary, indent=2)}\n\n"
         f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
         "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
         "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
-        "- Ground advice in specific merchants and amounts from retrieved transactions and connect to an exact active goal name.\n"
+        "- Ground advice in spending categories and real dollar amounts. Only name a specific merchant if 100% confident the advice applies exclusively to that merchant (e.g. cancelling a specific subscription); otherwise, refer to the spending category.\n"
+        "- Do NOT invent item details (e.g. coffee, snacks) not explicitly stated in transaction descriptions.\n"
+        "- Connect the recommendation to an exact active goal name from active_goals.\n"
         "- Do not repeat merchants in past_suggestions; follow user preferences and cadence rules."
     )
     return prompt_text(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
-        temperature=0.4,
+        temperature=0.0,
     )
 
 
