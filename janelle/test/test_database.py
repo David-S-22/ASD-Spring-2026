@@ -45,6 +45,25 @@ def anomaly_cleanup_calls(monkeypatch):
 	return calls
 
 
+@fixture(autouse=True)
+def feedback_cleanup_calls(monkeypatch):
+	"""Record feedback cleanup calls and prevent real network requests in tests."""
+	calls = []
+	from unittest.mock import Mock
+
+	original_delete = database_app.requests.delete
+
+	def record(url, *args, **kwargs):
+		if "/feedbacks" in url:
+			cat_id = kwargs.get("params", {}).get("category_id")
+			calls.append((url, cat_id, kwargs.get("timeout")))
+			return Mock(status_code=204)
+		return original_delete(url, *args, **kwargs)
+
+	monkeypatch.setattr(database_app.requests, "delete", record)
+	return calls
+
+
 def get_connection(database_path):
 	connection = sqlite3.connect(database_path)
 	connection.row_factory = sqlite3.Row
@@ -523,6 +542,58 @@ def test_anomaly_cleanup_swallows_request_errors(monkeypatch):
 	monkeypatch.setattr(database_anomalies.requests, "delete", raise_error)
 
 	database_anomalies.delete_anomaly_by_transaction_id(42)
+
+
+def test_delete_category_triggers_feedback_cleanup(
+	database_client,
+	feedback_cleanup_calls,
+):
+	client, _database_path = database_client
+	created = client.post(
+		"/categories",
+		json={"name": "Cleanup Category", "type": "want"},
+	).get_json()
+
+	response = client.delete(f"/categories/{created['id']}")
+
+	assert response.status_code == 204
+	assert len(feedback_cleanup_calls) == 1
+	url, cat_id, timeout = feedback_cleanup_calls[0]
+	assert "feedbacks" in url
+	assert cat_id == created["id"]
+
+
+def test_delete_missing_category_skips_feedback_cleanup(
+	database_client,
+	feedback_cleanup_calls,
+):
+	client, _database_path = database_client
+
+	response = client.delete(f"/categories/{MISSING_CATEGORY_ID}")
+
+	assert response.status_code == 404
+	assert feedback_cleanup_calls == []
+
+
+def test_feedback_cleanup_swallows_request_errors(
+	database_client,
+	monkeypatch,
+):
+	from requests import RequestException
+
+	client, _database_path = database_client
+	created = client.post(
+		"/categories",
+		json={"name": "Error Category", "type": "want"},
+	).get_json()
+
+	def raise_error(*_args, **_kwargs):
+		raise RequestException("savings db offline")
+
+	monkeypatch.setattr(database_app.requests, "delete", raise_error)
+
+	response = client.delete(f"/categories/{created['id']}")
+	assert response.status_code == 204
 
 
 def test_transaction_create_records_ai_category_override_atomically(

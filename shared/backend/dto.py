@@ -49,3 +49,5 @@ class Feedback:
     id: int
     feedback: str
     suggestion_id: Optional[int] = None
+    category_id: Optional[int] = None
+    timeframe: Optional[str] = None

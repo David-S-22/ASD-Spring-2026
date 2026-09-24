@@ -88,6 +88,7 @@ services:
       DB_PATH: /app/data/transactions.db
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
       ANOMALIES_TIMEOUT_SECONDS: 10
+      SAVINGS_DB_URL: http://savings-db:6002
     volumes:
       - transactions_data:/app/data
 
@@ -236,6 +237,7 @@ services:
       TRANSACTIONS_DB_URL: http://localhost:6001
       OLLAMA_URL: http://localhost:11434/v1
       OLLAMA_MODEL: llama3.1:8b
+      OLLAMA_CLASSIFIER_MODEL: qwen2.5:3b
       MCP_SERVER_URL: http://localhost:8000/mcp
     depends_on:
       savings-db:

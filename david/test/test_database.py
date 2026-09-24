@@ -435,3 +435,85 @@ def test_delete_suggestion_cascades_to_linked_feedback(client: FlaskClient):
     assert persisted_general is not None
     assert persisted_general.suggestion_id is None
 
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_category_and_timeframe(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Cut dining costs", "category_id": 80, "timeframe": "2 weeks"}),
+    )
+    assert response.status_code == 201
+    res = response.get_json()
+    assert res["category_id"] == 80
+    assert res["timeframe"] == "2 weeks"
+
+    saved = db.session.get(Feedback, res["id"])
+    assert saved.category_id == 80
+    assert saved.timeframe == "2 weeks"
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_invalid_category_id(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Cut dining costs", "category_id": "not-an-int"}),
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_feedback_partial_category_and_timeframe(client: FlaskClient):
+    feedbacks = setup_feedback()
+    fb_id = feedbacks[0].id
+    orig_text = feedbacks[0].feedback
+
+    # Update only category_id
+    response = client.patch(f"/feedback/{fb_id}", json={"category_id": 70})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["category_id"] == 70
+    assert res["feedback"] == orig_text  # Text must NOT be wiped
+
+    # Update only timeframe
+    response = client.patch(f"/feedback/{fb_id}", json={"timeframe": "1 month"})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["timeframe"] == "1 month"
+    assert res["category_id"] == 70
+    assert res["feedback"] == orig_text
+
+    # Update timeframe to empty string normalizes to None
+    response = client.patch(f"/feedback/{fb_id}", json={"timeframe": ""})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["timeframe"] is None
+
+    # Invalid category_id returns 400
+    response = client.patch(f"/feedback/{fb_id}", json={"category_id": "invalid"})
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_delete_feedbacks_by_category(client: FlaskClient):
+    fb1 = Feedback(feedback="Transport focus", category_id=70)
+    fb2 = Feedback(feedback="Another transport", category_id=70)
+    fb3 = Feedback(feedback="Dining focus", category_id=80)
+    db.session.add_all([fb1, fb2, fb3])
+    db.session.commit()
+    id1, id2, id3 = fb1.id, fb2.id, fb3.id
+
+    # Invalid category_id returns 400
+    response = client.delete("/feedbacks?category_id=abc")
+    assert response.status_code == 400
+
+    # Valid category_id deletes only matching
+    response = client.delete("/feedbacks?category_id=70")
+    assert response.status_code == 204
+
+    assert db.session.get(Feedback, id1) is None
+    assert db.session.get(Feedback, id2) is None
+    assert db.session.get(Feedback, id3) is not None
+
+
