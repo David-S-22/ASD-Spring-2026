@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 mcp = FastMCP("Transactions")
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
+RAG_SERVER_URL = os.getenv("RAG_SERVER_URL", "http://localhost:5003")
 
 
 @mcp.resource("docs://readme", mime_type="text/markdown")
@@ -46,6 +47,21 @@ def search_transactions(
         params["category_name"] = category_name
 
     resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions", params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+
+
+@mcp.tool()
+def retrieve_context(feature: str, question: str, k: int = 3) -> dict:
+    """Return the documents in a feature's corpus that are closest to the question.
+
+    Args:
+        feature: Which feature's corpus to search, for example 'bills'.
+        question: The question to find supporting documents for.
+        k: How many documents to return.
+    """
+    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/retrieve", json={"feature": feature, "question": question, "k": k})
     resp.raise_for_status()
     return resp.json()
 
