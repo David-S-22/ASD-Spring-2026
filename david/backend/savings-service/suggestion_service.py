@@ -170,7 +170,7 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
         search_prompt,
         tools=tools,
         model=search_model,
-        temperature=0.0,
+        temperature=0.20,
     )
 
     if category_names and tool_args.get("category_name") not in category_names:
@@ -284,10 +284,17 @@ def generate_advice(
         f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
         "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
         "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
+        "- Ensure advice is completely understandable, grammatically correct, and natural to read.\n"
+        "- Avoid awkward clause stacking or preposition chains (never say 'shopping at [items]' or stack multiple 'at' / 'towards' clauses awkwardly).\n"
+        "- Ensure practical financial sense: never advise reducing spending by shopping at the store where spending already occurred; suggest trimming the grocery bill, setting a budget cap, or choosing store brands.\n"
+        "- Clearly express causal logic: explain how reducing spending frees up money towards the goal (e.g. 'to save towards your [Goal Name] goal').\n"
         "- Ground advice in spending categories and real dollar amounts. Only name a specific merchant if 100% confident the advice applies exclusively to that merchant (e.g. cancelling a specific subscription); otherwise, refer to the spending category.\n"
-        "- Do NOT invent item details (e.g. coffee, snacks) not explicitly stated in transaction descriptions.\n"
+        "- Rotate actionable optimization strategies (e.g. cadence limits, visit reductions, off-peak rates, pausing/rotating subscriptions) across unaddressed spending areas in the retrieved data.\n"
+        "- Do NOT repeat, paraphrase, or recycle actions already present in past_suggestions.\n"
+        "- Never use comparative merchant phrasing (e.g. 'stores like [Merchant]').\n"
+        "- Do NOT invent item details (e.g. coffee, snacks, store-brand staples) not explicitly stated in transaction descriptions.\n"
         "- Connect the recommendation to an exact active goal name from active_goals.\n"
-        "- Do not repeat merchants in past_suggestions; follow user preferences and cadence rules."
+        "- Follow user preferences and cadence rules."
     )
     return prompt_text(
         user_prompt,
