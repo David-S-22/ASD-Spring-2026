@@ -170,7 +170,7 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
         search_prompt,
         tools=tools,
         model=search_model,
-        temperature=0.0,
+        temperature=0.20,
     )
 
     if category_names and tool_args.get("category_name") not in category_names:
@@ -197,6 +197,55 @@ def _format_transactions_for_prompt(
             item["category"] = category_map[category_id]
         formatted.append(item)
     return formatted
+
+
+def _aggregate_spending_by_merchant(
+    transactions: list[dict],
+    category_map: dict[int, str],
+) -> list[dict]:
+    """Aggregates spending totals and transaction counts grouped by merchant."""
+    merchants: dict[str, dict[str, Any]] = {}
+    for tx in (transactions or []):
+        merchant = str(tx.get("merchant") or "Unknown").strip()
+        try:
+            amount = float(tx.get("amount", 0))
+        except (ValueError, TypeError):
+            amount = 0.0
+
+        category_id = tx.get("category_id")
+        category_name = None
+        if category_id is not None and category_id in category_map:
+            category_name = category_map[category_id]
+        elif "category" in tx:
+            category_name = tx.get("category")
+
+        if merchant not in merchants:
+            merchants[merchant] = {
+                "merchant": merchant,
+                "total_spent_raw": 0.0,
+                "transaction_count": 0,
+                "categories": set(),
+            }
+        merchants[merchant]["total_spent_raw"] += amount
+        merchants[merchant]["transaction_count"] += 1
+        if category_name:
+            merchants[merchant]["categories"].add(category_name)
+
+    sorted_merchants = sorted(
+        merchants.values(),
+        key=lambda m: m["total_spent_raw"],
+        reverse=True,
+    )
+
+    aggregated = []
+    for m in sorted_merchants:
+        aggregated.append({
+            "merchant": m["merchant"],
+            "total_spent": _format_amount(m["total_spent_raw"]),
+            "transaction_count": m["transaction_count"],
+            "category": ", ".join(sorted(m["categories"])) if m["categories"] else "Uncategorized",
+        })
+    return aggregated
 
 
 def generate_advice(
@@ -226,21 +275,32 @@ def generate_advice(
         return "You don't have any transactions yet. Add transactions using the transactions tab."
 
     formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
+    spending_summary = _aggregate_spending_by_merchant(transactions, category_map)
 
     system_prompt = load_prompt("savings_prompt.txt")
     user_prompt = (
         f"{user_data}\n\n"
+        f"Pre-Calculated Spending Summary by Merchant:\n{json.dumps(spending_summary, indent=2)}\n\n"
         f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
         "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
         "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
-        "- Ground advice in specific merchants and amounts from retrieved transactions and connect to an exact active goal name.\n"
-        "- Do not repeat merchants in past_suggestions; follow user preferences and cadence rules."
+        "- Ensure advice is completely understandable, grammatically correct, and natural to read.\n"
+        "- Avoid awkward clause stacking or preposition chains (never say 'shopping at [items]' or stack multiple 'at' / 'towards' clauses awkwardly).\n"
+        "- Ensure practical financial sense: never advise reducing spending by shopping at the store where spending already occurred; suggest trimming the grocery bill, setting a budget cap, or choosing store brands.\n"
+        "- Clearly express causal logic: explain how reducing spending frees up money towards the goal (e.g. 'to save towards your [Goal Name] goal').\n"
+        "- Ground advice in spending categories and real dollar amounts. Only name a specific merchant if 100% confident the advice applies exclusively to that merchant (e.g. cancelling a specific subscription); otherwise, refer to the spending category.\n"
+        "- Rotate actionable optimization strategies (e.g. cadence limits, visit reductions, off-peak rates, pausing/rotating subscriptions) across unaddressed spending areas in the retrieved data.\n"
+        "- Do NOT repeat, paraphrase, or recycle actions already present in past_suggestions.\n"
+        "- Never use comparative merchant phrasing (e.g. 'stores like [Merchant]').\n"
+        "- Do NOT invent item details (e.g. coffee, snacks, store-brand staples) not explicitly stated in transaction descriptions.\n"
+        "- Connect the recommendation to an exact active goal name from active_goals.\n"
+        "- Follow user preferences and cadence rules."
     )
     return prompt_text(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
-        temperature=0.4,
+        temperature=0.0,
     )
 
 
