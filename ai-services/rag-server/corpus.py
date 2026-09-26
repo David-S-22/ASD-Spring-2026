@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -11,6 +12,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 from database import client, get_collection
+
+logger = logging.getLogger(__name__)
 
 SOURCES_DIR = Path(__file__).resolve().parent / "sources"
 
@@ -63,7 +66,8 @@ def load_pdf_chunks(folder: Path, feature: str) -> List[Document]:
                             },
                         )
                     )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to load or parse PDF {pdf_file}: {e}")
             continue
     if not pdf_docs:
         return []
@@ -87,8 +91,16 @@ def ingest_folder(feature: str, folder_path: Path | str, rebuild: bool = True) -
 
     chunks = load_folder_chunks(feature, folder)
     if chunks:
+        chunk_counts: Dict[str, int] = {}
+        ids = []
+        for chunk in chunks:
+            src = chunk.metadata.get("source", "doc")
+            idx = chunk_counts.get(src, 0)
+            chunk_counts[src] = idx + 1
+            ids.append(f"{feature}_{src}_{idx}")
+
         vector_store = Chroma(client=client, collection_name=feature)
-        vector_store.add_documents(chunks)
+        vector_store.add_documents(chunks, ids=ids)
     else:
         get_collection(feature)
 

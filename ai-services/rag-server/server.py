@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import threading
 
 # Prioritize local directory for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -12,6 +13,8 @@ from database import client
 from query import retrieve
 
 logger = logging.getLogger(__name__)
+
+rag_lock = threading.Lock()
 
 app = Flask(__name__)
 PORT = int(os.getenv("RAG_PORT", "5003"))
@@ -42,7 +45,8 @@ def health():
 def refresh_route():
     """Rebuild a feature's collection from the documents in the request."""
     body = request.get_json()
-    total = refresh(body["feature"], body["ids"], body["documents"], body.get("metadatas"))
+    with rag_lock:
+        total = refresh(body["feature"], body["ids"], body["documents"], body.get("metadatas"))
     return jsonify({"feature": body["feature"], "total": total})
 
 
@@ -50,14 +54,16 @@ def refresh_route():
 def retrieve_route():
     """Return the documents closest to the question."""
     body = request.get_json()
-    results = retrieve(body["feature"], body["question"], body.get("k", 3), body.get("where"))
+    with rag_lock:
+        results = retrieve(body["feature"], body["question"], body.get("k", 3), body.get("where"))
     return jsonify({"results": to_json(results)})
 
 
 @app.post("/sources/refresh")
 def refresh_sources_route():
     """Re-ingest all documents from the sources directory."""
-    results = ingest_sources()
+    with rag_lock:
+        results = ingest_sources()
     return jsonify({"ok": True, "sources": results})
 
 

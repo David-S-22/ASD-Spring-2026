@@ -202,3 +202,39 @@ def test_load_pdf_chunks_standalone(tmp_path):
     assert chunks[0].metadata["feature"] == "pdf_feature"
     assert chunks[0].metadata["doc_type"] == "pdf"
     assert chunks[0].metadata["page"] == 1
+
+
+def test_corrupt_pdf_logs_warning_and_skips(tmp_path, caplog):
+    """A malformed or corrupted PDF is logged with a warning and skipped without crashing."""
+    folder = tmp_path / "corrupt_pdf_test"
+    folder.mkdir()
+
+    # Write invalid PDF data
+    bad_pdf = folder / "broken.pdf"
+    bad_pdf.write_bytes(b"This is not a valid PDF file.")
+
+    with caplog.at_level("WARNING"):
+        chunks = load_pdf_chunks(folder, "corrupt_feature")
+
+    assert chunks == []
+    assert any("Failed to load or parse PDF" in record.message for record in caplog.records)
+
+
+def test_ingest_folder_non_rebuild_is_idempotent(tmp_path):
+    """Calling ingest_folder with rebuild=False multiple times does not duplicate chunks."""
+    feature_name = "test_idempotent_feature"
+    folder = tmp_path / feature_name
+    folder.mkdir()
+    (folder / "info.md").write_text("# Idempotency Test\nDocument content to chunk.", encoding="utf-8")
+
+    try:
+        count_first = ingest_folder(feature_name, folder, rebuild=True)
+        assert count_first >= 1
+
+        # Re-ingest without rebuilding
+        count_second = ingest_folder(feature_name, folder, rebuild=False)
+        assert count_second == count_first
+    finally:
+        if feature_name in [c.name for c in client.list_collections()]:
+            client.delete_collection(name=feature_name)
+
