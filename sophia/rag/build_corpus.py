@@ -113,6 +113,9 @@ def main(argv=None):
     else:
         bills, payments, disputes = fetch()
     files = render_corpus(bills, payments, disputes)
+    if not files:
+        print("no bills came back from the database; the folder is left as it is")
+        return 1
     if args.check:
         problems = check_corpus(files, args.out)
         for problem in problems:

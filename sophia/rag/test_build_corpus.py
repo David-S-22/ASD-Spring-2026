@@ -79,3 +79,11 @@ def test_from_seed_matches_a_build_from_the_api(seed_api, tmp_path):
     assert build_corpus.main(["--out", str(seed_dir), "--from-seed"]) == 0
     assert {p.name: p.read_bytes() for p in api_dir.iterdir()} == {p.name: p.read_bytes() for p in seed_dir.iterdir()}
     assert config.BILLS_DB_API_URL == seed_api
+
+
+def test_build_refuses_to_empty_the_folder_when_no_bills_come_back(seed_api, tmp_path, monkeypatch):
+    """A database with no bills is a mistake, not a corpus: the build stops and the folder keeps its files."""
+    build_corpus.main(["--out", str(tmp_path)])
+    monkeypatch.setattr(build_corpus, "fetch", lambda: ([], [], []))
+    assert build_corpus.main(["--out", str(tmp_path)]) == 1
+    assert bill_files(tmp_path) == SEEDED_FILES
