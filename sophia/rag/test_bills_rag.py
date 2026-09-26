@@ -1,7 +1,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "ai-services", "rag-server"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "ai-services", "rag-server"))
 
 import pytest
 

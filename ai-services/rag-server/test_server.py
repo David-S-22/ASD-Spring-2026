@@ -1,13 +1,12 @@
 import io
 import os
 import sys
-
-sys.path.insert(0, os.path.dirname(__file__))
-
+sys.path.append(os.path.dirname(__file__))
 import pytest
-from pypdf import PdfReader
+import shutil
 
 from corpus import (
+    SOURCES_DIR,
     ingest_folder,
     ingest_sources,
     load_folder_chunks,
@@ -22,29 +21,6 @@ FEATURE = "servertest"
 IDS = ["a", "b", "c"]
 DOCUMENTS = ["The internet bill is overdue.", "Spotify is a music subscription.", "Rent is paid on the first of the month."]
 METADATAS = [{"topic": "bills"}, {"topic": "music"}, {"topic": "bills"}]
-
-
-def make_simple_pdf(text: str) -> bytes:
-    content = f"BT /F1 12 Tf 50 700 Td ({text}) Tj ET".encode("latin1")
-    length = len(content)
-    return (
-        b"%PDF-1.4\n"
-        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
-        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n"
-        b"4 0 obj << /Length " + str(length).encode("latin1") + b" >> stream\n"
-        + content + b"\nendstream endobj\n"
-        b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
-        b"xref\n0 6\n"
-        b"0000000000 65535 f \n"
-        b"0000000009 00000 n \n"
-        b"0000000058 00000 n \n"
-        b"0000000115 00000 n \n"
-        b"0000000244 00000 n \n"
-        b"0000000348 00000 n \n"
-        b"trailer << /Size 6 /Root 1 0 R >>\n"
-        b"startxref\n424\n%%EOF"
-    )
 
 
 @pytest.fixture
@@ -95,6 +71,13 @@ def test_startup_ingestion_billing_collection(http):
     assert res["results"][0]["metadata"]["feature"] == "billing"
     assert res["results"][0]["metadata"]["doc_type"] == "markdown"
 
+    # Verify retrieval of chunked PDF from billing collection
+    res_pdf = http.post("/retrieve", json={"feature": "billing", "question": "What is the late fee penalty?", "k": 1}).get_json()
+    assert len(res_pdf["results"]) >= 1
+    assert "penalty" in res_pdf["results"][0]["text"].lower()
+    assert res_pdf["results"][0]["metadata"]["feature"] == "billing"
+    assert res_pdf["results"][0]["metadata"]["doc_type"] == "pdf"
+
 
 def test_sources_refresh_route(http):
     """The /sources/refresh endpoint re-ingests sources and returns counts."""
@@ -119,7 +102,7 @@ def test_chunk_and_ingest_markdown_and_pdf(tmp_path):
 
     # PDF document
     pdf_file = feature_dir / "policy.pdf"
-    pdf_file.write_bytes(make_simple_pdf("Late payment incurs a ten dollar penalty fee."))
+    shutil.copy(SOURCES_DIR / "billing" / "billing_policy.pdf", pdf_file)
 
     try:
         # Ingest using ingest_sources with temporary sources_dir
@@ -211,7 +194,7 @@ def test_load_pdf_chunks_standalone(tmp_path):
     """load_pdf_chunks correctly chunks pdf files and preserves page numbers."""
     folder = tmp_path / "pdf_test"
     folder.mkdir()
-    (folder / "sample.pdf").write_bytes(make_simple_pdf("First page statement text."))
+    shutil.copy(SOURCES_DIR / "billing" / "billing_policy.pdf", folder / "sample.pdf")
 
     chunks = load_pdf_chunks(folder, "pdf_feature")
     assert len(chunks) >= 1
