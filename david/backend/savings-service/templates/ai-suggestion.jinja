@@ -1,4 +1,4 @@
-<div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" {% if loading %}hx-get="/savings-backend/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML" {% endif %}hx-sync="this:replace">
+<div class="dashboard-panel ai-suggestion-panel" id="ai-suggestion-container" {% if loading %}hx-get="/savings-backend/ai-suggestion" hx-trigger="load" hx-target="#ai-suggestion-container" hx-swap="outerHTML" {% endif %}>
     <div class="panel-header">
         <h2>AI Suggestion</h2>
         <button type="button" class="btn-refresh" 
@@ -11,7 +11,17 @@
     </div>
     <div class="ai-suggestion-body" id="ai-suggestion">
         <textarea class="ai-suggestion-textbox" name="suggestion" rows="3" readonly placeholder="Waiting for AI suggestion...">{{ "Waiting for AI suggestion..." if loading else (suggestion or "No current AI suggestion available.") }}</textarea>
-        {% set is_valid = not loading and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and suggestion != "No current AI suggestion available." %}
+        {% set is_valid = not loading and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and not suggestion.startswith("No transactions found") and not suggestion.startswith("Insufficient context") and suggestion != "No current AI suggestion available." %}
+        <div class="ai-suggestion-meta-section">
+            <div class="ai-meta-item">
+                <span class="ai-meta-label">Sources:</span>
+                <span class="ai-meta-value">{{ sources if is_valid and sources else ("Waiting for AI suggestion..." if loading else "None") }}</span>
+            </div>
+            <div class="ai-meta-item">
+                <span class="ai-meta-label">Confidence:</span>
+                <span class="confidence-badge confidence-{{ (confidence | lower) if is_valid and confidence else 'none' }}">{{ confidence if is_valid and confidence else ("Waiting..." if loading else "None") }}</span>
+            </div>
+        </div>
         <div class="ai-suggestion-feedback-section">
             <label for="ai-feedback-input">Feedback on this suggestion:</label>
             <textarea id="ai-feedback-input" class="ai-suggestion-feedback-input" 

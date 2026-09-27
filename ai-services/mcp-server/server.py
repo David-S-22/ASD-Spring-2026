@@ -57,11 +57,14 @@ def retrieve_context(feature: str, question: str, k: int = 3) -> dict:
     """Return the documents in a feature's corpus that are closest to the question.
 
     Args:
-        feature: Which feature's corpus to search, for example 'bills'.
+        feature: Which feature's corpus to search, for example 'bills' or 'savings'.
         question: The question to find supporting documents for.
         k: How many documents to return.
     """
-    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/retrieve", json={"feature": feature, "question": question, "k": k})
+    resp = requests.post(
+        f"{RAG_SERVER_URL.rstrip('/')}/retrieve",
+        json={"feature": feature, "question": question, "k": k},
+    )
     resp.raise_for_status()
     return resp.json()
 
