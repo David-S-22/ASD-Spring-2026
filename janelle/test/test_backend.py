@@ -238,9 +238,9 @@ MODE_ENVIRONMENT = (
     "RAG_TIMEOUT_SECONDS",
     "RAG_REFRESH_ON_START",
     "RAG_REFRESH_AFTER_WRITE",
-    "RAG_INSUFFICIENT_ABOVE",
-    "RAG_HIGH_BELOW",
-    "RAG_MEDIUM_BELOW",
+    "RAG_HIGH",
+    "RAG_MEDIUM",
+    "RAG_LOW",
     "RAG_MODEL",
 )
 
@@ -277,9 +277,9 @@ def test_config_mode_defaults_match_design(reload_config):
     assert config.RAG_TIMEOUT_SECONDS == 15.0
     assert config.RAG_REFRESH_ON_START is True
     assert config.RAG_REFRESH_AFTER_WRITE is True
-    assert config.RAG_INSUFFICIENT_ABOVE == 1.2
-    assert config.RAG_HIGH_BELOW == 0.6
-    assert config.RAG_MEDIUM_BELOW == 0.9
+    assert config.RAG_HIGH == 0.6
+    assert config.RAG_MEDIUM == 0.9
+    assert config.RAG_LOW == 1.2
     assert config.RAG_MODEL == "qwen2.5:3b"
 
 
@@ -299,9 +299,9 @@ def test_config_reads_mode_overrides(reload_config):
         RAG_TIMEOUT_SECONDS="3",
         RAG_REFRESH_ON_START="0",
         RAG_REFRESH_AFTER_WRITE="false",
-        RAG_INSUFFICIENT_ABOVE="1.5",
-        RAG_HIGH_BELOW="0.5",
-        RAG_MEDIUM_BELOW="1.0",
+        RAG_HIGH="0.5",
+        RAG_MEDIUM="1.0",
+        RAG_LOW="1.5",
         RAG_MODEL="llama3.2:3b",
     )
 
@@ -322,9 +322,9 @@ def test_config_reads_mode_overrides(reload_config):
     assert config.RAG_TIMEOUT_SECONDS == 3.0
     assert config.RAG_REFRESH_ON_START is False
     assert config.RAG_REFRESH_AFTER_WRITE is False
-    assert config.RAG_INSUFFICIENT_ABOVE == 1.5
-    assert config.RAG_HIGH_BELOW == 0.5
-    assert config.RAG_MEDIUM_BELOW == 1.0
+    assert config.RAG_HIGH == 0.5
+    assert config.RAG_MEDIUM == 1.0
+    assert config.RAG_LOW == 1.5
     assert config.RAG_MODEL == "llama3.2:3b"
 
 
@@ -345,11 +345,11 @@ def test_config_mode_switches_parse_flags(reload_config, value, expected):
 
 
 @mark.parametrize("environment", [
-    {"RAG_HIGH_BELOW": "0.95"},
-    {"RAG_MEDIUM_BELOW": "1.3"},
-    {"RAG_HIGH_BELOW": "0"},
-    {"RAG_HIGH_BELOW": "-0.1"},
-    {"RAG_INSUFFICIENT_ABOVE": "not-a-number"},
+    {"RAG_HIGH": "0.95"},
+    {"RAG_MEDIUM": "1.3"},
+    {"RAG_HIGH": "0"},
+    {"RAG_HIGH": "-0.1"},
+    {"RAG_LOW": "not-a-number"},
 ])
 def test_invalid_rag_thresholds_fall_back_to_defaults_with_warning(
     reload_config,
@@ -360,10 +360,10 @@ def test_invalid_rag_thresholds_fall_back_to_defaults_with_warning(
         config = reload_config(**environment)
 
     assert (
-        config.RAG_INSUFFICIENT_ABOVE,
-        config.RAG_HIGH_BELOW,
-        config.RAG_MEDIUM_BELOW,
-    ) == (1.2, 0.6, 0.9)
+        config.RAG_HIGH,
+        config.RAG_MEDIUM,
+        config.RAG_LOW,
+    ) == (0.6, 0.9, 1.2)
     warnings = [
         record for record in caplog.records
         if "Invalid RAG distance thresholds" in record.getMessage()

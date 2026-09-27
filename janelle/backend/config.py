@@ -78,44 +78,43 @@ RAG_REFRESH_ON_START = _environment_flag("RAG_REFRESH_ON_START", True)
 RAG_REFRESH_AFTER_WRITE = _environment_flag("RAG_REFRESH_AFTER_WRITE", True)
 RAG_MODEL = os.environ.get("RAG_MODEL", "qwen2.5:3b")
 
-_RAG_THRESHOLD_DEFAULTS = (1.2, 0.6, 0.9)
+_RAG_THRESHOLD_DEFAULTS = (0.6, 0.9, 1.2)
 
 
 def _rag_thresholds():
-    """Return (insufficient_above, high_below, medium_below).
+    """Return the (high, medium, low) retrieval distance thresholds.
 
-    The values must satisfy 0 < high < medium < insufficient. An invalid or
-    unparseable combination falls back to the defaults with one warning
-    rather than failing startup.
+    A best distance below RAG_HIGH is high confidence, below RAG_MEDIUM is
+    medium, and up to RAG_LOW is low. Documents farther than RAG_LOW are not
+    used as context at all. The values must satisfy 0 < high < medium < low;
+    an invalid or unparseable combination falls back to the defaults with one
+    warning rather than failing startup.
     """
     try:
-        insufficient = float(os.environ.get(
-            "RAG_INSUFFICIENT_ABOVE",
+        high = float(os.environ.get(
+            "RAG_HIGH",
             str(_RAG_THRESHOLD_DEFAULTS[0]),
         ))
-        high = float(os.environ.get(
-            "RAG_HIGH_BELOW",
+        medium = float(os.environ.get(
+            "RAG_MEDIUM",
             str(_RAG_THRESHOLD_DEFAULTS[1]),
         ))
-        medium = float(os.environ.get(
-            "RAG_MEDIUM_BELOW",
+        low = float(os.environ.get(
+            "RAG_LOW",
             str(_RAG_THRESHOLD_DEFAULTS[2]),
         ))
     except ValueError:
-        insufficient = high = medium = None
+        high = medium = low = None
 
-    if (
-        insufficient is not None
-        and 0 < high < medium < insufficient
-    ):
-        return insufficient, high, medium
+    if high is not None and 0 < high < medium < low:
+        return high, medium, low
 
     logging.getLogger(__name__).warning(
         "Invalid RAG distance thresholds; using defaults "
-        "RAG_INSUFFICIENT_ABOVE=%s RAG_HIGH_BELOW=%s RAG_MEDIUM_BELOW=%s",
+        "RAG_HIGH=%s RAG_MEDIUM=%s RAG_LOW=%s",
         *_RAG_THRESHOLD_DEFAULTS,
     )
     return _RAG_THRESHOLD_DEFAULTS
 
 
-RAG_INSUFFICIENT_ABOVE, RAG_HIGH_BELOW, RAG_MEDIUM_BELOW = _rag_thresholds()
+RAG_HIGH, RAG_MEDIUM, RAG_LOW = _rag_thresholds()

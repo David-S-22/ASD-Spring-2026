@@ -160,13 +160,13 @@ Compose supplies production-ready defaults. The backend reads:
 | `RAG_TIMEOUT_SECONDS` | `15` | Per `/retrieve` and `/refresh` call timeout. |
 | `RAG_REFRESH_ON_START` | `true` | Refresh the records collection at startup. |
 | `RAG_REFRESH_AFTER_WRITE` | `true` | Refresh the records collection after a confirmed create. |
-| `RAG_INSUFFICIENT_ABOVE` | `1.2` | Distance above which a document is not context. |
-| `RAG_HIGH_BELOW` | `0.6` | Best distance below this, with two or more survivors, is `high` confidence. |
-| `RAG_MEDIUM_BELOW` | `0.9` | Best distance below this is `medium` confidence. |
+| `RAG_HIGH` | `0.6` | Best distance below this, with two or more survivors, is `high` confidence. |
+| `RAG_MEDIUM` | `0.9` | Best distance below this is `medium` confidence. |
+| `RAG_LOW` | `1.2` | Best distance up to this is `low` confidence. Documents farther than this are not used as context; if none remain the result is insufficient context. |
 | `RAG_MODEL` | `qwen2.5:3b` | Model used for the grounded category choice. |
 
 The three distance thresholds must satisfy
-`0 < RAG_HIGH_BELOW < RAG_MEDIUM_BELOW < RAG_INSUFFICIENT_ABOVE`. An invalid
+`0 < RAG_HIGH < RAG_MEDIUM < RAG_LOW`. An invalid
 combination logs one warning and falls back to the defaults.
 
 The database process reads `PORT` and `DB_PATH`; Compose uses port `6001` and
