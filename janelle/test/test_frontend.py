@@ -346,14 +346,7 @@ def test_compose_configures_mcp_and_rag_modes():
         1,
     )[0]
     assert "MCP_ENABLED: ${MCP_ENABLED:-true}" in transactions_backend
-    assert "MCP_SERVER_URL: http://host.docker.internal:8000/mcp" in transactions_backend
-    assert "MCP_TIMEOUT_SECONDS: 30" in transactions_backend
     assert "RAG_ENABLED: ${RAG_ENABLED:-true}" in transactions_backend
-    assert "RAG_SERVER_URL: http://host.docker.internal:5003" in transactions_backend
-    assert "RAG_RECORDS_COLLECTION: transactions-records" in transactions_backend
-    assert "RAG_GUIDE_COLLECTION: transactions" in transactions_backend
-    assert "RAG_TIMEOUT_SECONDS: 15" in transactions_backend
-    assert 'RAG_REFRESH_ON_START: "true"' in transactions_backend
     assert '- "host.docker.internal:host-gateway"' in transactions_backend
 
 

@@ -72,14 +72,7 @@ services:
       AGENT_REQUEST_TTL_SECONDS: 900
       AI_TIMEOUT_SECONDS: 90
       MCP_ENABLED: ${MCP_ENABLED:-true}
-      MCP_SERVER_URL: http://host.docker.internal:8000/mcp
-      MCP_TIMEOUT_SECONDS: 30
       RAG_ENABLED: ${RAG_ENABLED:-true}
-      RAG_SERVER_URL: http://host.docker.internal:5003
-      RAG_RECORDS_COLLECTION: transactions-records
-      RAG_GUIDE_COLLECTION: transactions
-      RAG_TIMEOUT_SECONDS: 15
-      RAG_REFRESH_ON_START: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
