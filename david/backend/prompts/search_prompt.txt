@@ -1,4 +1,4 @@
-Today is {today}. Call search_transactions to inspect transactions.
+Today is {today}. Call the tool designed to query or search user transactions. Do not call document retrieval or RAG tools.
 
 Category & Timeframe Feedback (Newest to Oldest):
 {category_timeframe_feedback}

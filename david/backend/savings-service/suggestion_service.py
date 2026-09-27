@@ -1,56 +1,51 @@
 from datetime import date
 import json
 import os
-from typing import Any, List, Optional
+from typing import Any
 from shared.backend import dto
 from .helpers import fetch_categories, fetch_feedbacks, fetch_goals, fetch_suggestions
 from .ollama_service import (
     execute_mcp_tool,
     fetch_mcp_tools,
-    generate_tool_call_arguments,
     load_prompt,
     planner_model,
-    prompt_text,
-    prompt_text_with_confidence,
+    prompt_text_and_calculate_confidence,
+    prompt_tool_call,
     search_model,
 )
 
-
-def _get_item_field(item: Any, field: str, default: Any = None) -> Any:
+def _get_item_field(item: dict[str, Any] | Any, field: str, default: Any = None) -> Any:
     if isinstance(item, dict):
         return item.get(field, default)
     return getattr(item, field, default)
 
-
-def _format_amount(value: Any) -> str:
+def _format_amount(value: int | float | str | None) -> str:
     """Formats numeric values as currency strings ($X.XX)."""
     try:
         return f"${float(value):.2f}"
     except Exception:
         return f"${value}"
 
-
-def _format_active_goals(goals: List[dto.Goal]) -> list[dict]:
+def _format_active_goals(goals: list[dto.Goal] | list[dict[str, Any]] | None) -> list[dict[str, str]]:
     """Extracts and formats active goals for the planner prompt."""
     return [
         {
-            "goal": getattr(goal, "name", goal.get("name", "") if isinstance(goal, dict) else ""),
-            "target_amount": _format_amount(getattr(goal, "cost", goal.get("cost", 0) if isinstance(goal, dict) else 0)),
-            "deadline": str(getattr(goal, "date", goal.get("date", "") if isinstance(goal, dict) else ""))[:10],
+            "goal": str(_get_item_field(goal, "name", "") or ""),
+            "target_amount": _format_amount(_get_item_field(goal, "cost", 0)),
+            "deadline": str(_get_item_field(goal, "date", "") or "")[:10],
         }
         for goal in (goals or [])
     ]
 
-
-def _format_past_suggestions(suggestions: List[dto.Suggestion]) -> list[str]:
+def _format_past_suggestions(suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None) -> list[str]:
     """Formats past suggestions with their acceptance status and feedback rationale."""
     formatted_suggestions = []
     for suggestion in (suggestions or []):
-        text = getattr(suggestion, "suggestion", suggestion.get("suggestion", "") if isinstance(suggestion, dict) else "")
+        text = str(_get_item_field(suggestion, "suggestion", "") or "")
         if text and "\n\n" in text:
             text = text.split("\n\n")[0].strip()
-        is_accepted = getattr(suggestion, "accepted", suggestion.get("accepted", False) if isinstance(suggestion, dict) else False)
-        feedback_comment = getattr(suggestion, "feedback", suggestion.get("feedback", None) if isinstance(suggestion, dict) else None)
+        is_accepted = bool(_get_item_field(suggestion, "accepted", False))
+        feedback_comment = _get_item_field(suggestion, "feedback", None)
         status = "ACCEPTED" if is_accepted else "REJECTED"
         if feedback_comment:
             formatted_suggestions.append(f'[{status}] "{text}" -> Feedback: "{feedback_comment}"')
@@ -58,31 +53,29 @@ def _format_past_suggestions(suggestions: List[dto.Suggestion]) -> list[str]:
             formatted_suggestions.append(f'[{status}] "{text}"')
     return formatted_suggestions
 
-
 def _format_user_preferences(
-    feedbacks: List[dto.Feedback],
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """Formats general user preferences (reversed so newest preferences appear first)."""
     preferences = []
     for feedback_item in reversed(feedbacks or []):
         if _get_item_field(feedback_item, "suggestion_id") is not None:
             continue
         preference = {
-            "rule": _get_item_field(feedback_item, "feedback", "") or "",
+            "rule": str(_get_item_field(feedback_item, "feedback", "") or ""),
         }
         category_id = _get_item_field(feedback_item, "category_id")
         if category_id is not None and category_id in category_map:
             preference["category"] = category_map[category_id]
         timeframe = _get_item_field(feedback_item, "timeframe")
         if timeframe:
-            preference["timeframe"] = timeframe
+            preference["timeframe"] = str(timeframe)
         preferences.append(preference)
     return preferences
 
-
 def _format_category_timeframe_feedback(
-    feedbacks: List[dto.Feedback],
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
 ) -> str:
     """Formats all feedbacks that specify category/timeframe (reversed, newest first)."""
@@ -111,8 +104,7 @@ def _format_category_timeframe_feedback(
 
     return "\n".join(lines)
 
-
-def _format_background_preferences(feedbacks: List[dto.Feedback]) -> str:
+def _format_background_preferences(feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None) -> str:
     """Formats general constraint feedbacks without category/timeframe (reversed, newest first)."""
     general_items = [
         item
@@ -126,12 +118,11 @@ def _format_background_preferences(feedbacks: List[dto.Feedback]) -> str:
     ]
     return "\n".join(lines) if lines else "None"
 
-
 def format_planner_prompt(
-    goals: List[dto.Goal],
-    suggestions: List[dto.Suggestion],
-    feedbacks: List[dto.Feedback],
-    tx_url: Optional[str] = None,
+    goals: list[dto.Goal] | list[dict[str, Any]] | None,
+    suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None,
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
+    tx_url: str | None = None,
 ) -> str:
     """Constructs the structured JSON data block for the 8B planner prompt."""
     categories = fetch_categories(tx_url)
@@ -143,17 +134,19 @@ def format_planner_prompt(
     }
     return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
 
-
-def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Optional[str] = None) -> dict:
-    """Prompts the search tool model to determine search_transactions arguments based on user feedback."""
+def generate_transaction_search_tool_call(
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
+    tx_url: str | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Prompts the search tool model with all available MCP tools to select the transaction querying tool and arguments based on user feedback."""
     tools = fetch_mcp_tools()
     if not tools:
-        return {}
+        return "search_transactions", {}
 
     categories = fetch_categories(tx_url)
     category_names = [category.name for category in categories] if categories else []
     category_map = {category.id: category.name for category in categories} if categories else {}
-    today_str = os.environ.get("DEMO_TODAY", date.today().isoformat())
+    today_str = date.today().isoformat()
 
     search_prompt = load_prompt("search_prompt.txt").format(
         today=today_str,
@@ -162,94 +155,72 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
         valid_categories=", ".join(category_names) if category_names else "None",
     ).strip()
 
-    search_tools = [t for t in tools if t.get("function", {}).get("name") == "search_transactions"]
-    if not search_tools:
-        search_tools = tools
-
     if category_names:
-        for tool_definition in search_tools:
-            if tool_definition.get("function", {}).get("name") == "search_transactions":
-                tool_definition["function"]["parameters"].setdefault("properties", {}).setdefault(
-                    "category_name", {}
-                )["enum"] = category_names
+        for tool_definition in tools:
+            props = (
+                tool_definition.get("function", {})
+                .get("parameters", {})
+                .get("properties", {})
+            )
+            if "category_name" in props:
+                props["category_name"]["enum"] = category_names
 
-    tool_args = generate_tool_call_arguments(
-        search_prompt,
-        tools=search_tools,
-        model=search_model,
-        temperature=0.20,
+    system_prompt = (
+        "You are a financial data assistant. Select and invoke the tool that queries user transactions. "
+        "Do not invoke document retrieval or other tools."
     )
 
-    if category_names and tool_args.get("category_name") not in category_names:
-        tool_args.pop("category_name", None)
+    tool_name, tool_args, _ = prompt_tool_call(
+        search_prompt,
+        tools=tools,
+        model=search_model,
+        system_prompt=system_prompt,
+        temperature=0.0,
+    )
 
-    return {key: value for key, value in tool_args.items() if value is not None and value != ""}
+    cat_val = tool_args.get("category_name")
+    if cat_val and category_names:
+        matched_cat = next(
+            (c for c in category_names if c.lower() == str(cat_val).lower()),
+            None,
+        )
+        if matched_cat:
+            tool_args["category_name"] = matched_cat
+
+    cleaned_args = {key: value for key, value in tool_args.items() if value is not None and value != ""}
+    return tool_name or "search_transactions", cleaned_args
 
 
 def generate_context_retrieval_args(
-    goals: List[dto.Goal],
-    spending_summary: list[dict],
-    feedbacks: List[dto.Feedback],
-) -> dict:
+    goals: list[dto.Goal] | list[dict[str, Any]] | None = None,
+    k: int = 3,
+) -> dict[str, str | int]:
     """
-    Prompts the tool model to formulate retrieve_context arguments for the savings RAG knowledge base.
-    Follows a similar pattern to transaction search, targeting advice on how to generate savings advice.
+    Constructs arguments for the retrieve_context MCP tool targeting savings advice.
+    Formulates a targeted question on how to generate savings advice.
     """
-    tools = fetch_mcp_tools()
-    rag_tools = [t for t in tools if t.get("function", {}).get("name") == "retrieve_context"]
-
-    goal_names = [getattr(g, "name", "") for g in (goals or []) if getattr(g, "name", "")]
-    categories = [
-        item.get("category")
-        for item in (spending_summary or [])
-        if item.get("category") and item.get("category") != "Uncategorized"
-    ]
-
-    default_question = "advice about how to generate savings advice"
-    if goal_names and categories:
-        default_question = f"advice about how to generate savings advice for {categories[0]} towards {goal_names[0]}"
-    elif goal_names:
-        default_question = f"advice about how to generate savings advice towards {goal_names[0]}"
-
-    default_args = {"feature": "savings", "question": default_question, "k": 3}
-    if not rag_tools:
-        return default_args
-
-    try:
-        rag_prompt = load_prompt("rag_search_prompt.txt").format(
-            active_goals=", ".join(goal_names) if goal_names else "General Savings",
-            spending_categories=", ".join(categories[:3]) if categories else "Discretionary spending",
-        ).strip()
-
-        tool_args = generate_tool_call_arguments(
-            rag_prompt,
-            tools=rag_tools,
-            model=search_model,
-            temperature=0.20,
-        )
-        if isinstance(tool_args, dict) and tool_args.get("question"):
-            return {
-                "feature": "savings",
-                "question": str(tool_args.get("question", default_question)),
-                "k": int(tool_args.get("k", 3)),
-            }
-    except Exception:
-        pass
-
-    return default_args
-
+    question = "advice about how to generate savings advice"
+    if goals:
+        goal_name = _get_item_field(goals[0], "name")
+        if goal_name:
+            question = f"advice about how to generate savings advice towards {goal_name}"
+    return {
+        "feature": "savings",
+        "question": question,
+        "k": k,
+    }
 
 def _format_transactions_for_prompt(
-    transactions: list[dict],
+    transactions: list[dict[str, Any]] | None,
     category_map: dict[int, str],
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """Formats and enriches transactions with readable dates, amounts, and category names."""
     formatted = []
     for tx in (transactions or []):
         item = {
             "date": str(tx.get("date", ""))[:10],
-            "merchant": tx.get("merchant", ""),
-            "description": tx.get("description", ""),
+            "merchant": str(tx.get("merchant", "") or ""),
+            "description": str(tx.get("description", "") or ""),
             "amount": _format_amount(tx.get("amount", 0)),
         }
         category_id = tx.get("category_id")
@@ -258,11 +229,10 @@ def _format_transactions_for_prompt(
         formatted.append(item)
     return formatted
 
-
 def _aggregate_spending_by_merchant(
-    transactions: list[dict],
+    transactions: list[dict[str, Any]] | None,
     category_map: dict[int, str],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Aggregates spending totals and transaction counts grouped by merchant."""
     merchants: dict[str, dict[str, Any]] = {}
     for tx in (transactions or []):
@@ -307,23 +277,19 @@ def _aggregate_spending_by_merchant(
         })
     return aggregated
 
-
-def generate_advice(
-    goals: List[dto.Goal],
-    suggestions: List[dto.Suggestion],
-    feedbacks: List[dto.Feedback],
-    tx_url: Optional[str] = None,
-) -> str:
-    """Coordinates retrieval of transactions via MCP and prompts the planner model to generate savings advice."""
-    categories = fetch_categories(tx_url)
-    category_map = {category.id: category.name for category in categories} if categories else {}
-    user_data = format_planner_prompt(goals, suggestions, feedbacks, tx_url=tx_url)
-
-    search_args = generate_transaction_search_args(feedbacks, tx_url=tx_url)
-    transactions = execute_mcp_tool("search_transactions", search_args)
+def _fetch_filtered_transactions(
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
+    tx_url: str | None = None,
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """
+    Executes transaction search tool call derived from user feedbacks.
+    Returns (transactions, None) on success, or (None, fallback_message) if no transactions exist.
+    """
+    tool_name, search_args = generate_transaction_search_tool_call(feedbacks, tx_url=tx_url)
+    transactions = execute_mcp_tool(tool_name, search_args)
     if not transactions:
         if search_args:
-            all_transactions = execute_mcp_tool("search_transactions", {})
+            all_transactions = execute_mcp_tool(tool_name, {})
             if all_transactions:
                 filter_parts = []
                 if "category_name" in search_args:
@@ -331,14 +297,29 @@ def generate_advice(
                 if "start_date" in search_args or "end_date" in search_args:
                     filter_parts.append("within the specified timeframe")
                 filter_str = " ".join(filter_parts) if filter_parts else "matching your filter"
-                return f"No transactions found {filter_str}. Try broadening your feedback or checking other categories."
-        return "You don't have any transactions yet. Add transactions using the transactions tab."
+                return None, f"No transactions found {filter_str}. Try broadening your feedback or checking other categories."
+        return None, "You don't have any transactions yet. Add transactions using the transactions tab."
+    return transactions, None
 
-    formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
-    spending_summary = _aggregate_spending_by_merchant(transactions, category_map)
 
-    # Follow similar pattern to search_transactions: retrieve context from MCP retrieve_context
-    rag_args = generate_context_retrieval_args(goals, spending_summary, feedbacks)
+def _extract_rag_sources(rag_docs: list[dict[str, Any]]) -> str:
+    """Extracts unique source citations from retrieved RAG documents."""
+    sources: list[str] = []
+    for doc in rag_docs:
+        source_name = doc.get("metadata", {}).get("source")
+        if source_name and source_name not in sources:
+            sources.append(source_name)
+    return ", ".join(sources) if sources else "savings_advice_guide.md"
+
+
+def _fetch_rag_guidelines(
+    goals: list[dto.Goal] | list[dict[str, Any]] | None,
+) -> tuple[str, str] | None:
+    """
+    Retrieves savings advice guidelines from the RAG knowledge base via MCP retrieve_context.
+    Returns (context_blocks, sources_str) if sufficient context exists, otherwise None.
+    """
+    rag_args = generate_context_retrieval_args(goals)
     try:
         rag_response = execute_mcp_tool("retrieve_context", rag_args)
     except Exception:
@@ -349,44 +330,62 @@ def generate_advice(
 
     # Ensure advice is NOT generated if the AI has an insufficient amount of context
     if not valid_rag_docs or sum(len(doc.get("text", "").strip()) for doc in valid_rag_docs) < 30:
-        return "Insufficient context available to generate savings advice."
+        return None
 
-    # Extract source citations from retrieved RAG documents
-    sources = []
-    for doc in valid_rag_docs:
-        source_name = doc.get("metadata", {}).get("source")
-        if source_name and source_name not in sources:
-            sources.append(source_name)
-    sources_str = ", ".join(sources) if sources else "savings_advice_guide.md"
-
+    sources_str = _extract_rag_sources(valid_rag_docs)
     rag_context_blocks = "\n".join([
         f"- [Source: {doc.get('metadata', {}).get('source', 'Unknown')}]: {doc.get('text', '').strip()}"
         for doc in valid_rag_docs
     ])
+    return rag_context_blocks, sources_str
 
-    system_prompt = load_prompt("savings_prompt.txt")
-    user_prompt = (
+
+def _build_advice_prompt(
+    user_data: str,
+    spending_summary: list[dict[str, Any]],
+    formatted_transactions: list[dict[str, str]],
+    rag_context_blocks: str,
+) -> str:
+    """Constructs the prompt for the savings advice planner model."""
+    return (
         f"{user_data}\n\n"
         f"Pre-Calculated Spending Summary by Merchant:\n{json.dumps(spending_summary, indent=2)}\n\n"
-        f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
-        f"Retrieved Savings Advice Guidelines from MCP retrieve_context:\n{rag_context_blocks}\n\n"
-        "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
-        "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
-        "- Ground your recommendation in the retrieved savings advice guidelines and real transactions.\n"
-        "- Ensure advice is completely understandable, grammatically correct, and natural to read.\n"
-        "- Avoid awkward clause stacking or preposition chains (never say 'shopping at [items]' or stack multiple 'at' / 'towards' clauses awkwardly).\n"
-        "- Ensure practical financial sense: never advise reducing spending by shopping at the store where spending already occurred; suggest trimming the grocery bill, setting a budget cap, or choosing store brands.\n"
-        "- Clearly express causal logic: explain how reducing spending frees up money towards the goal (e.g. 'to save towards your [Goal Name] goal').\n"
-        "- Ground advice in spending categories and real dollar amounts. Only name a specific merchant if 100% confident the advice applies exclusively to that merchant (e.g. cancelling a specific subscription); otherwise, refer to the spending category.\n"
-        "- Rotate actionable optimization strategies (e.g. cadence limits, visit reductions, off-peak rates, pausing/rotating subscriptions) across unaddressed spending areas in the retrieved data.\n"
-        "- Do NOT repeat, paraphrase, or recycle actions already present in past_suggestions.\n"
-        "- Never use comparative merchant phrasing (e.g. 'stores like [Merchant]').\n"
-        "- Do NOT invent item details (e.g. coffee, snacks, store-brand staples) not explicitly stated in transaction descriptions.\n"
-        "- Connect the recommendation to an exact active goal name from active_goals.\n"
-        "- If the retrieved guidelines, transactions, or active goals provide insufficient context to formulate advice, reply strictly with: Insufficient context to generate savings advice.\n"
-        "- Follow user preferences and cadence rules."
+        f"Retrieved Transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
+        f"Retrieved Savings Advice Guidelines:\n{rag_context_blocks}\n\n"
+        "Deliver 1 or 2 personalized savings advice sentences in a single plain text paragraph based on the guidelines and spending data. "
+        "If context is insufficient, reply strictly with: Insufficient context to generate savings advice."
     )
-    raw_advice, confidence_category, _ = prompt_text_with_confidence(
+
+
+def generate_advice(
+    goals: list[dto.Goal] | list[dict[str, Any]] | None,
+    suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None,
+    feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
+    tx_url: str | None = None,
+) -> str:
+    """Coordinates retrieval of transactions & RAG context via MCP and prompts the planner model to generate savings advice."""
+    if not goals:
+        return "Insufficient context available to generate savings advice."
+
+    transactions, tx_error = _fetch_filtered_transactions(feedbacks, tx_url=tx_url)
+    if tx_error is not None or not transactions:
+        return tx_error or "You don't have any transactions yet. Add transactions using the transactions tab."
+
+    categories = fetch_categories(tx_url)
+    category_map = {category.id: category.name for category in categories} if categories else {}
+    formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
+    spending_summary = _aggregate_spending_by_merchant(transactions, category_map)
+
+    rag_guidelines = _fetch_rag_guidelines(goals)
+    if not rag_guidelines:
+        return "Insufficient context available to generate savings advice."
+    rag_context_blocks, sources_str = rag_guidelines
+
+    user_data = format_planner_prompt(goals, suggestions, feedbacks, tx_url=tx_url)
+    system_prompt = load_prompt("savings_prompt.txt")
+    user_prompt = _build_advice_prompt(user_data, spending_summary, formatted_transactions, rag_context_blocks)
+
+    raw_advice, confidence_category = prompt_text_and_calculate_confidence(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
@@ -396,17 +395,13 @@ def generate_advice(
     if not raw_advice or raw_advice.strip().lower().startswith("insufficient context"):
         return "Insufficient context available to generate savings advice."
 
-    # Format into two paragraphs:
-    # Paragraph 1: The advice
-    # Paragraph 2: Source citations and confidence category (derived from Ollama token logprobs)
     advice_lines = [line.strip() for line in raw_advice.strip().splitlines() if line.strip()]
     advice_paragraph = " ".join(advice_lines)
     metadata_paragraph = f"Sources: {sources_str} | Confidence: {confidence_category}"
-
     return f"{advice_paragraph}\n\n{metadata_paragraph}"
 
 
-def generate_savings_advice(db_url: str, tx_url: Optional[str] = None) -> str:
+def generate_savings_advice(db_url: str, tx_url: str | None = None) -> str:
     """Top-level entry point to fetch data and generate personalized savings advice."""
     goals = fetch_goals(db_url)
     if not goals:
