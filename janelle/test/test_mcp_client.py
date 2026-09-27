@@ -9,7 +9,7 @@ from janelle.backend.services import mcp_client
 from janelle.backend.services.mcp_client import MCPError
 
 
-SECRET = "secret-detail http://user:password@internal"
+LEAK_MARKER = "internal error detail that must not leak"
 
 
 class FakeClient:
@@ -168,11 +168,11 @@ def test_timeout_maps_to_mcp_timeout(monkeypatch: MonkeyPatch):
 
 
 @mark.parametrize("error, code", [
-    (ConnectionError(SECRET), "mcp_connection"),
-    (RuntimeError(SECRET), "mcp_connection"),
-    (OSError(SECRET), "mcp_connection"),
-    (ToolError(SECRET), "mcp_tool_error"),
-    (TimeoutError(SECRET), "mcp_timeout"),
+    (ConnectionError(LEAK_MARKER), "mcp_connection"),
+    (RuntimeError(LEAK_MARKER), "mcp_connection"),
+    (OSError(LEAK_MARKER), "mcp_connection"),
+    (ToolError(LEAK_MARKER), "mcp_tool_error"),
+    (TimeoutError(LEAK_MARKER), "mcp_timeout"),
 ])
 def test_errors_map_to_safe_codes_without_leaking_text(error, code):
     FakeClient.error = error
@@ -185,8 +185,8 @@ def test_errors_map_to_safe_codes_without_leaking_text(error, code):
             operation()
 
         assert caught.value.code == code
-        assert SECRET not in caught.value.message
-        assert SECRET not in str(caught.value)
+        assert LEAK_MARKER not in caught.value.message
+        assert LEAK_MARKER not in str(caught.value)
         assert caught.value.__cause__ is None
         assert caught.value.__suppress_context__ is True
 

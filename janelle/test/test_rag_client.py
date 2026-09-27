@@ -8,14 +8,14 @@ from janelle.backend.services import rag_client
 from janelle.backend.services.rag_client import RAGError
 
 
-SECRET = "secret-detail http://user:password@internal"
+LEAK_MARKER = "internal error detail that must not leak"
 
 
 def response_with_json(payload, status=200):
     response = Mock()
     response.status_code = status
     response.json.return_value = payload
-    response.text = SECRET
+    response.text = LEAK_MARKER
     return response
 
 
@@ -161,10 +161,10 @@ def test_disabled_mode_short_circuits_without_request(
 
 @mark.parametrize("operation", OPERATIONS)
 @mark.parametrize("error, code", [
-    (requests.Timeout(SECRET), "rag_timeout"),
-    (requests.ConnectTimeout(SECRET), "rag_timeout"),
-    (requests.ConnectionError(SECRET), "rag_connection"),
-    (requests.RequestException(SECRET), "rag_connection"),
+    (requests.Timeout(LEAK_MARKER), "rag_timeout"),
+    (requests.ConnectTimeout(LEAK_MARKER), "rag_timeout"),
+    (requests.ConnectionError(LEAK_MARKER), "rag_connection"),
+    (requests.RequestException(LEAK_MARKER), "rag_connection"),
 ])
 def test_transport_errors_map_to_safe_codes(http, operation, error, code):
     get, post = http
@@ -175,8 +175,8 @@ def test_transport_errors_map_to_safe_codes(http, operation, error, code):
         operation()
 
     assert caught.value.code == code
-    assert SECRET not in caught.value.message
-    assert SECRET not in str(caught.value)
+    assert LEAK_MARKER not in caught.value.message
+    assert LEAK_MARKER not in str(caught.value)
     assert caught.value.__cause__ is None
     assert caught.value.__suppress_context__ is True
 
@@ -185,14 +185,14 @@ def test_transport_errors_map_to_safe_codes(http, operation, error, code):
 @mark.parametrize("status", [500, 404, 400, 302])
 def test_non_2xx_maps_to_rag_http_error(http, operation, status):
     get, post = http
-    get.return_value = response_with_json({"error": SECRET}, status)
-    post.return_value = response_with_json({"error": SECRET}, status)
+    get.return_value = response_with_json({"error": LEAK_MARKER}, status)
+    post.return_value = response_with_json({"error": LEAK_MARKER}, status)
 
     with raises(RAGError) as caught:
         operation()
 
     assert caught.value.code == "rag_http_error"
-    assert SECRET not in caught.value.message
+    assert LEAK_MARKER not in caught.value.message
 
 
 @mark.parametrize("operation", OPERATIONS)
@@ -200,13 +200,13 @@ def test_non_json_body_is_invalid(http, operation):
     get, post = http
     for method in (get, post):
         method.return_value = response_with_json(None)
-        method.return_value.json.side_effect = ValueError(SECRET)
+        method.return_value.json.side_effect = ValueError(LEAK_MARKER)
 
     with raises(RAGError) as caught:
         operation()
 
     assert caught.value.code == "rag_invalid_response"
-    assert SECRET not in caught.value.message
+    assert LEAK_MARKER not in caught.value.message
 
 
 @mark.parametrize("body", [
