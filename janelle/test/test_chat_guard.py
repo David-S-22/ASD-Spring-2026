@@ -218,7 +218,7 @@ def test_parser_uses_date_aware_examples_for_common_questions(monkeypatch):
     partial_example = examples[
         "List all purchases spent with Anytime Fitness"
     ]
-    assert partial_example["filters"] == {"q": "Anytime Fitness"}
+    assert partial_example["filters"] == {"search_text": "Anytime Fitness"}
     assert partial_example["calculation"] == "none"
     amount_example = examples["List all purchases over $100"]
     assert amount_example["filters"] == {"min_amount": 100.01}

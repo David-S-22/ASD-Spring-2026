@@ -1451,12 +1451,12 @@ def test_chat_resolves_partial_merchant_or_description(
 
     result = response.get_json()
     assert response.status_code == 200
-    assert result["filters"] == {"q": fragment}
+    assert result["filters"] == {"search_text": fragment}
     assert [transaction["id"] for transaction in result["transactions"]] == [
         14,
         7,
     ]
-    assert get.call_args_list[-1].kwargs["params"] == {"q": fragment}
+    assert get.call_args_list[-1].kwargs["params"] == {"search_text": fragment}
 
 
 def test_chat_normalizes_exact_date_filter(

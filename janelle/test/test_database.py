@@ -852,7 +852,7 @@ def test_transaction_filters_work_alone_and_in_combination(database_client):
 	assert len(spotify) == 3
 	assert all(row["merchant"] == "Spotify AU" for row in spotify)
 
-	search = client.get("/transactions?q=premium").get_json()
+	search = client.get("/transactions?search_text=premium").get_json()
 	assert len(search) == 2
 	assert all("premium" in row["description"].lower() for row in search)
 

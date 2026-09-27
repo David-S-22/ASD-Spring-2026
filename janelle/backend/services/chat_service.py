@@ -15,7 +15,7 @@ from . import ollama_service
 DB_FIELDS = {"date", "merchant", "description", "amount", "category_id"}
 MODEL_FIELDS = DB_FIELDS | {"amount_cents", "category"}
 FILTER_FIELDS = {
-    "q", "date_from", "date_to", "since", "merchant", "category_id",
+    "search_text", "date_from", "date_to", "since", "merchant", "category_id",
     "min_amount", "max_amount",
 }
 ROW_FIELDS = (
@@ -671,7 +671,7 @@ def validate_filters(filters, names, ids):
 
 def resolve_search_filters(filters, transactions):
     merchant = filters.get("merchant")
-    if merchant is None or filters.get("q") is not None:
+    if merchant is None or filters.get("search_text") is not None:
         return filters
 
     fragment = merchant.strip()
@@ -693,7 +693,7 @@ def resolve_search_filters(filters, transactions):
         for key, value in filters.items()
         if key != "merchant"
     }
-    resolved["q"] = fragment
+    resolved["search_text"] = fragment
     return resolved
 
 

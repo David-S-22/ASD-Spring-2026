@@ -140,7 +140,7 @@ def run_probe(backend_url):
             "GET",
             (
                 f"{backend_url}/transactions?"
-                f"{urlencode({'q': marker})}"
+                f"{urlencode({'search_text': marker})}"
             ),
         )
         if marker_transactions(matches_before_confirmation, marker):
@@ -171,7 +171,7 @@ def run_probe(backend_url):
             "GET",
             (
                 f"{backend_url}/transactions?"
-                f"{urlencode({'q': marker})}"
+                f"{urlencode({'search_text': marker})}"
             ),
         )
         matching_transactions = marker_transactions(matches, marker)
@@ -232,7 +232,7 @@ def run_probe(backend_url):
                     "GET",
                     (
                         f"{backend_url}/transactions?"
-                        f"{urlencode({'q': marker})}"
+                        f"{urlencode({'search_text': marker})}"
                     ),
                 )
                 if isinstance(matches, list):
@@ -270,7 +270,7 @@ def run_probe(backend_url):
                 "GET",
                 (
                     f"{backend_url}/transactions?"
-                    f"{urlencode({'q': marker})}"
+                    f"{urlencode({'search_text': marker})}"
                 ),
             )
             if marker_transactions(remaining, marker):
