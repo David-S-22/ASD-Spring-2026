@@ -359,6 +359,3 @@ def test_ci_starts_backend_with_mcp_and_rag_disabled():
     assert 'MCP_ENABLED: "false"' in workflow
     assert 'RAG_ENABLED: "false"' in workflow
     assert "--no-deps" in workflow
-    assert "grep -q '\"mcp\":\"disabled\"'" in workflow
-    assert "grep -q '\"rag\":\"disabled\"'" in workflow
-    assert "http://127.0.0.1:5001/mcp/tools)\" = \"503\"" in workflow

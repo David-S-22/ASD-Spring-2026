@@ -5,8 +5,8 @@ from .models import Category, CategoryCorrection, Transaction, db
 
 def filtered_transactions(filters):
 	statement = select(Transaction)
-	if filters["q"]:
-		query = filters["q"].casefold()
+	if filters["search_text"]:
+		query = filters["search_text"].casefold()
 		statement = statement.where(
 			or_(
 				func.instr(func.casefold(Transaction.merchant), query) > 0,

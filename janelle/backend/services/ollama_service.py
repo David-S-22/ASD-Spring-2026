@@ -24,7 +24,7 @@ FIELDS = {
     "date", "merchant", "description", "amount", "category", "category_id",
 }
 FILTERS = {
-    "q", "date", "dates", "date_from", "date_to", "since", "merchant",
+    "search_text", "date", "dates", "date_from", "date_to", "since", "merchant",
     "category", "category_id", "min_amount", "max_amount",
 }
 DATE_FILTERS = {"date", "dates", "date_from", "date_to", "since"}
@@ -268,7 +268,7 @@ def validate_chat_response(data, categories=()):
         (
             filters,
             {
-                "q", "date", "date_from", "date_to", "since", "merchant",
+                "search_text", "date", "date_from", "date_to", "since", "merchant",
                 "category",
             },
         ),
@@ -454,7 +454,7 @@ def build_messages(message, categories, previous_observation):
                 "operation": "read",
                 "transaction_id": None,
                 "fields": {},
-                "filters": {"q": "Anytime Fitness"},
+                "filters": {"search_text": "Anytime Fitness"},
                 "calculation": "none",
                 "handoff": "none",
                 "reply": "I will find merchant or description matches.",
@@ -878,7 +878,7 @@ def write_grounding_error(data, message, categories):
                 )
 
     if operation in {"update", "delete"}:
-        for key in ("q", "merchant"):
+        for key in ("search_text", "merchant"):
             value = filters.get(key)
             if (
                 value is not None

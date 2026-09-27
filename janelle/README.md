@@ -78,7 +78,7 @@ The backend exposes transaction and category CRUD at `/transactions` and
 
 The database API also exposes
 `POST /transactions/<id>/category-correction` and
-`GET /category-corrections`. Transaction list queries support `q`,
+`GET /category-corrections`. Transaction list queries support `search_text`,
 `merchant`, `date_from`, `date_to`, `since`, `category_id`, `min_amount`,
 and `max_amount`.
 
