@@ -251,6 +251,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
             or suggestion_text.startswith("Error")
             or suggestion_text.startswith("You don't have")
             or suggestion_text.startswith("No transactions found")
+            or suggestion_text.startswith("Insufficient context")
         ):
             return jsonify({"error": "No valid suggestion available to accept or reject."}), 400
 

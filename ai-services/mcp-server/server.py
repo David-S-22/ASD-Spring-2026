@@ -53,15 +53,19 @@ def search_transactions(
 
 
 @mcp.tool()
-def retrieve_context(feature: str, question: str, k: int = 3) -> dict:
+def retrieve_context(feature: str, question: str, k: int = 3, where: dict = None) -> dict:
     """Return the documents in a feature's corpus that are closest to the question.
 
     Args:
-        feature: Which feature's corpus to search, for example 'bills'.
+        feature: Which feature's corpus to search, for example 'bills' or 'savings'.
         question: The question to find supporting documents for.
         k: How many documents to return.
+        where: Optional metadata filter dict.
     """
-    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/retrieve", json={"feature": feature, "question": question, "k": k})
+    payload = {"feature": feature, "question": question, "k": k}
+    if where:
+        payload["where"] = where
+    resp = requests.post(f"{RAG_SERVER_URL.rstrip('/')}/retrieve", json=payload)
     resp.raise_for_status()
     return resp.json()
 

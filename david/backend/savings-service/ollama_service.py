@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 import pathlib
 from typing import Any, Optional, Union
@@ -46,6 +47,62 @@ def prompt_text(
         temperature=temperature,
     )
     return (resp.choices[0].message.content or "").strip()
+
+
+def calculate_confidence_category(logprobs_content: Optional[list]) -> tuple[str, float]:
+    """
+    Calculates the confidence category ('High', 'Medium', 'Low') and average linear probability
+    from token log probabilities returned directly by Ollama, ensuring the LLM does not fabricate confidence.
+    """
+    if not logprobs_content:
+        return "Medium", 0.50
+
+    token_probs = []
+    for token_info in logprobs_content:
+        lp = getattr(token_info, "logprob", None)
+        if lp is not None:
+            token_probs.append(math.exp(lp))
+
+    if not token_probs:
+        return "Medium", 0.50
+
+    avg_prob = sum(token_probs) / len(token_probs)
+    if avg_prob >= 0.70:
+        category = "High"
+    elif avg_prob >= 0.40:
+        category = "Medium"
+    else:
+        category = "Low"
+
+    return category, avg_prob
+
+
+def prompt_text_with_confidence(
+    prompt: str,
+    model: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.0,
+) -> tuple[str, str, float]:
+    """
+    Prompts the AI model with logprobs enabled to generate a plain-text response,
+    extracts the token log probabilities directly from Ollama, and computes
+    a confidence category ('High', 'Medium', 'Low') and raw confidence score.
+    """
+    messages = _format_messages(prompt, system_prompt=system_prompt)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        logprobs=True,
+    )
+    choice = resp.choices[0]
+    content = (choice.message.content or "").strip()
+
+    logprobs_obj = getattr(choice, "logprobs", None)
+    logprobs_content = getattr(logprobs_obj, "content", None) if logprobs_obj else None
+    confidence_category, confidence_score = calculate_confidence_category(logprobs_content)
+
+    return content, confidence_category, confidence_score
 
 
 def prompt_json(
@@ -115,7 +172,7 @@ def generate_tool_call_arguments(
     return json.loads(tool_call.function.arguments)
 
 
-def execute_mcp_tool(tool_name: str, arguments: dict) -> list:
+def execute_mcp_tool(tool_name: str, arguments: dict) -> Any:
     """Executes a tool on the FastMCP server with the given arguments and returns the result data."""
     async def _call():
         async with Client(MCP_SERVER_URL) as mcp_client:

@@ -10,8 +10,8 @@
         </button>
     </div>
     <div class="ai-suggestion-body" id="ai-suggestion">
-        <textarea class="ai-suggestion-textbox" name="suggestion" rows="3" readonly placeholder="Waiting for AI suggestion...">{{ "Waiting for AI suggestion..." if loading else (suggestion or "No current AI suggestion available.") }}</textarea>
-        {% set is_valid = not loading and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and suggestion != "No current AI suggestion available." %}
+        <textarea class="ai-suggestion-textbox" name="suggestion" rows="4" readonly placeholder="Waiting for AI suggestion...">{{ "Waiting for AI suggestion..." if loading else (suggestion or "No current AI suggestion available.") }}</textarea>
+        {% set is_valid = not loading and suggestion and not suggestion.startswith("Error") and not suggestion.startswith("You don't have") and not suggestion.startswith("No transactions found") and not suggestion.startswith("Insufficient context") and suggestion != "No current AI suggestion available." %}
         <div class="ai-suggestion-feedback-section">
             <label for="ai-feedback-input">Feedback on this suggestion:</label>
             <textarea id="ai-feedback-input" class="ai-suggestion-feedback-input" 

@@ -11,6 +11,7 @@ from .ollama_service import (
     load_prompt,
     planner_model,
     prompt_text,
+    prompt_text_with_confidence,
     search_model,
 )
 
@@ -46,6 +47,8 @@ def _format_past_suggestions(suggestions: List[dto.Suggestion]) -> list[str]:
     formatted_suggestions = []
     for suggestion in (suggestions or []):
         text = getattr(suggestion, "suggestion", suggestion.get("suggestion", "") if isinstance(suggestion, dict) else "")
+        if text and "\n\n" in text:
+            text = text.split("\n\n")[0].strip()
         is_accepted = getattr(suggestion, "accepted", suggestion.get("accepted", False) if isinstance(suggestion, dict) else False)
         feedback_comment = getattr(suggestion, "feedback", suggestion.get("feedback", None) if isinstance(suggestion, dict) else None)
         status = "ACCEPTED" if is_accepted else "REJECTED"
@@ -159,8 +162,12 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
         valid_categories=", ".join(category_names) if category_names else "None",
     ).strip()
 
+    search_tools = [t for t in tools if t.get("function", {}).get("name") == "search_transactions"]
+    if not search_tools:
+        search_tools = tools
+
     if category_names:
-        for tool_definition in tools:
+        for tool_definition in search_tools:
             if tool_definition.get("function", {}).get("name") == "search_transactions":
                 tool_definition["function"]["parameters"].setdefault("properties", {}).setdefault(
                     "category_name", {}
@@ -168,7 +175,7 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
 
     tool_args = generate_tool_call_arguments(
         search_prompt,
-        tools=tools,
+        tools=search_tools,
         model=search_model,
         temperature=0.20,
     )
@@ -177,6 +184,59 @@ def generate_transaction_search_args(feedbacks: List[dto.Feedback], tx_url: Opti
         tool_args.pop("category_name", None)
 
     return {key: value for key, value in tool_args.items() if value is not None and value != ""}
+
+
+def generate_context_retrieval_args(
+    goals: List[dto.Goal],
+    spending_summary: list[dict],
+    feedbacks: List[dto.Feedback],
+) -> dict:
+    """
+    Prompts the tool model to formulate retrieve_context arguments for the savings RAG knowledge base.
+    Follows a similar pattern to transaction search, targeting advice on how to generate savings advice.
+    """
+    tools = fetch_mcp_tools()
+    rag_tools = [t for t in tools if t.get("function", {}).get("name") == "retrieve_context"]
+
+    goal_names = [getattr(g, "name", "") for g in (goals or []) if getattr(g, "name", "")]
+    categories = [
+        item.get("category")
+        for item in (spending_summary or [])
+        if item.get("category") and item.get("category") != "Uncategorized"
+    ]
+
+    default_question = "advice about how to generate savings advice"
+    if goal_names and categories:
+        default_question = f"advice about how to generate savings advice for {categories[0]} towards {goal_names[0]}"
+    elif goal_names:
+        default_question = f"advice about how to generate savings advice towards {goal_names[0]}"
+
+    default_args = {"feature": "savings", "question": default_question, "k": 3}
+    if not rag_tools:
+        return default_args
+
+    try:
+        rag_prompt = load_prompt("rag_search_prompt.txt").format(
+            active_goals=", ".join(goal_names) if goal_names else "General Savings",
+            spending_categories=", ".join(categories[:3]) if categories else "Discretionary spending",
+        ).strip()
+
+        tool_args = generate_tool_call_arguments(
+            rag_prompt,
+            tools=rag_tools,
+            model=search_model,
+            temperature=0.20,
+        )
+        if isinstance(tool_args, dict) and tool_args.get("question"):
+            return {
+                "feature": "savings",
+                "question": str(tool_args.get("question", default_question)),
+                "k": int(tool_args.get("k", 3)),
+            }
+    except Exception:
+        pass
+
+    return default_args
 
 
 def _format_transactions_for_prompt(
@@ -277,13 +337,42 @@ def generate_advice(
     formatted_transactions = _format_transactions_for_prompt(transactions, category_map)
     spending_summary = _aggregate_spending_by_merchant(transactions, category_map)
 
+    # Follow similar pattern to search_transactions: retrieve context from MCP retrieve_context
+    rag_args = generate_context_retrieval_args(goals, spending_summary, feedbacks)
+    try:
+        rag_response = execute_mcp_tool("retrieve_context", rag_args)
+    except Exception:
+        rag_response = None
+
+    rag_results = rag_response.get("results", []) if isinstance(rag_response, dict) else []
+    valid_rag_docs = [doc for doc in rag_results if doc.get("text", "").strip()]
+
+    # Ensure advice is NOT generated if the AI has an insufficient amount of context
+    if not valid_rag_docs or sum(len(doc.get("text", "").strip()) for doc in valid_rag_docs) < 30:
+        return "Insufficient context available to generate savings advice."
+
+    # Extract source citations from retrieved RAG documents
+    sources = []
+    for doc in valid_rag_docs:
+        source_name = doc.get("metadata", {}).get("source")
+        if source_name and source_name not in sources:
+            sources.append(source_name)
+    sources_str = ", ".join(sources) if sources else "savings_advice_guide.md"
+
+    rag_context_blocks = "\n".join([
+        f"- [Source: {doc.get('metadata', {}).get('source', 'Unknown')}]: {doc.get('text', '').strip()}"
+        for doc in valid_rag_docs
+    ])
+
     system_prompt = load_prompt("savings_prompt.txt")
     user_prompt = (
         f"{user_data}\n\n"
         f"Pre-Calculated Spending Summary by Merchant:\n{json.dumps(spending_summary, indent=2)}\n\n"
         f"Retrieved Transactions from MCP search_transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
+        f"Retrieved Savings Advice Guidelines from MCP retrieve_context:\n{rag_context_blocks}\n\n"
         "Execute the ACT phase of the Plan-Act-Observe-Adapt loop by delivering 1 or 2 specialized, personalized savings advice sentences directly to me in plain text without preamble or markdown bolding:\n"
         "- Begin immediately with the first word of the advice (no intro, heading, or colon).\n"
+        "- Ground your recommendation in the retrieved savings advice guidelines and real transactions.\n"
         "- Ensure advice is completely understandable, grammatically correct, and natural to read.\n"
         "- Avoid awkward clause stacking or preposition chains (never say 'shopping at [items]' or stack multiple 'at' / 'towards' clauses awkwardly).\n"
         "- Ensure practical financial sense: never advise reducing spending by shopping at the store where spending already occurred; suggest trimming the grocery bill, setting a budget cap, or choosing store brands.\n"
@@ -294,14 +383,27 @@ def generate_advice(
         "- Never use comparative merchant phrasing (e.g. 'stores like [Merchant]').\n"
         "- Do NOT invent item details (e.g. coffee, snacks, store-brand staples) not explicitly stated in transaction descriptions.\n"
         "- Connect the recommendation to an exact active goal name from active_goals.\n"
+        "- If the retrieved guidelines, transactions, or active goals provide insufficient context to formulate advice, reply strictly with: Insufficient context to generate savings advice.\n"
         "- Follow user preferences and cadence rules."
     )
-    return prompt_text(
+    raw_advice, confidence_category, _ = prompt_text_with_confidence(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
         temperature=0.0,
     )
+
+    if not raw_advice or raw_advice.strip().lower().startswith("insufficient context"):
+        return "Insufficient context available to generate savings advice."
+
+    # Format into two paragraphs:
+    # Paragraph 1: The advice
+    # Paragraph 2: Source citations and confidence category (derived from Ollama token logprobs)
+    advice_lines = [line.strip() for line in raw_advice.strip().splitlines() if line.strip()]
+    advice_paragraph = " ".join(advice_lines)
+    metadata_paragraph = f"Sources: {sources_str} | Confidence: {confidence_category}"
+
+    return f"{advice_paragraph}\n\n{metadata_paragraph}"
 
 
 def generate_savings_advice(db_url: str, tx_url: Optional[str] = None) -> str:

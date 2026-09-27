@@ -120,7 +120,7 @@
         if (suggestionContainer && (elt.classList.contains('btn-accept') || elt.classList.contains('btn-cancel'))) {
           const suggestionBox = suggestionContainer.querySelector('.ai-suggestion-textbox');
           const suggestionText = suggestionBox ? suggestionBox.value.trim() : '';
-          if (!suggestionText || suggestionText === 'Waiting for AI suggestion...' || suggestionText.startsWith('Error') || suggestionText === 'No current AI suggestion available.' || suggestionText.startsWith("You don't have")) {
+          if (!suggestionText || suggestionText === 'Waiting for AI suggestion...' || suggestionText.startsWith('Error') || suggestionText === 'No current AI suggestion available.' || suggestionText.startsWith("You don't have") || suggestionText.startsWith("No transactions found") || suggestionText.startsWith("Insufficient context")) {
             showError('No valid suggestion available to accept or reject.');
             evt.preventDefault();
             return;
