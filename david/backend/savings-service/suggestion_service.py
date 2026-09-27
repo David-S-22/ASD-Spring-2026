@@ -41,6 +41,8 @@ def _format_past_suggestions(suggestions: list[dto.Suggestion] | list[dict[str, 
     formatted_suggestions = []
     for suggestion in (suggestions or []):
         text = str(_get_item_field(suggestion, "suggestion", "") or "").strip()
+        if not text:
+            continue
         is_accepted = bool(_get_item_field(suggestion, "accepted", False))
         feedback_comment = _get_item_field(suggestion, "feedback", None)
         status = "ACCEPTED" if is_accepted else "REJECTED"
@@ -406,7 +408,7 @@ def generate_advice(
 
 def generate_savings_advice(db_url: str, tx_url: str | None = None) -> tuple[str, str | None, str | None]:
     """Top-level entry point to fetch data and generate personalized savings advice."""
-    goals = fetch_goals(db_url)
+    goals = fetch_goals(db_url, active_only=True, top=3)
     if not goals:
         return (
             "You don't have any active savings goals yet. "

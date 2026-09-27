@@ -65,9 +65,18 @@ def object_to_hook(d: dict):
 object_hook = object_to_hook
 
 
-def fetch_goals(db_url: str) -> List[dto.Goal]:
+def fetch_goals(
+    db_url: str,
+    active_only: bool = False,
+    top: Optional[int] = None,
+) -> List[dto.Goal]:
     try:
-        resp = requests.get(f"{db_url.rstrip('/')}/goals", timeout=5)
+        params = {}
+        if active_only:
+            params["active_only"] = "true"
+        if top is not None:
+            params["top"] = top
+        resp = requests.get(f"{db_url.rstrip('/')}/goals", params=params, timeout=5)
         if resp.ok:
             return resp.json(object_hook=object_to_hook)
     except Exception as e:
