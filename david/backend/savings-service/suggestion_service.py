@@ -1,6 +1,5 @@
 from datetime import date
 import json
-import os
 from typing import Any
 from shared.backend import dto
 from .helpers import fetch_categories, fetch_feedbacks, fetch_goals, fetch_suggestions
@@ -51,18 +50,23 @@ def _format_past_suggestions(suggestions: list[dto.Suggestion] | list[dict[str, 
             formatted_suggestions.append(f'[{status}] "{text}"')
     return formatted_suggestions
 
-def _format_user_preferences(
+def _format_feedback_for_planner(
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
 ) -> list[dict[str, str]]:
-    """Formats general user preferences (reversed so newest preferences appear first)."""
+    """Formats general user feedback preferences for the planner prompt JSON block (newest first).
+
+    Feedbacks linked to past suggestions (suggestion_id is not None) are excluded here,
+    as they are already incorporated into the prompt within past suggestions.
+    """
     preferences = []
     for feedback_item in reversed(feedbacks or []):
         if _get_item_field(feedback_item, "suggestion_id") is not None:
             continue
-        preference = {
-            "rule": str(_get_item_field(feedback_item, "feedback", "") or ""),
-        }
+        rule_text = str(_get_item_field(feedback_item, "feedback", "") or "").strip()
+        if not rule_text:
+            continue
+        preference = {"rule": rule_text}
         category_id = _get_item_field(feedback_item, "category_id")
         if category_id is not None and category_id in category_map:
             preference["category"] = category_map[category_id]
@@ -72,49 +76,48 @@ def _format_user_preferences(
         preferences.append(preference)
     return preferences
 
-def _format_category_timeframe_feedback(
+
+def _format_feedback_for_search(
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
-) -> str:
-    """Formats all feedbacks that specify category/timeframe (reversed, newest first)."""
-    category_timeframe_items = [
-        item
-        for item in (feedbacks or [])
-        if _get_item_field(item, "category_id") is not None or _get_item_field(item, "timeframe") is not None
-    ]
-    if not category_timeframe_items:
-        return "None"
+) -> tuple[str, str]:
+    """Formats user feedback for the transaction search prompt in a single pass (newest first).
 
-    lines = []
-    for index, item in enumerate(reversed(category_timeframe_items), start=1):
-        details = []
-        category_name = category_map.get(_get_item_field(item, "category_id"))
-        if category_name:
-            details.append(f"Category: {category_name}")
+    Returns a tuple of:
+      - category_timeframe_feedback: Numbered list of feedbacks that specify a category or timeframe,
+        used by the search model to pick query filters (category_name, start_date, end_date).
+      - background_preferences: Bulleted list of general constraint feedbacks without category/timeframe.
+    """
+    category_timeframe_lines: list[str] = []
+    background_lines: list[str] = []
+
+    for item in reversed(feedbacks or []):
+        text = str(_get_item_field(item, "feedback", "") or "").strip()
+        if not text:
+            continue
+
+        category_id = _get_item_field(item, "category_id")
         timeframe = _get_item_field(item, "timeframe")
-        if timeframe:
-            details.append(f"Timeframe: {timeframe}")
 
-        detail_str = f" [{', '.join(details)}]" if details else ""
-        text = _get_item_field(item, "feedback", "") or ""
-        tag = " (Newest)" if index == 1 else ""
-        lines.append(f"{index}.{tag} \"{str(text).strip()}\"{detail_str}")
+        if category_id is not None or timeframe is not None:
+            details = []
+            category_name = category_map.get(category_id) if category_id is not None else None
+            if category_name:
+                details.append(f"Category: {category_name}")
+            if timeframe:
+                details.append(f"Timeframe: {timeframe}")
 
-    return "\n".join(lines)
+            detail_str = f" [{', '.join(details)}]" if details else ""
+            index = len(category_timeframe_lines) + 1
+            tag = " (Newest)" if index == 1 else ""
+            category_timeframe_lines.append(f'{index}.{tag} "{text}"{detail_str}')
+        else:
+            background_lines.append(f"- {text}")
 
-def _format_background_preferences(feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None) -> str:
-    """Formats general constraint feedbacks without category/timeframe (reversed, newest first)."""
-    general_items = [
-        item
-        for item in (feedbacks or [])
-        if _get_item_field(item, "category_id") is None and _get_item_field(item, "timeframe") is None
-    ]
-    lines = [
-        f"- {str(_get_item_field(item, 'feedback', '')).strip()}"
-        for item in reversed(general_items)
-        if _get_item_field(item, "feedback") and str(_get_item_field(item, "feedback")).strip()
-    ]
-    return "\n".join(lines) if lines else "None"
+    cat_tf_str = "\n".join(category_timeframe_lines) if category_timeframe_lines else "None"
+    bg_str = "\n".join(background_lines) if background_lines else "None"
+    return cat_tf_str, bg_str
+
 
 def format_planner_prompt(
     goals: list[dto.Goal] | list[dict[str, Any]] | None,
@@ -128,9 +131,10 @@ def format_planner_prompt(
     tables = {
         "active_goals": _format_active_goals(goals),
         "past_suggestions": _format_past_suggestions(suggestions),
-        "general_user_preferences": _format_user_preferences(feedbacks, category_map),
+        "general_user_preferences": _format_feedback_for_planner(feedbacks, category_map),
     }
     return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
+
 
 def generate_transaction_search_tool_call(
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
@@ -146,10 +150,12 @@ def generate_transaction_search_tool_call(
     category_map = {category.id: category.name for category in categories} if categories else {}
     today_str = date.today().isoformat()
 
+    category_timeframe_feedback, background_preferences = _format_feedback_for_search(feedbacks, category_map)
+
     search_prompt = load_prompt("search_prompt.txt").format(
         today=today_str,
-        category_timeframe_feedback=_format_category_timeframe_feedback(feedbacks, category_map),
-        background_preferences=_format_background_preferences(feedbacks),
+        category_timeframe_feedback=category_timeframe_feedback,
+        background_preferences=background_preferences,
         valid_categories=", ".join(category_names) if category_names else "None",
     ).strip()
 
@@ -387,7 +393,7 @@ def generate_advice(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
-        temperature=0.0,
+        temperature=0.25,
     )
 
     if not raw_advice or raw_advice.strip().lower().startswith("insufficient context"):
