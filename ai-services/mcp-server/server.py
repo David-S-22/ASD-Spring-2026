@@ -70,11 +70,7 @@ def search_transactions(
     if max_value is not None:
         params["max_amount"] = max_value
 
-    resp = requests.get(
-        f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions",
-        params=params,
-        timeout=20,
-    )
+    resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions", params=params)
     resp.raise_for_status()
     return resp.json()
 
