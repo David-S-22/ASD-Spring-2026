@@ -35,13 +35,13 @@ def _format_messages(prompt: str, system_prompt: str | None = None) -> list[dict
     return messages
 
 
-def prompt_text(
+def get_ai_text_response(
     prompt: str,
     model: str,
+    temperature: float,
     system_prompt: str | None = None,
-    temperature: float = 0.0,
 ) -> str:
-    """Prompts the AI model to generate a plain-text response."""
+    """Sends a prompt to the AI model and returns its plain-text completion response."""
     messages = _format_messages(prompt, system_prompt=system_prompt)
     resp = client.chat.completions.create(
         model=model,
@@ -54,10 +54,7 @@ def prompt_text(
 def calculate_confidence_category(
     logprobs_content: list[Any] | None,
 ) -> ConfidenceCategory:
-    """
-    Calculates the confidence category ('High', 'Medium', 'Low') from token log probabilities
-    returned directly by Ollama, ensuring the LLM does not fabricate confidence.
-    """
+    """Calculates the confidence category ('High', 'Medium', 'Low') from token log probabilities."""
     if not logprobs_content:
         return "Medium"
 
@@ -78,16 +75,13 @@ def calculate_confidence_category(
     return "Low"
 
 
-def prompt_text_and_calculate_confidence(
+def get_ai_text_and_calculate_confidence(
     prompt: str,
     model: str,
+    temperature: float,
     system_prompt: str | None = None,
-    temperature: float = 0.0,
 ) -> tuple[str, ConfidenceCategory]:
-    """
-    Prompts Ollama with logprobs enabled to generate text, then calculates
-    the model confidence category directly from token log probabilities.
-    """
+    """Prompts the AI model to generate text with token logprobs enabled, and calculates its confidence category."""
     messages = _format_messages(prompt, system_prompt=system_prompt)
     resp = client.chat.completions.create(
         model=model,
@@ -105,13 +99,13 @@ def prompt_text_and_calculate_confidence(
     return content, confidence_category
 
 
-def prompt_json(
+def get_ai_json_response(
     prompt: str,
     model: str,
+    temperature: float,
     system_prompt: str | None = None,
-    temperature: float = 0.0,
 ) -> dict[str, Any]:
-    """Prompts the AI model with JSON mode enabled and parses the JSON response into a dict."""
+    """Prompts the AI model in JSON mode and parses the response into a Python dictionary."""
     messages = _format_messages(prompt, system_prompt=system_prompt)
     resp = client.chat.completions.create(
         model=model,
@@ -123,14 +117,14 @@ def prompt_json(
     return json.loads(content)
 
 
-def prompt_structured_schema(
+def get_ai_structured_json(
     prompt: str,
     schema: dict[str, Any],
     model: str,
+    temperature: float,
     system_prompt: str | None = None,
-    temperature: float = 0.0,
 ) -> dict[str, Any]:
-    """Prompts the AI model with grammar-constrained JSON schema decoding and returns the parsed dict."""
+    """Prompts the AI model with grammar-constrained JSON schema decoding and returns the parsed structured dictionary."""
     messages = _format_messages(prompt, system_prompt=system_prompt)
     resp = client.chat.completions.create(
         model=model,
@@ -148,18 +142,14 @@ def prompt_structured_schema(
     return json.loads(content)
 
 
-def prompt_tool_call(
+def call_ai_to_select_tool(
     prompt: str | list[dict[str, Any]],
     tools: list[dict[str, Any]],
     model: str,
+    temperature: float,
     system_prompt: str | None = None,
-    temperature: float = 0.0,
-) -> tuple[str, dict[str, Any], str]:
-    """
-    Prompts the AI model with available tools to select an appropriate tool and arguments.
-    Accepts either a string prompt or an existing list of message dicts for multi-turn loops.
-    Returns a tuple of (tool_name, arguments_dict, tool_call_id).
-    """
+) -> tuple[str, dict[str, Any]]:
+    """Calls the AI model with a list of available tools, asking the AI to select an appropriate tool and arguments."""
     if isinstance(prompt, list):
         messages = prompt
     else:
@@ -175,10 +165,9 @@ def prompt_tool_call(
     choice = resp.choices[0]
     tool_calls = getattr(choice.message, "tool_calls", None)
     if not tool_calls:
-        return "", {}, "call_1"
+        return "", {}
 
     tool_call = tool_calls[0]
-    tool_call_id = str(getattr(tool_call, "id", "call_1") or "call_1")
     tool_name = str(getattr(getattr(tool_call, "function", None), "name", "") or "")
     tool_args_str = getattr(getattr(tool_call, "function", None), "arguments", "{}") or "{}"
     try:
@@ -186,7 +175,7 @@ def prompt_tool_call(
     except Exception:
         tool_args = {}
 
-    return tool_name, tool_args, tool_call_id
+    return tool_name, tool_args
 
 
 def execute_mcp_tool(
