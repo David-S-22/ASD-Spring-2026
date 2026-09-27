@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional
 from shared.backend import dto
-from .ollama_service import classifier_model, load_prompt, prompt_structured_schema
+from .ollama_service import classifier_model, get_ai_structured_json, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,12 @@ def classify_feedback(feedback_text: str, categories: List[dto.Category]) -> tup
     sys_prompt = load_prompt("classify_prompt.txt")
 
     try:
-        data = prompt_structured_schema(
+        data = get_ai_structured_json(
             prompt=feedback_text.strip(),
             schema=schema,
             model=classifier_model,
             system_prompt=sys_prompt,
+            temperature=0.0,
         )
         if data.get("intent") == "focus":
             cat_val = data.get("category")

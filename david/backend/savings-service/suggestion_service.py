@@ -4,12 +4,12 @@ from typing import Any
 from shared.backend import dto
 from .helpers import fetch_categories, fetch_feedbacks, fetch_goals, fetch_suggestions
 from .ollama_service import (
+    call_ai_to_select_tool,
     execute_mcp_tool,
     fetch_mcp_tools,
+    get_ai_text_and_calculate_confidence,
     load_prompt,
     planner_model,
-    prompt_text_and_calculate_confidence,
-    prompt_tool_call,
     search_model,
 )
 
@@ -174,7 +174,7 @@ def generate_transaction_search_tool_call(
         "Do not invoke document retrieval or other tools."
     )
 
-    tool_name, tool_args, _ = prompt_tool_call(
+    tool_name, tool_args = call_ai_to_select_tool(
         search_prompt,
         tools=tools,
         model=search_model,
@@ -389,7 +389,7 @@ def generate_advice(
     system_prompt = load_prompt("savings_prompt.txt")
     user_prompt = _build_advice_prompt(user_data, spending_summary, formatted_transactions, rag_context_blocks)
 
-    raw_advice, confidence_category = prompt_text_and_calculate_confidence(
+    raw_advice, confidence_category = get_ai_text_and_calculate_confidence(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
