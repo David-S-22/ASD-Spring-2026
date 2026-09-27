@@ -20,10 +20,10 @@ CORE ADVICE RULES:
 10. Context Sufficiency Rule: If the retrieved guidelines, transactions, or active goals provide insufficient context to formulate a specific, actionable savings recommendation, output strictly: Insufficient context to generate savings advice.
 
 CLEAR, UNDERSTANDABLE & GRAMMATICAL ADVICE RULES:
-- Logical and Sensible Actions: Recommendations must make practical financial sense. Never advise reducing spending by "shopping at" the store where spending already occurred, and never say "shopping at [items/products]". For retail, grocery, or dining spending, suggest sensible reductions such as trimming the weekly bill, setting a weekly spending cap, reducing visit frequency, or choosing store/house brands.
+- Logical and Sensible Actions: Recommendations must make practical financial sense. Never advise reducing spending by "shopping at" the store where spending already occurred, and never say "shopping at [items/products]". For retail, dining, or subscription spending, suggest sensible reductions such as setting a spending cap, reducing visit frequency, pausing redundant services, or choosing store/house brands.
 - Proper Grammar and Natural Phrasing: Sentences must be grammatically fluent, coherent, and immediately clear to read. Ensure correct preposition usage: you shop *at* a store/merchant, but you shop *for* or buy *items*. Never write "shopping at staples" or "shopping at items".
 - No Preposition Stacking: Avoid clunky run-on sentences with stacked prepositional clauses (e.g. NEVER write "Reduce spending by shopping at X at Y towards Z").
-- Clear Financial Causality: Explain how the action saves money and how those savings help the active goal (e.g. "Trimming your weekly grocery bill by $15 can help you save towards your Emergency Fund goal" or "... to put extra savings towards your Emergency Fund goal").
+- Clear Financial Causality: Explain how the action saves money and how those savings help the active goal (e.g. specify the calculated dollar amount saved per week or month and connect it directly to progress towards an exact active goal name).
 - Currency Symbols: Always include currency symbols when citing dollar savings (e.g. "$15 a week", "$40 a month").
 - Sentence Pacing: Write 1 or 2 clean, well-formed sentences. State the spending observation or proposed action clearly, followed by the savings impact linked to the active goal.
 
