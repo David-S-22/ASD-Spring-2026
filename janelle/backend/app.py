@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 import requests
 from flask import Flask, jsonify, make_response, render_template, request
@@ -17,6 +18,7 @@ from .Helpers import (
     render_transaction_page,
     render_transaction_table,
 )
+from .services import mcp_client, rag_client
 from .services.chat_service import ChatError
 from .services.transaction_orchestrator import (
     get_preview_request_context,
@@ -24,6 +26,26 @@ from .services.transaction_orchestrator import (
     run_category_selection,
     run_confirmed_transaction,
 )
+
+
+def mode_error_response(error):
+    """Map an MCP or RAG client error onto the ChatError JSON shape.
+
+    A disabled switch is 503 with the disabled code; every other failure is
+    502 with the generic unavailable code so no detail leaks to the client.
+    """
+    if isinstance(error, mcp_client.MCPError):
+        disabled_code, unavailable_code = "mcp_disabled", "mcp_unavailable"
+        unavailable_message = "The MCP server is unavailable."
+    else:
+        disabled_code, unavailable_code = "rag_disabled", "rag_unavailable"
+        unavailable_message = "The RAG server is unavailable."
+
+    if error.code == disabled_code:
+        chat_error = ChatError(error.message, disabled_code, 503)
+    else:
+        chat_error = ChatError(unavailable_message, unavailable_code, 502)
+    return jsonify(chat_error.to_dict()), chat_error.status
 
 
 def setup_app(db_url: str) -> Flask:
@@ -89,7 +111,43 @@ def setup_app(db_url: str) -> Flask:
 
     @application.get("/health")
     def get_health():
-        return jsonify(ok=True, container="transactions-backend")
+        return jsonify(
+            ok=True,
+            container="transactions-backend",
+            modes={
+                "ai": "enabled",
+                "mcp": "enabled" if config.MCP_ENABLED else "disabled",
+                "rag": "enabled" if config.RAG_ENABLED else "disabled",
+            },
+        )
+
+    @application.get("/mcp/tools")
+    def get_mcp_tools():
+        try:
+            tools = mcp_client.list_tools()
+        except mcp_client.MCPError as error:
+            return mode_error_response(error)
+        return jsonify(tools=tools)
+
+    @application.post("/rag/refresh")
+    def refresh_rag_records():
+        started = time.perf_counter()
+        try:
+            # PR 5 replaces the empty lists with the corpus builder output.
+            result = rag_client.refresh(
+                config.RAG_RECORDS_COLLECTION,
+                [],
+                [],
+                None,
+            )
+        except rag_client.RAGError as error:
+            return mode_error_response(error)
+        return jsonify(
+            feature=result["feature"],
+            total=result["total"],
+            kinds={},
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
 
     @application.route("/transactions")
     def get_transactions():

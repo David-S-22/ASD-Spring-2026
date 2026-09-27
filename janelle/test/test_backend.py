@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from unittest.mock import Mock, call
+import importlib
 import json
 
 import requests
@@ -40,14 +41,334 @@ def test_index_identifies_backend(client: FlaskClient):
     assert response.get_json() == {"container": "transactions-backend"}
 
 
-def test_health_reports_backend_liveness(client: FlaskClient):
+def test_health_reports_backend_liveness(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(backend_app.config, "MCP_ENABLED", True)
+    monkeypatch.setattr(backend_app.config, "RAG_ENABLED", True)
+
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.get_json() == {
         "ok": True,
         "container": "transactions-backend",
+        "modes": {"ai": "enabled", "mcp": "enabled", "rag": "enabled"},
     }
+
+
+@mark.parametrize("mcp_enabled", [True, False])
+@mark.parametrize("rag_enabled", [True, False])
+def test_health_reports_mcp_and_rag_modes_without_network(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    mcp_enabled,
+    rag_enabled,
+):
+    monkeypatch.setattr(backend_app.config, "MCP_ENABLED", mcp_enabled)
+    monkeypatch.setattr(backend_app.config, "RAG_ENABLED", rag_enabled)
+    for method in ("get", "post", "request"):
+        monkeypatch.setattr(
+            backend_app.requests,
+            method,
+            Mock(side_effect=AssertionError("no network")),
+        )
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json()["modes"] == {
+        "ai": "enabled",
+        "mcp": "enabled" if mcp_enabled else "disabled",
+        "rag": "enabled" if rag_enabled else "disabled",
+    }
+    body = response.get_data(as_text=True)
+    mcp_mode = "enabled" if mcp_enabled else "disabled"
+    rag_mode = "enabled" if rag_enabled else "disabled"
+    assert f'"mcp":"{mcp_mode}"' in body
+    assert f'"rag":"{rag_mode}"' in body
+
+
+def test_mcp_tools_lists_registered_tools(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    tools = [{
+        "name": "search_transactions",
+        "description": "Search transactions",
+        "input_schema": {"type": "object"},
+    }]
+    monkeypatch.setattr(
+        backend_app.mcp_client,
+        "list_tools",
+        Mock(return_value=tools),
+    )
+
+    response = client.get("/mcp/tools")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"tools": tools}
+
+
+def test_mcp_tools_refuses_when_disabled(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(backend_app.config, "MCP_ENABLED", False)
+
+    response = client.get("/mcp/tools")
+
+    assert response.status_code == 503
+    assert response.get_json() == {
+        "error": "MCP mode is disabled.",
+        "code": "mcp_disabled",
+    }
+
+
+@mark.parametrize("code", [
+    "mcp_connection",
+    "mcp_timeout",
+    "mcp_tool_error",
+    "mcp_invalid_result",
+])
+def test_mcp_tools_reports_unavailable_server(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    code,
+):
+    monkeypatch.setattr(
+        backend_app.mcp_client,
+        "list_tools",
+        Mock(side_effect=backend_app.mcp_client.MCPError(code)),
+    )
+
+    response = client.get("/mcp/tools")
+
+    assert response.status_code == 502
+    assert response.get_json() == {
+        "error": "The MCP server is unavailable.",
+        "code": "mcp_unavailable",
+    }
+
+
+def test_rag_refresh_refuses_when_disabled(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(backend_app.config, "RAG_ENABLED", False)
+    post = Mock()
+    monkeypatch.setattr(backend_app.rag_client.requests, "post", post)
+
+    response = client.post("/rag/refresh")
+
+    assert response.status_code == 503
+    assert response.get_json() == {
+        "error": "RAG mode is disabled.",
+        "code": "rag_disabled",
+    }
+    post.assert_not_called()
+
+
+def test_rag_refresh_pushes_empty_records_collection_when_enabled(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(backend_app.config, "RAG_ENABLED", True)
+    monkeypatch.setattr(
+        backend_app.config,
+        "RAG_RECORDS_COLLECTION",
+        "transactions-records",
+    )
+    refresh = Mock(return_value={
+        "feature": "transactions-records",
+        "total": 0,
+    })
+    monkeypatch.setattr(backend_app.rag_client, "refresh", refresh)
+
+    response = client.post("/rag/refresh")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["feature"] == "transactions-records"
+    assert body["total"] == 0
+    assert body["kinds"] == {}
+    assert isinstance(body["duration_ms"], float)
+    refresh.assert_called_once_with("transactions-records", [], [], None)
+
+
+@mark.parametrize("code", [
+    "rag_connection",
+    "rag_timeout",
+    "rag_http_error",
+    "rag_invalid_response",
+])
+def test_rag_refresh_reports_unavailable_server(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+    code,
+):
+    monkeypatch.setattr(
+        backend_app.rag_client,
+        "refresh",
+        Mock(side_effect=backend_app.rag_client.RAGError(code)),
+    )
+
+    response = client.post("/rag/refresh")
+
+    assert response.status_code == 502
+    assert response.get_json() == {
+        "error": "The RAG server is unavailable.",
+        "code": "rag_unavailable",
+    }
+
+
+MODE_ENVIRONMENT = (
+    "MCP_ENABLED",
+    "MCP_SERVER_URL",
+    "MCP_TIMEOUT_SECONDS",
+    "MCP_ALLOWED_TOOLS",
+    "MCP_FALLBACK_TO_DATABASE",
+    "RAG_ENABLED",
+    "RAG_SERVER_URL",
+    "RAG_RECORDS_COLLECTION",
+    "RAG_GUIDE_COLLECTION",
+    "RAG_TOP_K",
+    "RAG_GUIDE_TOP_K",
+    "RAG_TIMEOUT_SECONDS",
+    "RAG_REFRESH_ON_START",
+    "RAG_REFRESH_AFTER_WRITE",
+    "RAG_INSUFFICIENT_ABOVE",
+    "RAG_HIGH_BELOW",
+    "RAG_MEDIUM_BELOW",
+    "RAG_MODEL",
+)
+
+
+@fixture
+def reload_config(monkeypatch: MonkeyPatch):
+    for name in MODE_ENVIRONMENT:
+        monkeypatch.delenv(name, raising=False)
+
+    def reload(**environment):
+        for name, value in environment.items():
+            monkeypatch.setenv(name, value)
+        return importlib.reload(backend_app.config)
+
+    yield reload
+    monkeypatch.undo()
+    importlib.reload(backend_app.config)
+
+
+def test_config_mode_defaults_match_design(reload_config):
+    config = reload_config()
+
+    assert config.MCP_ENABLED is True
+    assert config.MCP_SERVER_URL == "http://host.docker.internal:8000/mcp"
+    assert config.MCP_TIMEOUT_SECONDS == 30.0
+    assert config.MCP_ALLOWED_TOOLS == frozenset({"search_transactions"})
+    assert config.MCP_FALLBACK_TO_DATABASE is True
+    assert config.RAG_ENABLED is True
+    assert config.RAG_SERVER_URL == "http://host.docker.internal:5003"
+    assert config.RAG_RECORDS_COLLECTION == "transactions-records"
+    assert config.RAG_GUIDE_COLLECTION == "transactions"
+    assert config.RAG_TOP_K == 6
+    assert config.RAG_GUIDE_TOP_K == 3
+    assert config.RAG_TIMEOUT_SECONDS == 15.0
+    assert config.RAG_REFRESH_ON_START is True
+    assert config.RAG_REFRESH_AFTER_WRITE is True
+    assert config.RAG_INSUFFICIENT_ABOVE == 1.2
+    assert config.RAG_HIGH_BELOW == 0.6
+    assert config.RAG_MEDIUM_BELOW == 0.9
+    assert config.RAG_MODEL == "qwen2.5:3b"
+
+
+def test_config_reads_mode_overrides(reload_config):
+    config = reload_config(
+        MCP_ENABLED="false",
+        MCP_SERVER_URL="http://mcp.local:9000/mcp/",
+        MCP_TIMEOUT_SECONDS="4.5",
+        MCP_ALLOWED_TOOLS=" search_transactions , retrieve_context ,,",
+        MCP_FALLBACK_TO_DATABASE="no",
+        RAG_ENABLED="off",
+        RAG_SERVER_URL="http://rag.local:5003/",
+        RAG_RECORDS_COLLECTION="records",
+        RAG_GUIDE_COLLECTION="guide",
+        RAG_TOP_K="4",
+        RAG_GUIDE_TOP_K="2",
+        RAG_TIMEOUT_SECONDS="3",
+        RAG_REFRESH_ON_START="0",
+        RAG_REFRESH_AFTER_WRITE="false",
+        RAG_INSUFFICIENT_ABOVE="1.5",
+        RAG_HIGH_BELOW="0.5",
+        RAG_MEDIUM_BELOW="1.0",
+        RAG_MODEL="llama3.2:3b",
+    )
+
+    assert config.MCP_ENABLED is False
+    assert config.MCP_SERVER_URL == "http://mcp.local:9000/mcp"
+    assert config.MCP_TIMEOUT_SECONDS == 4.5
+    assert config.MCP_ALLOWED_TOOLS == frozenset({
+        "search_transactions",
+        "retrieve_context",
+    })
+    assert config.MCP_FALLBACK_TO_DATABASE is False
+    assert config.RAG_ENABLED is False
+    assert config.RAG_SERVER_URL == "http://rag.local:5003"
+    assert config.RAG_RECORDS_COLLECTION == "records"
+    assert config.RAG_GUIDE_COLLECTION == "guide"
+    assert config.RAG_TOP_K == 4
+    assert config.RAG_GUIDE_TOP_K == 2
+    assert config.RAG_TIMEOUT_SECONDS == 3.0
+    assert config.RAG_REFRESH_ON_START is False
+    assert config.RAG_REFRESH_AFTER_WRITE is False
+    assert config.RAG_INSUFFICIENT_ABOVE == 1.5
+    assert config.RAG_HIGH_BELOW == 0.5
+    assert config.RAG_MEDIUM_BELOW == 1.0
+    assert config.RAG_MODEL == "llama3.2:3b"
+
+
+@mark.parametrize("value, expected", [
+    ("true", True),
+    ("1", True),
+    ("yes", True),
+    ("ON", True),
+    ("false", False),
+    ("0", False),
+    ("", False),
+])
+def test_config_mode_switches_parse_flags(reload_config, value, expected):
+    config = reload_config(MCP_ENABLED=value, RAG_ENABLED=value)
+
+    assert config.MCP_ENABLED is expected
+    assert config.RAG_ENABLED is expected
+
+
+@mark.parametrize("environment", [
+    {"RAG_HIGH_BELOW": "0.95"},
+    {"RAG_MEDIUM_BELOW": "1.3"},
+    {"RAG_HIGH_BELOW": "0"},
+    {"RAG_HIGH_BELOW": "-0.1"},
+    {"RAG_INSUFFICIENT_ABOVE": "not-a-number"},
+])
+def test_invalid_rag_thresholds_fall_back_to_defaults_with_warning(
+    reload_config,
+    caplog,
+    environment,
+):
+    with caplog.at_level("WARNING"):
+        config = reload_config(**environment)
+
+    assert (
+        config.RAG_INSUFFICIENT_ABOVE,
+        config.RAG_HIGH_BELOW,
+        config.RAG_MEDIUM_BELOW,
+    ) == (1.2, 0.6, 0.9)
+    warnings = [
+        record for record in caplog.records
+        if "Invalid RAG distance thresholds" in record.getMessage()
+    ]
+    assert len(warnings) == 1
 
 
 def test_transaction_rows_are_loaded_from_database(
