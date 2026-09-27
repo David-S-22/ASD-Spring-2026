@@ -66,13 +66,13 @@ def refresh_sources_route():
         results = ingest_sources()
     return jsonify({"ok": True, "sources": results})
 
-if __name__ == "__main__":
-    #Ingest documents from sources/ on startup
-    try:
-        print("Beginning Source Ingestion")
-        ingested = ingest_sources()
-        print(f"RAG server startup ingestion complete: {ingested}")
-    except Exception as e:
-        logger.error(f"Error during RAG server startup ingestion: {e}")
+#Ingest documents from sources/ on startup
+try:
+    print("Beginning Source Ingestion")
+    ingested = ingest_sources()
+    print(f"RAG server startup ingestion complete: {ingested}")
+except Exception as e:
+    logger.error(f"Error during RAG server startup ingestion: {e}")
 
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=PORT)
