@@ -234,8 +234,13 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        suggestion = generate_savings_advice(db_url, tx_url=tx_url)
-        return render_template("ai-suggestion.jinja", suggestion=suggestion), 200
+        suggestion, sources, confidence = generate_savings_advice(db_url, tx_url=tx_url)
+        return render_template(
+            "ai-suggestion.jinja",
+            suggestion=suggestion,
+            sources=sources,
+            confidence=confidence,
+        ), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
     def action_ai_suggestion():
@@ -294,7 +299,13 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
             return jsonify({"error": f"Failed to save suggestion decision: {str(e)}"}), 500
 
         return make_response(
-            render_template("ai-suggestion.jinja", suggestion=None, loading=True),
+            render_template(
+                "ai-suggestion.jinja",
+                suggestion=None,
+                sources=None,
+                confidence=None,
+                loading=True,
+            ),
             200,
             {"HX-Trigger": "suggestionChanged, feedbackChanged"},
         )

@@ -41,9 +41,7 @@ def _format_past_suggestions(suggestions: list[dto.Suggestion] | list[dict[str, 
     """Formats past suggestions with their acceptance status and feedback rationale."""
     formatted_suggestions = []
     for suggestion in (suggestions or []):
-        text = str(_get_item_field(suggestion, "suggestion", "") or "")
-        if text and "\n\n" in text:
-            text = text.split("\n\n")[0].strip()
+        text = str(_get_item_field(suggestion, "suggestion", "") or "").strip()
         is_accepted = bool(_get_item_field(suggestion, "accepted", False))
         feedback_comment = _get_item_field(suggestion, "feedback", None)
         status = "ACCEPTED" if is_accepted else "REJECTED"
@@ -362,14 +360,14 @@ def generate_advice(
     suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None,
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     tx_url: str | None = None,
-) -> str:
+) -> tuple[str, str | None, str | None]:
     """Coordinates retrieval of transactions & RAG context via MCP and prompts the planner model to generate savings advice."""
     if not goals:
-        return "Insufficient context available to generate savings advice."
+        return "Insufficient context available to generate savings advice.", None, None
 
     transactions, tx_error = _fetch_filtered_transactions(feedbacks, tx_url=tx_url)
     if tx_error is not None or not transactions:
-        return tx_error or "You don't have any transactions yet. Add transactions using the transactions tab."
+        return tx_error or "You don't have any transactions yet. Add transactions using the transactions tab.", None, None
 
     categories = fetch_categories(tx_url)
     category_map = {category.id: category.name for category in categories} if categories else {}
@@ -378,7 +376,7 @@ def generate_advice(
 
     rag_guidelines = _fetch_rag_guidelines(goals)
     if not rag_guidelines:
-        return "Insufficient context available to generate savings advice."
+        return "Insufficient context available to generate savings advice.", None, None
     rag_context_blocks, sources_str = rag_guidelines
 
     user_data = format_planner_prompt(goals, suggestions, feedbacks, tx_url=tx_url)
@@ -393,30 +391,31 @@ def generate_advice(
     )
 
     if not raw_advice or raw_advice.strip().lower().startswith("insufficient context"):
-        return "Insufficient context available to generate savings advice."
+        return "Insufficient context available to generate savings advice.", None, None
 
     advice_lines = [line.strip() for line in raw_advice.strip().splitlines() if line.strip()]
     advice_paragraph = " ".join(advice_lines)
-    metadata_paragraph = f"Sources: {sources_str} | Confidence: {confidence_category}"
-    return f"{advice_paragraph}\n\n{metadata_paragraph}"
+    return advice_paragraph, sources_str, str(confidence_category)
 
 
-def generate_savings_advice(db_url: str, tx_url: str | None = None) -> str:
+def generate_savings_advice(db_url: str, tx_url: str | None = None) -> tuple[str, str | None, str | None]:
     """Top-level entry point to fetch data and generate personalized savings advice."""
     goals = fetch_goals(db_url)
     if not goals:
         return (
             "You don't have any active savings goals yet. "
-            "Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!"
+            "Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!",
+            None,
+            None,
         )
 
     feedbacks = fetch_feedbacks(db_url)
     suggestions = fetch_suggestions(db_url)
 
     try:
-        advice = generate_advice(goals, suggestions, feedbacks, tx_url=tx_url)
+        advice, sources, confidence = generate_advice(goals, suggestions, feedbacks, tx_url=tx_url)
         if advice:
-            return advice
-        return "Error: Could not generate AI savings suggestion (empty response received from AI model)."
+            return advice, sources, confidence
+        return "Error: Could not generate AI savings suggestion (empty response received from AI model).", None, None
     except Exception as e:
-        return f"Error: Could not generate AI savings suggestion ({e})."
+        return f"Error: Could not generate AI savings suggestion ({e}).", None, None
