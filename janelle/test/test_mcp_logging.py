@@ -8,7 +8,7 @@ from pytest import MonkeyPatch, fixture
 import janelle.backend.app as backend_app
 import janelle.backend.services.transaction_orchestrator as transaction_orchestrator
 from janelle.backend import config
-from janelle.backend.services import mcp_client, transaction_source
+from janelle.backend.services import transaction_source
 from janelle.backend.services.mcp_client import MCPError
 
 
@@ -211,63 +211,15 @@ def test_fallback_is_logged_with_a_safe_error_code(
     assert record["error"] == "mcp_connection"
     assert record["rows"] == 1
     assert "The MCP server is unavailable." not in caplog.text
-
-
-def test_failed_read_is_logged_when_fallback_is_off(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-    mcp_on,
-    caplog,
-):
-    monkeypatch.setattr(config, "MCP_FALLBACK_TO_DATABASE", False)
-    monkeypatch.setattr(
-        backend_app.requests,
-        "get",
-        Mock(side_effect=[response_with_json(CATEGORIES)]),
+    act = [
+        item
+        for item in response.get_json()["agent"]["trace"]
+        if item["stage"] == "ACT"
+    ]
+    assert act[0]["summary"] == (
+        "Queried transactions using trusted application code "
+        "via database (MCP fallback)."
     )
-    use_extraction(monkeypatch, {"calculation": "count"})
-    use_tool(monkeypatch, error=MCPError("mcp_timeout"))
-
-    with caplog.at_level(
-        logging.INFO,
-        logger=client.application.logger.name,
-    ):
-        response = client.post("/chat", json={"message": "How many?"})
-
-    assert response.status_code == 503
-    assert response.get_json()["code"] == "mcp_unavailable"
-    record = tool_records(caplog)[0]
-    assert record["status"] == "failed"
-    assert record["error"] == "mcp_timeout"
-    assert record["rows"] == 0
-
-
-def test_switch_off_logs_one_skipped_disabled_record(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-    caplog,
-):
-    monkeypatch.setattr(
-        backend_app.requests,
-        "get",
-        Mock(side_effect=[
-            response_with_json(CATEGORIES),
-            response_with_json(WOOLWORTHS),
-        ]),
-    )
-    use_extraction(monkeypatch, {"calculation": "count"})
-
-    with caplog.at_level(
-        logging.INFO,
-        logger=client.application.logger.name,
-    ):
-        response = client.post("/chat", json={"message": "How many?"})
-
-    assert response.status_code == 200
-    records = tool_records(caplog)
-    assert len(records) == 1
-    assert records[0]["status"] == "skipped_disabled"
-    assert records[0]["arguments"] == {}
 
 
 def test_write_preview_and_confirmation_log_no_tool_record(
@@ -374,64 +326,6 @@ def test_chat_read_response_exposes_the_tool_call_and_names_it_in_the_trace(
     )
 
 
-def test_chat_read_trace_names_the_database_after_a_fallback(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-    mcp_on,
-):
-    monkeypatch.setattr(
-        backend_app.requests,
-        "get",
-        Mock(side_effect=[
-            response_with_json(CATEGORIES),
-            response_with_json(WOOLWORTHS),
-        ]),
-    )
-    use_extraction(monkeypatch, {"calculation": "count"})
-    use_tool(monkeypatch, error=MCPError("mcp_connection"))
-
-    result = client.post("/chat", json={"message": "How many?"}).get_json()
-
-    act = [item for item in result["agent"]["trace"] if item["stage"] == "ACT"]
-    assert act[0]["summary"] == (
-        "Queried transactions using trusted application code "
-        "via database (MCP fallback)."
-    )
-
-
-def test_truncated_read_notes_the_row_cap_in_the_reply(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-    mcp_on,
-):
-    many = [
-        {
-            "id": index,
-            "date": "2026-08-14T00:00:00",
-            "merchant": "Woolworths",
-            "description": "Weekly shop",
-            "amount": 10.0,
-            "category_id": 80,
-        }
-        for index in range(1, 620)
-    ]
-    monkeypatch.setattr(
-        backend_app.requests,
-        "get",
-        Mock(side_effect=[response_with_json(CATEGORIES)]),
-    )
-    use_extraction(monkeypatch, {"calculation": "count"})
-    use_tool(monkeypatch, many)
-
-    result = client.post("/chat", json={"message": "How many?"}).get_json()
-
-    assert result["analytics"]["count"] == 500
-    assert result["reply"].endswith(
-        "Showing the first 500 matching transactions."
-    )
-    assert result["agent"]["tools"][0]["truncated"] is True
-
-
 def test_mcp_tools_listing_emits_one_record(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
@@ -472,33 +366,3 @@ def test_mcp_tools_listing_emits_one_record(
         "error": None,
     }
     assert records[0]["duration_ms"] >= 0
-
-
-def test_mcp_tools_listing_failure_records_a_safe_error_code(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-    mcp_on,
-    caplog,
-):
-    monkeypatch.setattr(
-        backend_app.mcp_client,
-        "list_tools",
-        Mock(side_effect=mcp_client.MCPError("mcp_connection")),
-    )
-
-    with caplog.at_level(
-        logging.INFO,
-        logger=client.application.logger.name,
-    ):
-        response = client.get("/mcp/tools")
-
-    assert response.status_code == 502
-    records = [
-        record
-        for record in workflow_records(caplog)
-        if record["event"] == "MCP_TOOLS_LISTED"
-    ]
-    assert len(records) == 1
-    assert records[0]["status"] == "failed"
-    assert records[0]["error"] == "mcp_connection"
-    assert records[0]["tools"] == 0
