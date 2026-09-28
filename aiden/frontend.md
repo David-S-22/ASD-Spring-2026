@@ -9,11 +9,13 @@ related transaction details, review status, and feedback controls.
 
 ## User interface
 
-The page loads anomaly rows from the backend and refreshes them periodically
-using HTMX. Unreviewed anomalies provide a review action that lets the user
-confirm or dismiss the finding. The review dialog shows the complete
-transaction details (ID, date, merchant, amount, description, and category ID)
-in two columns, followed by a full-width suspected-reason row before
+The page describes its table as a list of flagged transactions, their suspected
+reasons, and review status, with actions to confirm or dismiss unreviewed
+findings. Rows load from the backend and refresh periodically using HTMX. The
+review dialog shows the complete
+transaction details (ID, a locale-formatted date with weekday, merchant,
+amount, description, and category ID) in two columns, followed by a full-width
+suspected-reason row before
 collecting the user's decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.

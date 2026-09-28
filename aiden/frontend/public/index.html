@@ -152,6 +152,7 @@
         }
     </style>
     <h1>Anomalies</h1>
+    <p>Review flagged transactions, see why each was suspected, and confirm or dismiss unreviewed anomalies.</p>
     <table>
         <thead>
             <tr>
@@ -218,10 +219,23 @@
         // Anomaly review modal: pick Accept/Reject from a dropdown, then submit.
         let reviewAnomalyId = null;
 
+        function formatTransactionDate(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+
+            return new Intl.DateTimeFormat(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'UTC'
+            }).format(date);
+        }
+
         function openReviewModal(button) {
             reviewAnomalyId = Number(button.dataset.anomalyId);
             document.getElementById('review-transaction-id').textContent = button.dataset.transactionId;
-            document.getElementById('review-transaction-date').textContent = button.dataset.date;
+            document.getElementById('review-transaction-date').textContent = formatTransactionDate(button.dataset.date);
             document.getElementById('review-transaction-merchant').textContent = button.dataset.merchant;
             document.getElementById('review-transaction-amount').textContent = button.dataset.amount;
             document.getElementById('review-transaction-description').textContent = button.dataset.description;
