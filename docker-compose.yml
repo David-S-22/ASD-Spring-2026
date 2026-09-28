@@ -12,7 +12,7 @@ services:
     entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
     environment:
       # Any models you want to use must be listed here, to ensure they are installed on the container
-      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b qwen3:4b
     healthcheck:
       test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
@@ -146,7 +146,7 @@ services:
       ANOMALIES_DB_URL: http://anomalies-db:6004/anomalies
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
-      OLLAMA_MODEL: qwen2.5:3b
+      OLLAMA_MODEL: qwen3:4b
       MCP_SERVER_URL: http://host.docker.internal:8000/mcp
     depends_on:
       anomalies-db:

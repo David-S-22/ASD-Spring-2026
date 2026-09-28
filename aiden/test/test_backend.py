@@ -13,6 +13,7 @@ from responses import RequestsMock
 from backend.app import app
 from backend.services import review_queue
 from backend.services import anomalies_api
+from backend.services import ollama_api
 from backend.services.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
@@ -27,6 +28,48 @@ def test_index(client: FlaskClient):
     assert resp.status_code == 200
     assert isinstance(resp.json, dict)
     assert resp.json["container"] == "anomalies-backend"
+
+
+def test_ollama_thinking_trace_is_extracted_without_becoming_anomaly_output():
+    response = {
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {"thinking": "Amount is unusually large."},
+                    {"type": "output_text", "text": '{"is_suspicious": true}'},
+                ],
+            }
+        ]
+    }
+
+    assert ollama_api._extract_thinking(response) == "Amount is unusually large."
+    assert ollama_api._extract_response_text(response) == '{"is_suspicious": true}'
+
+
+def test_ollama_prompt_enables_thinking(monkeypatch: MonkeyPatch):
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(output_text="{}")
+
+    monkeypatch.setattr(
+        ollama_api,
+        "_get_client",
+        lambda: SimpleNamespace(responses=SimpleNamespace(create=create)),
+    )
+
+    ollama_api.prompt(
+        system_prompt="system",
+        user_prompt="user",
+        model="test-model",
+        temperature=0.2,
+        output_tokens=100,
+    )
+
+    assert captured["extra_body"] == {"think": True}
+
 
 def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
