@@ -6,6 +6,8 @@ The frontend is a lightweight nginx container that serves the anomalies user
 interface. The page is built with HTML, CSS, JavaScript, and HTMX, without a
 separate frontend framework or build step. It displays detected anomalies,
 related transaction details, review status, and feedback controls.
+The page structure, styling, and interactions are kept in `public/anomalies.html`,
+`public/anomalies.css`, and `public/anomalies.js`, respectively.
 
 ## User interface
 
@@ -42,4 +44,6 @@ Nginx serves files from `/app/public` and listens on the configured `PORT`,
 which is `3004` in Docker Compose. Requests under `/anomalies-backend/` are
 reverse-proxied to the URL provided by `ANOMALIES_BACKEND_URL`. The Dockerfile
 uses `nginx:alpine`, copies the static page into the image, and installs the
-templated nginx configuration.
+templated nginx configuration. CSS and JavaScript are served through the
+`/anomalies-assets/` route so their paths work both standalone and when the
+page is embedded in the shared frontend.
