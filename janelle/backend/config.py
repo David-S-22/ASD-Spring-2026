@@ -59,6 +59,10 @@ MCP_ALLOWED_TOOLS = frozenset(
     if name.strip()
 )
 MCP_FALLBACK_TO_DATABASE = _environment_flag("MCP_FALLBACK_TO_DATABASE", True)
+MCP_TOOL_SUPPORTS_EXTENDED_FILTERS = _environment_flag(
+    "MCP_TOOL_SUPPORTS_EXTENDED_FILTERS",
+    True,
+)
 
 # RAG mode
 RAG_ENABLED = _environment_flag("RAG_ENABLED", True)

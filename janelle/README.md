@@ -12,7 +12,7 @@ Ollama-backed assistant for transaction queries and guarded changes.
 | `frontend/` | nginx container that serves `public/index.html`, exposes `/health`, and proxies `/transactions-backend/*` to the backend. |
 | `backend/` | Flask API and Jinja/HTMX UI fragments. It proxies transaction and category requests to the database, runs the AI workflow, and notifies the anomalies service after a transaction is created. |
 | `backend/prompts/` | JSON-only planner prompt used by the transaction assistant. |
-| `backend/services/` | Ollama planning, trusted transaction operations, request orchestration, and the bounded Plan -> Act -> Observe -> Adapt runner. |
+| `backend/services/` | Ollama planning, trusted transaction operations, MCP and RAG clients, the MCP-or-database transaction read source, request orchestration, and the bounded Plan -> Act -> Observe -> Adapt runner. |
 | `backend/templates/` | Transaction table, forms, pagination, chat panel, preview, clarification, and result fragments. |
 | `database/` | Flask-SQLAlchemy API backed by SQLite, including models, validation, filtering, startup seed data, and category-correction records. |
 | `scripts/test/` | Standard-library HTTP helpers plus endpoint, live AI workflow, and database NFR probes. |
@@ -99,8 +99,54 @@ version to reject stale previews, and every attempted write is checked
 against the resulting database state.
 
 Each response includes an `agent` object containing the request ID, planner
-model, workflow status, and, when enabled, a stage trace with iteration,
-status, summary, and duration.
+model, workflow status, the MCP tool calls the request made, and, when
+enabled, a stage trace with iteration, status, summary, and duration.
+
+### MCP read path
+
+`backend/services/transaction_source.py` is the one seam every transaction
+read passes through. When `MCP_ENABLED=true`, a read plan fetches its rows by
+calling `search_transactions` on the shared MCP server instead of the
+database. Validated plan filters are mapped onto tool arguments:
+
+| Plan filter | Tool argument |
+|---|---|
+| `date_from`, or `since` when no `date_from` | `start_date` |
+| `date_to` | `end_date` |
+| `category_id` | `category_name`, resolved through the request's category lookup |
+| `merchant`, `search_text`, `min_amount`, `max_amount` | the same names |
+
+A `dates` list makes one call per date with `start_date` and `end_date` set to
+that day, capped at seven dates, and the rows are merged and de-duplicated by
+id exactly as the database path does. Returned rows pass the same
+`transaction_row` validation as database rows, so a malformed row fails safely
+with the existing invalid-response error. A result over 500 rows is truncated
+and the reply says so.
+
+Two reads never use the tool. Point lookups of `GET /transactions/<id>` are
+not searches, and write previews and confirmed writes ask for the row version
+that the tool does not return, so both stay on the database API.
+
+If the MCP server is unreachable, `MCP_FALLBACK_TO_DATABASE=true` serves the
+read from the database and records the fallback; with the fallback off the
+read fails with `503 mcp_unavailable`. Set
+`MCP_TOOL_SUPPORTS_EXTENDED_FILTERS=false` when the deployed tool only accepts
+dates and a category: the merchant, text and amount filters are then applied
+to the returned rows with the database API semantics, and the recorded call
+lists them under `residual_filters`.
+
+`POST /chat` reports what happened in `agent.tools`, one entry per invocation:
+
+```json
+{"server": "http://host.docker.internal:8000/mcp", "tool": "search_transactions",
+ "arguments": {"start_date": "2026-08-01", "end_date": "2026-08-31"},
+ "residual_filters": [], "status": "succeeded", "rows": 4, "truncated": false,
+ "duration_ms": 912.4, "error": null}
+```
+
+`status` is `succeeded`, `fallback_database`, `failed`, or `skipped_disabled`.
+The safe ACT trace summary names the tool or the fallback. Creates, category
+selections, and confirmations report an empty list.
 
 ### Logging
 
@@ -109,6 +155,23 @@ JSON record for every stage and one completion record for every cycle. The
 records include request ID, phase, model, iteration, stage, status, duration,
 and safe error type. User messages, prompts, transaction values, and model
 response bodies are deliberately excluded.
+
+The same switch emits one `MCP_TOOL` record per tool invocation, including
+the `fallback_database`, `failed`, and `skipped_disabled` outcomes, and one
+`MCP_TOOLS_LISTED` record per `GET /mcp/tools` call:
+
+```json
+{"event": "MCP_TOOL", "request_id": "...", "phase": "initial", "iteration": 1,
+ "stage": "ACT", "server": "http://host.docker.internal:8000/mcp",
+ "tool": "search_transactions",
+ "arguments": {"start_date": "2026-08-01", "merchant": "Woolworths"},
+ "residual_filters": [], "status": "succeeded", "rows": 4, "truncated": false,
+ "duration_ms": 912.4, "error": null}
+```
+
+`arguments` only ever carries filter values from the validated plan, and
+`error` is a safe code, so no user text, prompt, or model output reaches the
+record.
 
 `AGENT_TRACE_ENABLED` independently controls whether the safe stage trace is
 returned in API responses.
@@ -151,6 +214,7 @@ Compose supplies production-ready defaults. The backend reads:
 | `MCP_TIMEOUT_SECONDS` | `30` | Per MCP tool call timeout. |
 | `MCP_ALLOWED_TOOLS` | `search_transactions` | Comma-separated tool allow list. |
 | `MCP_FALLBACK_TO_DATABASE` | `true` | Read from the database when MCP is unreachable. |
+| `MCP_TOOL_SUPPORTS_EXTENDED_FILTERS` | `true` | Send the merchant, text, and amount filters to the tool instead of applying them to the returned rows. |
 | `RAG_ENABLED` | `true` | RAG mode switch. CI sets `false`. |
 | `RAG_SERVER_URL` | `http://host.docker.internal:5003` | Shared RAG server. |
 | `RAG_RECORDS_COLLECTION` | `transactions-records` | Backend-owned collection of transaction and correction documents. |
