@@ -310,7 +310,8 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
         with app.app_context():
             seeded_count = seed_database_if_empty(seeded_transaction_ids)
         assert seeded_count == len(expected_transaction_ids) - 1
-        anomalies = client.get("/anomalies/").json
+        response = client.get("/anomalies/")
+        assert isinstance(anomalies := response.json, list)
         assert (
             {anomaly["transaction_id"] for anomaly in anomalies}
             == expected_transaction_ids
