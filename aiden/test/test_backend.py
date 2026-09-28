@@ -2,6 +2,7 @@ import re
 import threading
 import time
 
+import pytest
 from datetime import datetime
 from types import SimpleNamespace
 from pytest import MonkeyPatch, fixture
@@ -13,6 +14,7 @@ from responses import RequestsMock
 from backend.app import app
 from backend.services import review_queue
 from backend.services import anomalies_api
+from backend.services import ollama_api
 from backend.services.review_queue import transaction_queue
 from backend.helpers import serialise
 from database.app import app as dbapp, setup_database
@@ -27,6 +29,75 @@ def test_index(client: FlaskClient):
     assert resp.status_code == 200
     assert isinstance(resp.json, dict)
     assert resp.json["container"] == "anomalies-backend"
+
+
+def test_ollama_prompt_requests_logprobs(monkeypatch: MonkeyPatch):
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(output_text="{}")
+
+    monkeypatch.setattr(
+        ollama_api,
+        "_get_client",
+        lambda: SimpleNamespace(responses=SimpleNamespace(create=create)),
+    )
+
+    ollama_api.prompt(
+        system_prompt="system",
+        user_prompt="user",
+        model="test-model",
+        temperature=0.2,
+        output_tokens=100,
+    )
+
+    assert captured["top_logprobs"] == ollama_api._TOP_LOGPROBS
+    assert captured["include"] == ["message.output_text.logprobs"]
+
+
+def test_ollama_prompt_returns_mean_confidence(monkeypatch: MonkeyPatch):
+    import math
+
+    response = {
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": '{"is_suspicious": true}',
+                        "logprobs": [
+                            {"token": "a", "logprob": -0.1, "top_logprobs": [{"token": "b", "logprob": -5.0}]},
+                            {"token": "c", "logprob": -0.3, "top_logprobs": [{"token": "d", "logprob": -9.0}]},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    monkeypatch.setattr(
+        ollama_api,
+        "_get_client",
+        lambda: SimpleNamespace(responses=SimpleNamespace(create=lambda **kwargs: response)),
+    )
+
+    result = ollama_api.prompt(
+        system_prompt="system",
+        user_prompt="user",
+        model="test-model",
+        temperature=0.2,
+        output_tokens=100,
+    )
+
+    assert result.text == '{"is_suspicious": true}'
+    # Each chosen token's probability is exp(logprob); nested top_logprobs are skipped.
+    assert result.mean_confidence == (math.exp(-0.1) + math.exp(-0.3)) / 2
+
+
+def test_ollama_mean_confidence_is_none_without_logprobs():
+    assert ollama_api._extract_mean_confidence(SimpleNamespace(output_text="{}")) is None
 
 def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
@@ -201,6 +272,73 @@ def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, mo
 
     assert persisted is not None
     assert persisted.agent_reason_suspected == "Persisted reason"
+
+
+def test_check_transaction_persists_mean_confidence_from_logprobs(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    import math
+
+    response = {
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": '{"is_suspicious": true, "justification": "Confident finding"}',
+                        "logprobs": [
+                            {"token": "a", "logprob": -0.02},
+                            {"token": "b", "logprob": -0.05},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    intercept_ollama_response(monkeypatch, response)
+
+    transaction = dto.Transaction(
+        id=95,
+        amount=9999999,
+        merchant="Slim Shady ATMs",
+        date=datetime.now(),
+        description="we are going to steal your money",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    with app.app_context():
+        persisted = anomalies_api.get_anomaly_by_transaction_id(95)
+
+    assert persisted is not None
+    assert persisted.confidence == pytest.approx((math.exp(-0.02) + math.exp(-0.05)) / 2)
+
+
+def test_check_transaction_confidence_is_none_without_logprobs(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "No logprobs"}')
+
+    transaction = dto.Transaction(
+        id=96,
+        amount=9999999,
+        merchant="Slim Shady ATMs",
+        date=datetime.now(),
+        description="we are going to steal your money",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    with app.app_context():
+        persisted = anomalies_api.get_anomaly_by_transaction_id(96)
+
+    assert persisted is not None
+    assert persisted.confidence is None
 
 
 def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
@@ -389,6 +527,41 @@ def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
     assert resp.status_code == 404
 
 
+def test_anomaly_row_renders_confidence_badge(client: FlaskClient):
+    with app.app_context():
+        anomalies_api.create_anomaly(
+            dto.Anomaly(
+                id=0,
+                transaction_id=4444,
+                agent_reason_suspected="odd",
+                is_confirmed_by_user=None,
+                confidence=0.92,
+            )
+        )
+
+    rows = client.get("/anomalies").text
+
+    assert 'data-sort-confidence="0.92"' in rows
+    assert '<span class="status-badge confidence-high">High</span>' in rows
+
+
+def test_anomaly_row_renders_dash_when_confidence_missing(client: FlaskClient):
+    with app.app_context():
+        anomalies_api.create_anomaly(
+            dto.Anomaly(
+                id=0,
+                transaction_id=4445,
+                agent_reason_suspected="odd",
+                is_confirmed_by_user=None,
+            )
+        )
+
+    rows = client.get("/anomalies").text
+
+    assert 'data-sort-confidence=""' in rows
+    assert 'aria-label="No confidence score"' in rows
+
+
 def test_anomaly_row_shows_transaction_date_and_merchant(client: FlaskClient, monkeypatch: MonkeyPatch):
     with app.app_context():
         anomalies_api.create_anomaly(
@@ -507,4 +680,12 @@ def intercept_ollama(monkeypatch: MonkeyPatch, model_response: str):
     fake_client = SimpleNamespace(responses=responses)
 
     # Monkeypatch ollama api
+    monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
+
+def intercept_ollama_response(monkeypatch: MonkeyPatch, response):
+    """Intercept Ollama with a full response payload (e.g. including logprobs)."""
+    create=lambda **kwargs: response
+    responses=SimpleNamespace(create=create)
+    fake_client = SimpleNamespace(responses=responses)
+
     monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)

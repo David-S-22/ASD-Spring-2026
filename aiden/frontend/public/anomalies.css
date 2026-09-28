@@ -148,6 +148,23 @@ button.review-btn:hover { background-color: #0369a1 !important; }
     color: var(--color-text-muted, #475569);
     border: 1px solid rgba(148, 163, 184, 0.3);
 }
+
+/* Confidence badges (low/medium/high), mirroring the status badge styling. */
+.confidence-high {
+    background-color: rgba(74, 222, 128, 0.15);
+    color: var(--color-success, #15803d);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+.confidence-medium {
+    background-color: rgba(251, 191, 36, 0.15);
+    color: var(--color-warning, #b45309);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.confidence-low {
+    background-color: rgba(248, 113, 113, 0.15);
+    color: var(--color-danger, #b91c1c);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
 .content:has(.anomalies-page) {
     max-width: 1300px;
     padding-inline: 1.5rem;

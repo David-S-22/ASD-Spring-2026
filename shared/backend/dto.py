@@ -22,13 +22,16 @@ class Category:
     type: Optional[str]
 
 # Represents a transaction an agent has decided may be suspicious. The user can confirm
-# whether it is true positive or false positive, which is represented by is_confirmed_by_user
+# whether it is true positive or false positive, which is represented by is_confirmed_by_user.
+# confidence is the agent's mean confidence in its finding, derived from the model's token
+# log probabilities (log probs). It is None when no confidence signal is available.
 @dataclass(frozen=True)
 class Anomaly:
     id: int
     transaction_id: int
     agent_reason_suspected: str
     is_confirmed_by_user: Optional[bool]
+    confidence: Optional[float] = None
 
 @dataclass(frozen=True)
 class Goal:

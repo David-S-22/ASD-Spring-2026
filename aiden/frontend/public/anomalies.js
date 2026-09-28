@@ -7,6 +7,7 @@ function sortAnomalies() {
         id: row => Number(row.dataset.sortId),
         date: row => Date.parse(row.dataset.sortDate),
         merchant: row => row.dataset.sortMerchant,
+        confidence: row => row.dataset.sortConfidence === '' ? NaN : Number(row.dataset.sortConfidence),
         status: row => ({ unreviewed: 0, confirmed: 1, dismissed: 2 }[row.dataset.sortStatus])
     };
     const getValue = sortValues[sortKey];

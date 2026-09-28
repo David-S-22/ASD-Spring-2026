@@ -42,6 +42,29 @@ def test_create_anomaly(client: FlaskClient):
     assert isinstance(resp.json["transaction_id"], int)
     assert resp.json["is_confirmed_by_user"] == False
     assert resp.json["agent_reason_suspected"] == "beans"
+    # confidence is optional and defaults to null when omitted.
+    assert resp.json["confidence"] is None
+
+
+def test_create_anomaly_persists_confidence(client: FlaskClient):
+    json = dict(
+        transaction_id=110,
+        agent_reason_suspected="beans",
+        is_confirmed_by_user=None,
+        confidence=0.87,
+    )
+
+    resp = client.post("/anomalies/", json=json)
+
+    assert resp.status_code == 201, resp.text
+    assert isinstance(create_json := resp.json, dict)
+    assert create_json["confidence"] == 0.87
+
+    resp = client.get("/anomalies/" + str(create_json["id"]))
+
+    assert resp.status_code == 200
+    assert isinstance(resp.json, dict)
+    assert resp.json["confidence"] == 0.87
 
 def test_delete_anomaly(client: FlaskClient):
     anomaly = create_anomaly(client, id=0, transaction_id=201, agent_reason_suspected="beans", is_confirmed_by_user=False)
