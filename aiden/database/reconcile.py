@@ -17,6 +17,7 @@ from sqlalchemy import select
 from .app import app
 from .config import config
 from .models import Anomaly, db
+from .seed import seed_database_if_empty
 
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,11 @@ def reconcile_anomalies() -> None:
             "Skipping anomaly reconciliation; transactions database unreachable"
         )
         return
+
+    with app.app_context():
+        seeded = seed_database_if_empty(transaction_ids)
+    if seeded:
+        logger.info("Seeded %s anomalies for existing transactions", seeded)
 
     removed = remove_orphaned_anomalies(transaction_ids)
     logger.info(

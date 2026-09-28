@@ -10,3 +10,4 @@ pytest.ini
 .vs
 reports/
 .mypy_cache/
+docker-compose.override.yml

@@ -5,6 +5,9 @@ EXPOSE 5004
 # Copy backend package into /app/backend to preserve package structure
 COPY ./aiden/backend ./backend
 
+# Ensure the package marker exists (not checked into source control)
+RUN touch backend/__init__.py
+
 # Copy shared models
 COPY ./shared/backend ./shared/backend
 

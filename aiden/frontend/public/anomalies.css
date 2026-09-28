@@ -1,0 +1,190 @@
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 8vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+.modal-overlay[hidden] { display: none; }
+.modal-overlay:not([hidden]) { animation: modal-fade-in 0.16s ease-out; }
+.modal-overlay.closing { animation: modal-fade-out 0.16s ease-in forwards; }
+.modal {
+    background: var(--color-surface, #ffffff);
+    color: var(--color-text, #1e293b);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--color-border, #cbd5e1);
+    max-width: 620px;
+    width: 90%;
+    max-height: 84vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.modal-overlay:not([hidden]) .modal { animation: modal-pop-in 0.18s ease-out; }
+.modal-overlay.closing .modal { animation: modal-pop-out 0.16s ease-in forwards; }
+@keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modal-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes modal-pop-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(5px) scale(0.985); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay:not([hidden]), .modal-overlay.closing,
+    .modal-overlay:not([hidden]) .modal, .modal-overlay.closing .modal {
+        animation-duration: 0.01ms;
+    }
+}
+.modal h2, .modal p, .modal label { color: var(--color-text, #1e293b); }
+.modal label { display: block; margin: 0.75rem 0 0.25rem; }
+.review-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+.review-detail {
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--color-border, #cbd5e1);
+    border-radius: 6px;
+    background: var(--color-surface-alt, #f8fafc);
+}
+.review-detail dt {
+    margin-bottom: 0.3rem;
+    color: var(--color-text-muted, #64748b);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.review-detail dd {
+    margin: 0;
+    color: var(--color-text, #1e293b);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.review-detail-reason {
+    grid-column: 1 / -1;
+    background: var(--color-surface-alt, #f8fafc);
+}
+.review-detail-reason dd { font-weight: 500; line-height: 1.5; }
+@media (max-width: 520px) {
+    .review-details { grid-template-columns: 1fr; }
+    .review-detail-reason { grid-column: auto; }
+}
+.modal select {
+    width: 100%;
+    padding: 0.4rem;
+    background: var(--color-surface-alt, #ffffff);
+    color: var(--color-text, #1e293b);
+    border: 1px solid var(--color-border, #cbd5e1);
+    border-radius: 5px;
+}
+.modal-actions { margin-top: 1.25rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+/* Review action buttons (matches the savings module palette). */
+button.btn-accept, button.btn-cancel {
+    padding: 5px 16px;
+    cursor: pointer;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #ffffff !important;
+    transition: background-color 0.15s ease;
+}
+button.btn-accept { background-color: #198754 !important; }
+button.btn-accept:hover { background-color: #157347 !important; }
+button.btn-cancel { background-color: #475569 !important; }
+button.btn-cancel:hover { background-color: #334155 !important; }
+button.review-btn {
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #ffffff !important;
+    background-color: #0284c7 !important;
+    transition: background-color 0.15s ease;
+}
+button.review-btn:hover { background-color: #0369a1 !important; }
+.no-actions {
+    display: inline-block;
+    width: 100%;
+    color: var(--color-text-muted, #64748b);
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Status badges (mirrors the savings accepted/rejected styling). */
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+.status-accepted {
+    background-color: rgba(74, 222, 128, 0.15);
+    color: var(--color-success, #15803d);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+.status-rejected {
+    background-color: rgba(248, 113, 113, 0.15);
+    color: var(--color-danger, #b91c1c);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+.status-unreviewed {
+    background-color: rgba(148, 163, 184, 0.15);
+    color: var(--color-text-muted, #475569);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+.content:has(.anomalies-page) {
+    max-width: 1300px;
+    padding-inline: 1.5rem;
+}
+.anomalies-page { width: 100%; }
+.anomalies-table-wrap { width: 100%; overflow-x: auto; }
+.anomalies-table { width: 100%; min-width: 900px; table-layout: auto; }
+.anomalies-table th:first-child { width: 5.5rem; }
+thead th .sort-btn, thead th .sort-btn:hover {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    white-space: nowrap;
+    transition: none;
+    cursor: pointer;
+}
+.sort-icon {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 0.9em;
+    height: 0.9em;
+    vertical-align: -0.1em;
+    color: var(--color-text-muted, #64748b);
+}
+.sort-icon-active { display: none; }
+th[aria-sort="ascending"] .sort-icon-neutral,
+th[aria-sort="descending"] .sort-icon-neutral { display: none; }
+th[aria-sort="ascending"] .sort-icon-active,
+th[aria-sort="descending"] .sort-icon-active { display: inline; }
+th[aria-sort="descending"] .sort-icon-active { transform: rotate(180deg); }

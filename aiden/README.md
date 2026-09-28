@@ -5,13 +5,13 @@ containerised frontend, backend, database, and model components.
 
 ## Documentation
 
-- [Backend documentation](backend.md) — backend overview, agentic workflow,
+- [Backend documentation](backend/README.md) — backend overview, agentic workflow,
   services, and routes.
-- [Frontend documentation](frontend.md) — frontend overview, user interface,
+- [Frontend documentation](frontend/README.md) — frontend overview, user interface,
   backend communication, and nginx configuration.
-- [Database documentation](database.md) — database overview, routes, and
+- [Database documentation](database/README.md) — database overview, routes, and
   conceptual, logical, and physical ERDs.
-- [Test documentation](tests.md) — backend and database testing, including
+- [Test documentation](test/README.md) — backend and database testing, including
   service integration with `responses`.
 
 ## Directory overview
@@ -20,14 +20,13 @@ containerised frontend, backend, database, and model components.
 
 Contains the user-facing anomalies interface. The frontend runs in an nginx
 container and serves the static page used to display anomalies, transaction
-information, review controls, and status messages. HTMX requests refresh
-anomaly rows and submit actions without full page reloads. The interface also
-supports checking a transaction and creating a dummy anomaly during
-development. Nginx proxies `/anomalies-backend/` requests to the backend
-container, while environment variables provide the backend URL. The directory
-contains the HTML page, nginx configuration, and Dockerfile required to build
-and run the frontend container. Detailed frontend documentation is available in
-[`frontend.md`](frontend.md).
+information, and review controls. HTMX requests refresh anomaly rows and submit
+review actions without full page reloads. Nginx proxies
+`/anomalies-backend/` requests to the backend container, while environment
+variables provide the backend URL. The directory contains the HTML page, nginx
+configuration, and Dockerfile required to build and run the frontend
+container. Detailed frontend documentation is available in
+[`frontend/README.md`](frontend/README.md).
 
 ### `backend/`
 
@@ -40,7 +39,7 @@ directory includes the agent logic, review queue, Ollama client, templates,
 helpers, requirements, and Dockerfile. The agent uses transaction details and
 previous user decisions to produce structured findings. Detailed workflow,
 services, and routes are documented in
-[`backend.md`](backend.md).
+[`backend/README.md`](backend/README.md).
 
 ### `database/`
 
@@ -51,7 +50,7 @@ status. Transactions and anomalies are stored in separate databases, so the
 relationship is represented by ID rather than a database foreign key. A unique
 constraint allows at most one anomaly per transaction. The directory includes
 the model, routes, parsing helpers, requirements, and Dockerfile. Database
-design, routes, and ERDs are documented in [`database.md`](database.md).
+design, routes, and ERDs are documented in [`database/README.md`](database/README.md).
 
 ### `test/`
 
@@ -64,4 +63,4 @@ redirected to Flask test clients, avoiding running containers. Model responses
 are controlled with monkeypatching to test valid, invalid, suspicious, and
 retry scenarios deterministically. Shared pytest setup and test dependencies
 are also stored here. Additional testing details are available in
-[`tests.md`](tests.md).
+[`test/README.md`](test/README.md).

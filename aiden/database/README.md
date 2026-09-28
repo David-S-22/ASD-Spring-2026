@@ -13,13 +13,16 @@ The `transactions` table and `anomalies` table are stored in separate databases.
 
 Because the reference to `transactions.id` is not an enforced foreign key,
 anomalies can become orphaned if a transaction is deleted while the anomalies
-database is unavailable. To recover from this, the container runs a
-reconciliation pass in a background thread when it starts, so the API begins
-serving requests immediately while cleanup proceeds:
+database is unavailable. A background reconciliation pass starts with the
+container, so the API can serve requests immediately while the pass proceeds:
 
 1. It polls the transactions database (`GET {TRANSACTIONS_DB_URL}/transactions`),
    retrying until the service is reachable.
-2. It deletes any anomaly whose `transaction_id` is not present in the returned
+2. It inserts any missing demo findings whose transaction IDs exist in the
+   returned set, without overwriting existing anomalies or review decisions.
+   The seed includes 17 findings with a mix of confirmed, dismissed, and
+   unreviewed user decisions.
+3. It deletes any anomaly whose `transaction_id` is not present in the returned
    set of transactions.
 
 This requires the `transactions-db` container to be running, so `anomalies-db`

@@ -5,6 +5,9 @@ EXPOSE 6004
 # Copy database package into /app/database to preserve package structure
 COPY ./aiden/database ./database
 
+# Ensure the package marker exists (not checked into source control)
+RUN touch database/__init__.py
+
 # Copy shared models
 COPY ./shared/backend ./shared/backend
 

@@ -1,0 +1,15 @@
+# If you have NVIDIA GPU you can configure ollama to use GPU instead of CPU
+# by copying this file to "docker-compose.override.yml" and using the same
+# docker compose up commands as before. You can check if it's running on the
+# GPU successfully by running the command "docker exec -it ollama ollama ps"
+# and checking the "Processor" tab. Note: Don't commit the new file.
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

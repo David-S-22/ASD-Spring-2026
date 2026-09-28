@@ -18,7 +18,9 @@ KEYS = {
 }
 PLAN_INTERNAL_KEYS = {"planning_error", "retryable"}
 OPERATIONS = {"create", "read", "update", "delete"}
-CALCULATIONS = {"none", "count", "sum", "average", "largest"}
+CALCULATIONS = {
+    "none", "count", "sum", "average", "largest", "smallest",
+}
 HANDOFFS = {"none"}
 FIELDS = {
     "date", "merchant", "description", "amount", "category", "category_id",
@@ -50,8 +52,16 @@ LIST_INTENT = re.compile(
     r"(?:purchases|transactions|expenses)\b",
     re.IGNORECASE,
 )
+LARGEST_INTENT = re.compile(
+    r"\b(?:biggest|largest|highest|most expensive|priciest)\b",
+    re.IGNORECASE,
+)
+SMALLEST_INTENT = re.compile(
+    r"\b(?:smallest|cheapest|lowest|least expensive)\b",
+    re.IGNORECASE,
+)
 RANKING_INTENT = re.compile(
-    r"\b(?:biggest|largest|highest|most expensive)\b",
+    rf"{LARGEST_INTENT.pattern}|{SMALLEST_INTENT.pattern}",
     re.IGNORECASE,
 )
 AMOUNT_BETWEEN = re.compile(
@@ -120,6 +130,10 @@ MONTH_DAY = re.compile(
     rf"\b(?P<month>{MONTH_NAMES})\s+"
     rf"(?P<day>\d{{1,2}})(?:st|nd|rd|th)?"
     rf"(?:,?\s+(?P<year>\d{{4}}))?\b",
+    re.IGNORECASE,
+)
+MONTH_ONLY = re.compile(
+    rf"\b(?P<month>{MONTH_NAMES})(?:\s+(?P<year>\d{{4}}))?\b",
     re.IGNORECASE,
 )
 DATE_RANGE_INTENT = re.compile(
@@ -255,8 +269,8 @@ def validate_chat_response(data, categories=()):
         return f"unsupported filters: {', '.join(unknown)}"
     if is_invalid_calculation(calculation):
         return (
-            "calculation must be count, sum, average, largest, none, "
-            "or a unique list"
+            "calculation must be count, sum, average, largest, "
+            "smallest, none, or a unique list"
         )
     if data["handoff"] not in HANDOFFS:
         return f"handoff must be one of {sorted(HANDOFFS)}"
@@ -401,6 +415,21 @@ def build_messages(message, categories, previous_observation):
                 "calculation": "largest",
                 "handoff": "none",
                 "reply": "I will rank your August purchases by amount.",
+            },
+        ),
+        (
+            "What is the smallest purchase I made in August?",
+            {
+                "operation": "read",
+                "transaction_id": None,
+                "fields": {},
+                "filters": {
+                    "date_from": august_start.isoformat(),
+                    "date_to": august_end.isoformat(),
+                },
+                "calculation": "smallest",
+                "handoff": "none",
+                "reply": "I will find your cheapest August purchases.",
             },
         ),
         (
@@ -599,6 +628,10 @@ def normalize_read_query(data, message, categories):
     }
     if LIST_INTENT.search(message) and not RANKING_INTENT.search(message):
         normalized["calculation"] = "none"
+    normalized["calculation"] = correct_ranking_direction(
+        normalized["calculation"],
+        message,
+    )
 
     date_filters = extract_date_filters(message)
     if date_filters:
@@ -624,10 +657,39 @@ def normalize_read_query(data, message, categories):
     return normalized
 
 
+def correct_ranking_direction(calculation, message):
+    """Rank from the end of the range the user actually asked for.
+
+    The planner answers "cheapest" with "largest" often enough to matter,
+    especially on a replan. The wording is unambiguous, so the message
+    wins over the model.
+    """
+    calculations = (
+        [calculation] if isinstance(calculation, str) else list(calculation)
+    )
+    if not any(item in {"largest", "smallest"} for item in calculations):
+        return calculation
+
+    wants_smallest = SMALLEST_INTENT.search(message) is not None
+    wants_largest = LARGEST_INTENT.search(message) is not None
+    if wants_smallest == wants_largest:
+        return calculation
+
+    wanted = "smallest" if wants_smallest else "largest"
+    corrected = []
+    for item in calculations:
+        item = wanted if item in {"largest", "smallest"} else item
+        if item not in corrected:
+            corrected.append(item)
+    return corrected[0] if isinstance(calculation, str) else corrected
+
+
 def extract_date_filters(message):
     matches = []
+    day_spans = []
     for pattern in (DAY_MONTH, MONTH_DAY):
         for match in pattern.finditer(message):
+            day_spans.append(match.span())
             month = MONTHS[match.group("month").casefold()]
             day = int(match.group("day"))
             year = match.group("year")
@@ -636,6 +698,8 @@ def extract_date_filters(message):
             except ValueError:
                 continue
             matches.append((match.start(), value))
+    if not matches:
+        return extract_month_range(message, day_spans)
     dates = []
     for _position, value in sorted(matches):
         iso_date = value.isoformat()
@@ -659,6 +723,38 @@ def extract_date_filters(message):
     if re.search(r"\b(?:before|until)\b", message, re.IGNORECASE):
         return {"date_to": value}
     return {"date": value}
+
+
+def extract_month_range(message, day_spans):
+    """Return the first bare month name as a whole-month range.
+
+    A month with no day ("in August") matches neither DAY_MONTH nor
+    MONTH_DAY, so without this the period is left to the planner.
+    ``day_spans`` are the day-and-month matches already consumed, so
+    "10 June" is never also read as the whole of June.
+    """
+    for match in MONTH_ONLY.finditer(message):
+        if any(
+            match.start() < end and start < match.end()
+            for start, end in day_spans
+        ):
+            continue
+        month = MONTHS[match.group("month").casefold()]
+        start = resolve_month_start(month, match.group("year"))
+        last_day = monthrange(start.year, month)[1]
+        return {
+            "date_from": start.isoformat(),
+            "date_to": date(start.year, month, last_day).isoformat(),
+        }
+    return {}
+
+
+def resolve_month_start(month, year):
+    if year is not None:
+        return date(int(year), month, 1)
+    today = date.today()
+    value = date(today.year, month, 1)
+    return value if value <= today else date(today.year - 1, month, 1)
 
 
 def resolve_date(month, day, year):
