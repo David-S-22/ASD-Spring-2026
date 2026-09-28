@@ -1,10 +1,18 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from shared.backend import dto
 
 db = SQLAlchemy()
 
 class Anomaly(db.Model): # type: ignore[name-defined]
+    __table_args__ = (
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_anomaly_confidence_range",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
     transaction_id: Mapped[int] = mapped_column(unique=True) # One anomaly per transaction
     agent_reason_suspected: Mapped[str] = mapped_column()

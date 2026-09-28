@@ -66,6 +66,21 @@ def test_create_anomaly_persists_confidence(client: FlaskClient):
     assert isinstance(resp.json, dict)
     assert resp.json["confidence"] == 0.87
 
+
+def test_confidence_out_of_range_is_rejected(client: FlaskClient):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        db.session.add(
+            Anomaly(transaction_id=115, agent_reason_suspected="beans", confidence=1.5)
+        )
+
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+
+        db.session.rollback()
+
 def test_delete_anomaly(client: FlaskClient):
     anomaly = create_anomaly(client, id=0, transaction_id=201, agent_reason_suspected="beans", is_confirmed_by_user=False)
     response = client.delete(f"/anomalies/{anomaly.id}")
