@@ -7,6 +7,9 @@ from pytest import fixture
 from backend.helpers import deserialise_safe, serialise
 from database import reconcile
 from database.app import app, setup_database
+from database.models import Anomaly, db
+from database.seed import SEED_ANOMALIES, seed_database_if_empty
+from janelle.database.seed import TRANSACTIONS
 from shared.backend import dto
 
 
@@ -282,6 +285,57 @@ def test_fetch_transaction_ids_with_retry_gives_up_when_unreachable(monkeypatch)
 
     assert ids is None
     assert calls["count"] == 3
+
+
+def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient):
+    seeded_transaction_ids = {transaction[0] for transaction in TRANSACTIONS}
+    expected_transaction_ids = {
+        transaction_id
+        for transaction_id, _, _ in SEED_ANOMALIES
+        if transaction_id in seeded_transaction_ids
+    }
+
+    with app.app_context():
+        db.session.query(Anomaly).delete()
+        db.session.add(
+            Anomaly(
+                transaction_id=26,
+                agent_reason_suspected="Existing anomaly must remain unchanged.",
+                is_confirmed_by_user=None,
+            )
+        )
+        db.session.commit()
+
+    try:
+        with app.app_context():
+            seeded_count = seed_database_if_empty(seeded_transaction_ids)
+        assert seeded_count == len(expected_transaction_ids) - 1
+        anomalies = client.get("/anomalies/").json
+        assert (
+            {anomaly["transaction_id"] for anomaly in anomalies}
+            == expected_transaction_ids
+        )
+        existing = next(
+            anomaly for anomaly in anomalies if anomaly["transaction_id"] == 26
+        )
+        assert existing["agent_reason_suspected"] == (
+            "Existing anomaly must remain unchanged."
+        )
+        assert len(anomalies) == 17
+        statuses = [anomaly["is_confirmed_by_user"] for anomaly in anomalies]
+        assert any(status is True for status in statuses)
+        assert any(status is False for status in statuses)
+        assert any(status is None for status in statuses)
+        assert all(
+            anomaly["transaction_id"] in seeded_transaction_ids
+            for anomaly in anomalies
+        )
+        with app.app_context():
+            assert seed_database_if_empty(seeded_transaction_ids) == 0
+    finally:
+        with app.app_context():
+            db.session.query(Anomaly).delete()
+            db.session.commit()
 
 
 # Pytest fixtures & helpers

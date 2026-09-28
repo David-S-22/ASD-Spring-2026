@@ -20,13 +20,12 @@ containerised frontend, backend, database, and model components.
 
 Contains the user-facing anomalies interface. The frontend runs in an nginx
 container and serves the static page used to display anomalies, transaction
-information, review controls, and status messages. HTMX requests refresh
-anomaly rows and submit actions without full page reloads. The interface also
-supports checking a transaction and creating a dummy anomaly during
-development. Nginx proxies `/anomalies-backend/` requests to the backend
-container, while environment variables provide the backend URL. The directory
-contains the HTML page, nginx configuration, and Dockerfile required to build
-and run the frontend container. Detailed frontend documentation is available in
+information, and review controls. HTMX requests refresh anomaly rows and submit
+review actions without full page reloads. Nginx proxies
+`/anomalies-backend/` requests to the backend container, while environment
+variables provide the backend URL. The directory contains the HTML page, nginx
+configuration, and Dockerfile required to build and run the frontend
+container. Detailed frontend documentation is available in
 [`frontend.md`](frontend.md).
 
 ### `backend/`
