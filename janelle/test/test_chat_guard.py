@@ -590,3 +590,138 @@ def test_create_category_is_explicit_only_with_category_syntax():
         "Add a purchase from Cat Cafe",
         categories,
     ) == "Dining"
+
+
+def test_chat_schema_accepts_smallest_calculation():
+    smallest = {
+        **VALID_RESPONSE,
+        "calculation": "smallest",
+    }
+
+    assert ollama_service.validate_chat_response(smallest) is None
+
+
+def test_chat_schema_rejects_an_unsupported_ranking_word():
+    invalid = {
+        **VALID_RESPONSE,
+        "calculation": "cheapest",
+    }
+
+    assert ollama_service.validate_chat_response(invalid) == (
+        "calculation must be count, sum, average, largest, "
+        "smallest, none, or a unique list"
+    )
+
+
+@mark.parametrize(
+    ("message", "planned", "expected"),
+    [
+        ("what is the smallest purchase i made", "largest", "smallest"),
+        ("show me the cheapest thing i bought", "largest", "smallest"),
+        ("the least expensive purchase", "largest", "smallest"),
+        ("show my biggest purchases", "smallest", "largest"),
+        ("my most expensive purchase", "smallest", "largest"),
+        ("what is the smallest purchase", "smallest", "smallest"),
+        ("how much did i spend", "sum", "sum"),
+        ("biggest and smallest purchases", "largest", "largest"),
+    ],
+)
+def test_ranking_direction_follows_the_message_not_the_model(
+    message,
+    planned,
+    expected,
+):
+    assert ollama_service.correct_ranking_direction(planned, message) == (
+        expected
+    )
+
+
+def test_ranking_direction_corrects_one_entry_of_a_calculation_list():
+    assert ollama_service.correct_ranking_direction(
+        ["count", "largest"],
+        "count my cheapest purchases",
+    ) == ["count", "smallest"]
+
+
+def test_a_bare_month_name_spans_that_whole_month():
+    today = date.today()
+    august_year = today.year if today.month >= 8 else today.year - 1
+
+    assert ollama_service.extract_date_filters(
+        "what is the smallest purchase i made in august"
+    ) == {
+        "date_from": f"{august_year}-08-01",
+        "date_to": f"{august_year}-08-31",
+    }
+
+
+def test_a_month_with_an_explicit_year_ignores_today():
+    assert ollama_service.extract_date_filters(
+        "What did I spend at Woolworths in August 2025?"
+    ) == {"date_from": "2025-08-01", "date_to": "2025-08-31"}
+
+
+def test_a_month_range_ends_on_its_real_last_day():
+    assert ollama_service.extract_date_filters(
+        "how much did i spend in Feb 2024"
+    ) == {"date_from": "2024-02-01", "date_to": "2024-02-29"}
+    assert ollama_service.extract_date_filters(
+        "how much did i spend in Feb 2025"
+    ) == {"date_from": "2025-02-01", "date_to": "2025-02-28"}
+
+
+def test_a_month_paired_with_a_day_stays_one_exact_date():
+    today = date.today()
+    june_year = (
+        today.year
+        if (today.month, today.day) >= (6, 10)
+        else today.year - 1
+    )
+
+    assert ollama_service.extract_date_filters(
+        "what did i buy on 10 June"
+    ) == {"date": f"{june_year}-06-10"}
+
+
+def test_discrete_days_are_not_widened_into_months():
+    today = date.today()
+    june_year = (
+        today.year
+        if (today.month, today.day) >= (6, 10)
+        else today.year - 1
+    )
+    july_year = (
+        today.year
+        if (today.month, today.day) >= (7, 15)
+        else today.year - 1
+    )
+
+    assert ollama_service.extract_date_filters(
+        "purchases on the 10th June and the 15th July"
+    ) == {"dates": [f"{june_year}-06-10", f"{july_year}-07-15"]}
+
+
+def test_a_message_with_no_date_has_no_date_filters():
+    assert ollama_service.extract_date_filters(
+        "how many transactions do i have"
+    ) == {}
+
+
+def test_prompt_teaches_the_smallest_calculation():
+    today = date.today()
+    august_year = today.year if today.month >= 8 else today.year - 1
+    messages = ollama_service.build_messages("anything", [], None)
+
+    assert '"smallest"' in messages[0]["content"]
+    examples = {
+        messages[index]["content"]: json.loads(messages[index + 1]["content"])
+        for index in range(1, len(messages) - 1, 2)
+    }
+    smallest_example = examples[
+        "What is the smallest purchase I made in August?"
+    ]
+    assert smallest_example["calculation"] == "smallest"
+    assert smallest_example["filters"] == {
+        "date_from": f"{august_year}-08-01",
+        "date_to": f"{august_year}-08-31",
+    }

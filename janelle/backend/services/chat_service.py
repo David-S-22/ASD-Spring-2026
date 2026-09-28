@@ -299,11 +299,11 @@ def build_read_response(
     transactions = [transaction_row(item, names) for item in raw_rows]
     calculations = normalize_calculations(result["calculation"])
     metrics = calculate_analytics(transactions)
-    if "largest" in calculations:
+    if "largest" in calculations or "smallest" in calculations:
         transactions = sorted(
             transactions,
             key=lambda transaction: transaction["amount"],
-            reverse=True,
+            reverse="largest" in calculations,
         )[:5]
     reply = build_analytics_reply(metrics, calculations, filters)
     if read_was_truncated(context):
@@ -740,10 +740,11 @@ def build_analytics_reply(metrics, calculations, filters):
     if not count:
         period = analytics_period(metrics, filters)
         return f"I found no matching transactions{period}."
-    if calculations == ["largest"]:
+    if calculations in (["largest"], ["smallest"]):
         shown = min(count, 5)
+        size = "biggest" if calculations == ["largest"] else "smallest"
         return (
-            f"Here are your {shown} biggest matching "
+            f"Here are your {shown} {size} matching "
             f"purchase{'s' if shown != 1 else ''}."
         )
     parts = []

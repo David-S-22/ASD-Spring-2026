@@ -86,9 +86,12 @@ and `max_amount`.
 
 The planner prompt is `backend/prompts/chat_prompt.txt`. The configured model
 can plan one transaction operation and request deterministic calculations
-such as count, sum, average, or largest purchases. Trusted application code
-validates and grounds the model output before reading data or preparing a
-write.
+such as count, sum, average, or the largest and smallest purchases. Trusted
+application code validates and grounds the model output before reading data
+or preparing a write. Two groundings override the planner outright: a bare
+month name ("in August") always becomes that whole month, and a ranking
+question is always answered from the end of the range the wording asks for,
+so "cheapest" cannot come back ranked by "largest".
 
 The workflow is bounded to at most two Plan -> Act -> Observe -> Adapt
 iterations. Reads are calculated from database rows by application code.

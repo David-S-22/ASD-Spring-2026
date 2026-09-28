@@ -2383,3 +2383,73 @@ def test_read_results_are_identical_with_the_mcp_switch_on_or_off(
     assert [call["status"] for call in tool["agent"]["tools"]] == [
         "succeeded" for _ in scenario["query_rows"]
     ]
+
+
+def test_chat_ranks_smallest_purchases_from_database_rows(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(side_effect=[
+        response_with_json(CATEGORIES),
+        response_with_json(MERIVALE_TRANSACTIONS),
+    ])
+    monkeypatch.setattr(backend_app.requests, "get", get)
+    use_extraction(monkeypatch, extraction(
+        filters={
+            "date_from": "2026-08-01",
+            "date_to": "2026-08-31",
+        },
+        calculation="smallest",
+    ))
+
+    response = client.post(
+        "/chat",
+        json={"message": "What is the smallest purchase I made in August?"},
+    )
+
+    result = response.get_json()
+    assert response.status_code == 200
+    assert [transaction["id"] for transaction in result["transactions"]] == [
+        28,
+        29,
+        27,
+    ]
+    assert result["analytics"]["calculations"] == ["smallest"]
+    assert result["analytics"]["count"] == 3
+    assert result["reply"] == "Here are your 3 smallest matching purchases."
+    assert get.call_args_list[-1].kwargs["params"] == {
+        "date_from": "2026-08-01",
+        "date_to": "2026-08-31",
+    }
+
+
+def test_ui_chat_renders_ranked_smallest_purchases(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(CATEGORIES),
+            response_with_json(MERIVALE_TRANSACTIONS),
+        ]),
+    )
+    use_extraction(monkeypatch, extraction(
+        filters={
+            "date_from": "2026-08-01",
+            "date_to": "2026-08-31",
+        },
+        calculation="smallest",
+    ))
+
+    response = client.post(
+        "/ui/chat",
+        data={"message": "What is the smallest purchase I made in August?"},
+    )
+
+    assert response.status_code == 200
+    assert "Smallest purchases" in response.text
+    assert "Biggest purchases" not in response.text
+    assert response.text.index("$42.00") < response.text.index("$76.00")
+    assert response.text.index("$76.00") < response.text.index("$84.50")

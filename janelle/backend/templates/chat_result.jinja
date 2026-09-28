@@ -205,8 +205,18 @@
     </ul>
     {% endif %}
 
-    {% if result.analytics and "largest" in result.analytics.calculations and result.transactions %}
-    <h3>Biggest purchases</h3>
+    {% set ranked = result.analytics and (
+        "largest" in result.analytics.calculations
+        or "smallest" in result.analytics.calculations
+    ) %}
+    {% if ranked and result.transactions %}
+    <h3>
+        {%- if "largest" in result.analytics.calculations -%}
+        Biggest purchases
+        {%- else -%}
+        Smallest purchases
+        {%- endif -%}
+    </h3>
     <ol class="transaction-chat-matches">
         {% for transaction in result.transactions %}
         <li>
