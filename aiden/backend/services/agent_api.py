@@ -72,6 +72,8 @@ class CouldNotParseAgentResponseException(Exception):
 class ReviewFinding:
     is_suspicious: bool
     justification: str
+    confidence: Optional[float] = None
+
 
 def review_new_transaction(
     transaction: dto.Transaction,
@@ -86,19 +88,23 @@ def review_new_transaction(
 
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
-        response = prompt(
+        result = prompt(
             system_prompt=detect_system_prompt,
             user_prompt=detect_user_prompt,
             model=config.OLLAMA_MODEL,
             temperature=temperature,
             output_tokens=500)
 
-        if (candidate := parse_review_finding(response)) is None:
-            current_app.logger.info("Response is not acceptable json %s", response)
+        if (candidate := parse_review_finding(result.text)) is None:
+            current_app.logger.info("Response is not acceptable json %s", result.text)
             iteration += 1
             continue
 
-        review_finding = candidate
+        review_finding = ReviewFinding(
+            candidate.is_suspicious,
+            candidate.justification,
+            result.mean_confidence,
+        )
         current_app.logger.info("Response was formatted into finding %s", review_finding)
         break
 
@@ -113,7 +119,8 @@ def review_new_transaction(
         id=0,
         transaction_id=transaction.id,
         agent_reason_suspected=review_finding.justification,
-        is_confirmed_by_user=None
+        is_confirmed_by_user=None,
+        confidence=review_finding.confidence,
     )
 
 def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:

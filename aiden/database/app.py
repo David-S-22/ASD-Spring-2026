@@ -3,7 +3,7 @@ from sqlalchemy import select, inspect
 from werkzeug.exceptions import HTTPException
 
 from .models import Anomaly, db
-from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_int
+from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_float, try_parse_int
 
 
 app = Flask(__name__)
@@ -28,6 +28,7 @@ def post_anomaly():
     set_mandatory_field(anomaly, data, "transaction_id", try_parse_int)
     set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
     set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
+    set_optional_field(anomaly, data, "confidence", try_parse_float)
 
     db.session.add(anomaly)
     db.session.commit()

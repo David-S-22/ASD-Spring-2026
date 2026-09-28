@@ -45,6 +45,15 @@ historical context in `agent_api.py`. The review queue passes only the current
 transaction to the agent, while the model retrieves historical examples on
 demand through MCP.
 
+## Confidence from log probabilities
+
+Each model response is requested with token log probabilities (log probs). The
+agent averages the chosen tokens' probabilities (`exp` of each log prob) into a
+`confidence` score in `(0, 1]` and stores that double on the anomaly. The score
+is `None` when the model server does not return log probabilities. It is
+persisted alongside the anomaly so a finding's confidence can be surfaced to the
+user.
+
 ## Review flow
 
 1. A transaction is queued by the Anomalies backend.

@@ -43,6 +43,18 @@ def try_parse_int(value: Any) -> Optional[int]:
     except:
         return None
 
+def try_parse_float(value: Any) -> Optional[float]:
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    try:
+        return float(value)
+    except:
+        return None
+
 def try_parse_bool(value: Any) -> Optional[bool]:
     if value is None:
         return None

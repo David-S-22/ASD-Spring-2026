@@ -33,7 +33,8 @@ at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
    Invalid responses are retried with increasing temperature, up to four
    attempts.
 7. If the transaction is suspicious, the resulting anomaly is written to the
-   anomalies database. Otherwise, no anomaly is created.
+   anomalies database, including a `confidence` score derived from the model's
+   log probabilities. Otherwise, no anomaly is created.
 8. The worker marks the transaction as complete. The frontend can poll
    `GET /anomaly-alert?key=<transaction-id>` for a rendered alert fragment.
 
@@ -108,6 +109,10 @@ flowchart TD
 Implements the anomaly-detection agent. It creates prompts that instruct the
 model to use the MCP reviewed-example tools, parses model JSON, validates the
 expected response fields, and converts suspicious findings into anomaly DTOs.
+It also records a `confidence` score for each finding — the mean per-token
+probability of the model's answer, derived from its token log probabilities
+(log probs). The score is stored on the anomaly, or left unset (`None`) when the
+model server returns no log probabilities.
 
 ### `ai-services/mcp-server/server.py`
 
@@ -138,12 +143,15 @@ used for anomaly listings and agent context.
 
 OpenAI-compatible client wrapper for the model server. It caches one client
 instance and sends system and user prompts with the configured model,
-temperature, token limit, timeout, and Ollama's `think` option enabled. When a
-thinking-capable model returns a `thinking` trace, it is extracted and emitted
-at DEBUG level for backend diagnostics. The trace is not persisted or returned
-to users; the anomaly's concise `agent_reason_suspected` field remains the
-user-facing explanation. Set `ANOMALY_LOG_LEVEL=DEBUG` to view the trace in
-the backend logs, for example with `docker compose logs -f anomalies-backend`.
+temperature, token limit, timeout, and Ollama's `think` option enabled. It
+requests token log probabilities (log probs) and returns a `PromptResult`
+carrying both the answer text and the mean per-token probability (mean
+confidence), which is stored on the anomaly. When a thinking-capable model
+returns a `thinking` trace, it is extracted and emitted at DEBUG level for
+backend diagnostics. The trace is not persisted or returned to users; the
+anomaly's concise `agent_reason_suspected` field remains the user-facing
+explanation. Set `ANOMALY_LOG_LEVEL=DEBUG` to view the trace in the backend
+logs, for example with `docker compose logs -f anomalies-backend`.
 
 ### `helpers.py`
 
