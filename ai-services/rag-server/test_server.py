@@ -79,6 +79,20 @@ def test_startup_ingestion_billing_collection(http):
     assert res_pdf["results"][0]["metadata"]["doc_type"] == "pdf"
 
 
+def test_startup_ingestion_transactions_guide(http):
+    """Sources/transactions is ingested on startup into its own 'transactions' collection."""
+    body = http.get("/health").get_json()
+    assert "transactions" in body["collections"]
+
+    res = http.post("/retrieve", json={"feature": "transactions", "question": "gym membership direct debit", "k": 2}).get_json()
+    assert len(res["results"]) >= 1
+    texts = " ".join(r["text"].lower() for r in res["results"])
+    assert "fitness" in texts or "gym memberships" in texts
+    assert res["results"][0]["metadata"]["source"] == "categories.md"
+    assert res["results"][0]["metadata"]["feature"] == "transactions"
+    assert res["results"][0]["metadata"]["doc_type"] == "markdown"
+
+
 def test_sources_refresh_route(http):
     """The /sources/refresh endpoint re-ingests sources and returns counts."""
     res = http.post("/sources/refresh").get_json()
