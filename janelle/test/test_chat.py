@@ -7,6 +7,7 @@ from pytest import MonkeyPatch, fixture, mark, raises
 
 import janelle.backend.app as backend_app
 import janelle.backend.services.transaction_orchestrator as transaction_orchestrator
+from janelle.backend.services import transaction_source
 
 
 CATEGORIES = [
@@ -214,13 +215,14 @@ def test_chat_emits_redacted_structured_workflow_logs(
         if "AI_WORKFLOW " in record.getMessage()
     ]
     assert [record["event"] for record in records] == [
+        "MCP_TOOL",
         "ai_workflow_stage",
         "ai_workflow_stage",
         "ai_workflow_stage",
         "ai_workflow_stage",
         "ai_workflow_complete",
     ]
-    assert [record["stage"] for record in records[:-1]] == [
+    assert [record["stage"] for record in records[1:-1]] == [
         "PLAN",
         "ACT",
         "OBSERVE",
@@ -2255,3 +2257,199 @@ def preview_fields():
         "amount": 24.5,
         "category_id": 80,
     }
+
+
+JUNE_TENTH = [
+    {
+        "id": 2,
+        "date": "2026-06-10T00:00:00",
+        "merchant": "Netflix",
+        "description": "Netflix.com subscription",
+        "amount": 20.99,
+        "category_id": 81,
+    },
+    {
+        "id": 1,
+        "date": "2026-06-10T00:00:00",
+        "merchant": "Harbourview Realty",
+        "description": "Rent payment",
+        "amount": 1100.0,
+        "category_id": 80,
+    },
+]
+JULY_FIFTEENTH = [
+    {
+        "id": 4,
+        "date": "2026-07-15T00:00:00",
+        "merchant": "DriveBox",
+        "description": "Cloud storage subscription",
+        "amount": 2.99,
+        "category_id": 81,
+    },
+    {
+        "id": 3,
+        "date": "2026-07-15T00:00:00",
+        "merchant": "Spotify AU",
+        "description": "Spotify Premium subscription",
+        "amount": 13.99,
+        "category_id": 80,
+    },
+]
+READ_SCENARIOS = {
+    "merchant_analytics": {
+        "message": "How often and how much do I spend at Merivale?",
+        "plan": {
+            "filters": {"merchant": "Merivale"},
+            "calculation": ["count", "sum", "average"],
+        },
+        "grounding_rows": [MERIVALE_TRANSACTIONS],
+        "query_rows": [MERIVALE_TRANSACTIONS],
+    },
+    "largest_in_a_date_range": {
+        "message": "Show my biggest purchases in August",
+        "plan": {
+            "filters": {"date_from": "2026-08-01", "date_to": "2026-08-31"},
+            "calculation": "largest",
+        },
+        "grounding_rows": [],
+        "query_rows": [MERIVALE_TRANSACTIONS],
+    },
+    "discrete_dates": {
+        "message": "List all purchases spent on the 10th June and 15th July",
+        "plan": {
+            "filters": {"dates": ["2026-06-10", "2026-07-15"]},
+            "calculation": "none",
+        },
+        "grounding_rows": [],
+        "query_rows": [JUNE_TENTH, JULY_FIFTEENTH],
+    },
+}
+
+
+def run_read_scenario(client, monkeypatch, scenario, mcp_enabled):
+    """Run one read scenario over MCP or the database and return the result.
+
+    Both paths see the same rows: with MCP on the tool replays exactly what
+    the database would have returned for each query.
+    """
+    monkeypatch.setattr(backend_app.config, "MCP_ENABLED", mcp_enabled)
+    monkeypatch.setattr(
+        backend_app.config,
+        "MCP_TOOL_SUPPORTS_EXTENDED_FILTERS",
+        True,
+    )
+    database_rows = list(scenario["grounding_rows"])
+    if not mcp_enabled:
+        database_rows += scenario["query_rows"]
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(CATEGORIES),
+            *[response_with_json(rows) for rows in database_rows],
+        ]),
+    )
+    replies = list(scenario["query_rows"])
+    monkeypatch.setattr(
+        transaction_source.mcp_client,
+        "call_tool",
+        lambda name, arguments: (replies.pop(0), 5.0),
+    )
+    use_extraction(monkeypatch, extraction(**scenario["plan"]))
+
+    response = client.post("/chat", json={"message": scenario["message"]})
+
+    assert response.status_code == 200
+    return response.get_json()
+
+
+@mark.parametrize("name", sorted(READ_SCENARIOS))
+def test_read_results_are_identical_with_the_mcp_switch_on_or_off(
+    name,
+    client: FlaskClient,
+):
+    scenario = READ_SCENARIOS[name]
+
+    with MonkeyPatch.context() as patch:
+        database = run_read_scenario(client, patch, scenario, False)
+    with MonkeyPatch.context() as patch:
+        tool = run_read_scenario(client, patch, scenario, True)
+
+    assert tool["reply"] == database["reply"]
+    assert tool["analytics"] == database["analytics"]
+    assert tool["transactions"] == database["transactions"]
+    assert tool["filters"] == database["filters"]
+    assert database["agent"]["tools"][0]["status"] == "skipped_disabled"
+    assert [call["status"] for call in tool["agent"]["tools"]] == [
+        "succeeded" for _ in scenario["query_rows"]
+    ]
+
+
+def test_chat_ranks_smallest_purchases_from_database_rows(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    get = Mock(side_effect=[
+        response_with_json(CATEGORIES),
+        response_with_json(MERIVALE_TRANSACTIONS),
+    ])
+    monkeypatch.setattr(backend_app.requests, "get", get)
+    use_extraction(monkeypatch, extraction(
+        filters={
+            "date_from": "2026-08-01",
+            "date_to": "2026-08-31",
+        },
+        calculation="smallest",
+    ))
+
+    response = client.post(
+        "/chat",
+        json={"message": "What is the smallest purchase I made in August?"},
+    )
+
+    result = response.get_json()
+    assert response.status_code == 200
+    assert [transaction["id"] for transaction in result["transactions"]] == [
+        28,
+        29,
+        27,
+    ]
+    assert result["analytics"]["calculations"] == ["smallest"]
+    assert result["analytics"]["count"] == 3
+    assert result["reply"] == "Here are your 3 smallest matching purchases."
+    assert get.call_args_list[-1].kwargs["params"] == {
+        "date_from": "2026-08-01",
+        "date_to": "2026-08-31",
+    }
+
+
+def test_ui_chat_renders_ranked_smallest_purchases(
+    client: FlaskClient,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(
+        backend_app.requests,
+        "get",
+        Mock(side_effect=[
+            response_with_json(CATEGORIES),
+            response_with_json(MERIVALE_TRANSACTIONS),
+        ]),
+    )
+    use_extraction(monkeypatch, extraction(
+        filters={
+            "date_from": "2026-08-01",
+            "date_to": "2026-08-31",
+        },
+        calculation="smallest",
+    ))
+
+    response = client.post(
+        "/ui/chat",
+        data={"message": "What is the smallest purchase I made in August?"},
+    )
+
+    assert response.status_code == 200
+    assert "Smallest purchases" in response.text
+    assert "Biggest purchases" not in response.text
+    assert response.text.index("$42.00") < response.text.index("$76.00")
+    assert response.text.index("$76.00") < response.text.index("$84.50")

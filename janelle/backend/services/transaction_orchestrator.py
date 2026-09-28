@@ -43,6 +43,7 @@ def orchestrate_transaction_request(message, db_url):
         "category_names": names,
         "category_ids": ids,
         "phase": "initial",
+        "request_id": request_id,
     }
     cycle_result = run_cycle(
         context,
@@ -145,6 +146,7 @@ def run_category_selection(payload, db_url):
             "category_selection": category_selection,
             "selection_plan": plan,
             "phase": "category_selection",
+            "request_id": request_id,
         }
         cycle_result = run_cycle(
             context,
@@ -210,6 +212,7 @@ def run_confirmed_transaction(payload, db_url):
         "preview": trusted_preview,
         "allow_suggested_category": True,
         "phase": "confirmed",
+        "request_id": request_id,
     }
     cycle_result = run_cycle(
         context,
@@ -297,6 +300,9 @@ def plan_confirmed_transaction(context):
 
 
 def act_on_plan(plan, context):
+    # The cycle runner passes a per-iteration context copy, so counting here
+    # gives the iteration number that tool log records are stamped with.
+    context["iteration"] = context.get("iteration", 0) + 1
     if plan.get("fallback"):
         return {
             "type": "validation",
@@ -314,16 +320,25 @@ def act_on_plan(plan, context):
     try:
         if plan["operation"] == "read":
             load_available_transactions(plan, context)
+            context["tool_calls"] = []
             result = chat_service.execute_read_plan(
                 plan,
                 context["db_url"],
                 context,
             )
+            tool_calls = context["tool_calls"]
             return {
                 "type": "query",
                 "status": "succeeded",
                 "result": result,
-                "database_calls": ["GET /transactions"],
+                "tool_calls": tool_calls,
+                "database_calls": (
+                    ["MCP search_transactions"]
+                    if any(
+                        call["status"] == "succeeded" for call in tool_calls
+                    )
+                    else ["GET /transactions"]
+                ),
             }
         if plan["operation"] == "create":
             return act_on_create(plan, context)
@@ -797,10 +812,12 @@ def failed_response(reply=None):
 
 
 def attach_agent(response, request_id, cycle_result):
+    action = last_cycle_value(cycle_result, "action")
     response["agent"] = {
         "request_id": request_id,
         "status": cycle_result["status"],
         "models": {"planner": config.CHAT_MODEL},
+        "tools": deepcopy(action.get("tool_calls", [])),
         "trace": (
             build_trace(cycle_result.get("cycles", []))
             if config.AGENT_TRACE_ENABLED
@@ -841,6 +858,33 @@ def log_agent_cycle(request_id, phase, cycle_result):
         ),
         "error_stage": error.get("stage"),
         "error_type": error.get("type"),
+    })
+
+
+def log_tool_call(request_id, phase, iteration, call):
+    """Emit one MCP_TOOL record for a transaction source dispatch.
+
+    The record only carries validated plan filter values and safe status and
+    error codes, so no user text or model output can reach the log.
+    """
+    if not config.AGENT_LOG_ENABLED:
+        return
+
+    log_workflow_event({
+        "event": "MCP_TOOL",
+        "request_id": request_id,
+        "phase": phase,
+        "iteration": iteration,
+        "stage": "ACT",
+        "server": call["server"],
+        "tool": call["tool"],
+        "arguments": call["arguments"],
+        "residual_filters": call["residual_filters"],
+        "status": call["status"],
+        "rows": call["rows"],
+        "truncated": call["truncated"],
+        "duration_ms": call["duration_ms"],
+        "error": call["error"],
     })
 
 
@@ -922,6 +966,11 @@ def plan_summary(plan):
 
 
 def action_summary(action):
+    if action["type"] == "query":
+        return (
+            "Queried transactions using trusted application code"
+            f"{tool_summary_suffix(action.get('tool_calls', []))}."
+        )
     summaries = {
         "category_selection": "Prepared a category choice without saving.",
         "confirmed_write": "Applied one confirmed transaction write.",
@@ -932,11 +981,19 @@ def action_summary(action):
         "missing_fields": "Found required transaction details were missing.",
         "no_change": "Found the requested values were already current.",
         "preview": "Prepared a non-mutating transaction preview.",
-        "query": "Queried transactions using trusted application code.",
         "target_resolution": "Resolved the possible transaction targets.",
         "validation": "Rejected an invalid transaction plan.",
     }
     return summaries.get(action["type"], "Completed the trusted action.")
+
+
+def tool_summary_suffix(tool_calls):
+    """Name the MCP tool in a safe trace summary, when one served the read."""
+    if any(call["status"] == "succeeded" for call in tool_calls):
+        return " via MCP tool search_transactions"
+    if any(call["status"] == "fallback_database" for call in tool_calls):
+        return " via database (MCP fallback)"
+    return ""
 
 
 def observation_summary(observation):

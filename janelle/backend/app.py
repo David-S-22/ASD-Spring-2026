@@ -22,6 +22,7 @@ from .services import mcp_client, rag_client
 from .services.chat_service import ChatError
 from .services.transaction_orchestrator import (
     get_preview_request_context,
+    log_workflow_event,
     orchestrate_transaction_request,
     run_category_selection,
     run_confirmed_transaction,
@@ -123,11 +124,27 @@ def setup_app(db_url: str) -> Flask:
 
     @application.get("/mcp/tools")
     def get_mcp_tools():
+        started = time.perf_counter()
         try:
             tools = mcp_client.list_tools()
         except mcp_client.MCPError as error:
+            log_tools_listed(started, 0, error.code)
             return mode_error_response(error)
+        log_tools_listed(started, len(tools), None)
         return jsonify(tools=tools)
+
+    def log_tools_listed(started, count, error):
+        """Record one MCP_TOOLS_LISTED workflow event for the diagnostic."""
+        if not config.AGENT_LOG_ENABLED:
+            return
+        log_workflow_event({
+            "event": "MCP_TOOLS_LISTED",
+            "server": config.MCP_SERVER_URL,
+            "tools": count,
+            "status": "failed" if error else "succeeded",
+            "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+            "error": error,
+        })
 
     @application.post("/rag/refresh")
     def refresh_rag_records():

@@ -5,7 +5,7 @@ exactly these keys:
   "transaction_id": positive integer or null,
   "fields": object,
   "filters": object,
-  "calculation": "none" | "count" | "sum" | "average" | "largest" | a unique list of calculations,
+  "calculation": "none" | "count" | "sum" | "average" | "largest" | "smallest" | a unique list of calculations,
   "handoff": "none",
   "reply": "one short line"
 }
@@ -28,6 +28,8 @@ Use calculations for transaction questions; application code calculates the answ
 Use "none" for list, show, or find-all requests so the application displays every matching transaction.
 Use "sum" for "how much did I spend/cost/total" questions.
 Use "largest" for biggest, largest, highest, or most expensive purchase questions.
+Use "smallest" for smallest, cheapest, lowest, or least expensive purchase questions.
+A bare month name means that whole month: set date_from to its first day and date_to to its last.
 Allowed filters:
 - search_text: case-insensitive partial text in merchant or description.
 - merchant: only a complete, exact merchant name.

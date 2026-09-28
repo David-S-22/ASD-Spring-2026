@@ -245,6 +245,7 @@ def execute_read_plan(plan, db_url, context):
         context["category_names"],
         context["category_ids"],
         context.get("available_transactions", []),
+        context,
     )
 
 
@@ -258,7 +259,14 @@ def execute_write_preview(plan, db_url, context):
     )
 
 
-def build_read_response(result, db_url, names, ids, available_transactions):
+def build_read_response(
+    result,
+    db_url,
+    names,
+    ids,
+    available_transactions,
+    context=None,
+):
     filters = resolve_search_filters(
         validate_filters(result["filters"], names, ids),
         available_transactions,
@@ -267,7 +275,11 @@ def build_read_response(result, db_url, names, ids, available_transactions):
         if filters:
             raw_rows = [
                 item
-                for item in query_transactions(db_url, filters)
+                for item in query_transactions(
+                    db_url,
+                    filters,
+                    context=context,
+                )
                 if item.get("id") == result["transaction_id"]
             ]
         else:
@@ -282,24 +294,33 @@ def build_read_response(result, db_url, names, ids, available_transactions):
                     raise
                 raw_rows = []
     else:
-        raw_rows = query_transactions(db_url, filters)
+        raw_rows = query_transactions(db_url, filters, context=context)
 
     transactions = [transaction_row(item, names) for item in raw_rows]
     calculations = normalize_calculations(result["calculation"])
     metrics = calculate_analytics(transactions)
-    if "largest" in calculations:
+    if "largest" in calculations or "smallest" in calculations:
         transactions = sorted(
             transactions,
             key=lambda transaction: transaction["amount"],
-            reverse=True,
+            reverse="largest" in calculations,
         )[:5]
+    reply = build_analytics_reply(metrics, calculations, filters)
+    if read_was_truncated(context):
+        reply += " Showing the first 500 matching transactions."
     return {
         **build_base_response(result),
         "filters": filters,
         "analytics": {**metrics, "calculations": calculations},
         "transactions": transactions,
-        "reply": build_analytics_reply(metrics, calculations, filters),
+        "reply": reply,
     }
+
+
+def read_was_truncated(context):
+    """Report whether the last recorded tool call hit the row cap."""
+    calls = (context or {}).get("tool_calls") or []
+    return bool(calls) and bool(calls[-1].get("truncated"))
 
 
 def build_write_preview(result, db_url, names, ids, available_transactions):
@@ -420,55 +441,15 @@ def find_matching_transactions(
     ]
 
 
-def query_transactions(db_url, filters, include_version=False):
-    dates = filters.get("dates")
-    if dates is None:
-        params = dict(filters)
-        if include_version:
-            params["_include_version"] = "true"
-        options = {"params": params} if params else {}
-        return database_request(
-            "get",
-            f"{db_url}/transactions",
-            list,
-            **options,
-        )
+def query_transactions(db_url, filters, include_version=False, context=None):
+    from . import transaction_source
 
-    base_filters = {
-        key: value
-        for key, value in filters.items()
-        if key != "dates"
-    }
-    rows = {}
-    for transaction_date in dates:
-        date_filters = {
-            **base_filters,
-            "date_from": transaction_date,
-            "date_to": transaction_date,
-        }
-        if include_version:
-            date_filters["_include_version"] = "true"
-        for item in database_request(
-            "get",
-            f"{db_url}/transactions",
-            list,
-            params=date_filters,
-        ):
-            try:
-                rows[item["id"]] = item
-            except (KeyError, TypeError) as error:
-                raise invalid_database_error() from error
-    try:
-        return sorted(
-            rows.values(),
-            key=lambda item: (
-                parse_transaction_date(item["date"]),
-                item["id"],
-            ),
-            reverse=True,
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        raise invalid_database_error() from error
+    return transaction_source.query_transactions(
+        db_url,
+        filters,
+        include_version,
+        context,
+    )
 
 
 def database_request(method, url, expected=None, **options):
@@ -759,10 +740,11 @@ def build_analytics_reply(metrics, calculations, filters):
     if not count:
         period = analytics_period(metrics, filters)
         return f"I found no matching transactions{period}."
-    if calculations == ["largest"]:
+    if calculations in (["largest"], ["smallest"]):
         shown = min(count, 5)
+        size = "biggest" if calculations == ["largest"] else "smallest"
         return (
-            f"Here are your {shown} biggest matching "
+            f"Here are your {shown} {size} matching "
             f"purchase{'s' if shown != 1 else ''}."
         )
     parts = []
