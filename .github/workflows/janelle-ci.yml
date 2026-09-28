@@ -6,6 +6,7 @@ on:
       - "main"
     paths:
       - .github/workflows/janelle-ci.yml
+      - docker-compose.yml
       - janelle/**
       - shared/**
   push:
@@ -13,6 +14,7 @@ on:
       - "main"
     paths:
       - ".github/workflows/janelle-ci.yml"
+      - "docker-compose.yml"
       - "janelle/**"
       - "shared/**"
 
@@ -38,11 +40,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: docker compose up --no-deps --detach transactions-frontend transactions-backend transactions-db
+        env:
+          MCP_ENABLED: "false"
+          RAG_ENABLED: "false"
       - run: sleep 3
       - name: Check frontend availability
-        run: curl --fail http://127.0.0.1:3001/ || exit 1
+        run: curl --fail http://127.0.0.1:3001/health || exit 1
       - name: Check backend availability
-        run: curl --fail http://127.0.0.1:5001/ || exit 1
+        run: curl --fail http://127.0.0.1:5001/health || exit 1
       - name: Check database availability
         run: curl --fail http://127.0.0.1:6001/ || exit 1
       - run: docker logs transactions-frontend transactions-backend transactions-db

@@ -35,7 +35,24 @@ Open `http://localhost:3001`. The service endpoints are:
 | Database API | `http://localhost:6001` |
 | Ollama | `http://localhost:11434` |
 
-Each transaction service exposes `GET /health`. Compose persists SQLite data
+Each transaction service exposes `GET /health`. The backend health body also
+reports which integration modes are switched on, without any network call:
+
+```json
+{"ok": true, "container": "transactions-backend", "modes": {"ai": "enabled", "mcp": "enabled", "rag": "enabled"}}
+```
+
+`mcp` and `rag` read `disabled` when `MCP_ENABLED` or `RAG_ENABLED` is
+`false`. Compose passes both through `${MCP_ENABLED:-true}` and
+`${RAG_ENABLED:-true}`, so they can be turned off without editing the file:
+
+```powershell
+$env:MCP_ENABLED = "false"; $env:RAG_ENABLED = "false"
+docker compose up --build -d --no-deps transactions-db transactions-backend transactions-frontend
+```
+
+The backend reaches the shared MCP server (port `8000`) and RAG server
+(port `5003`) on the host through `host.docker.internal`. Compose persists SQLite data
 in the `transactions_data` volume and ensures the configured
 `qwen2.5:3b` model is available in Ollama.
 
@@ -56,10 +73,12 @@ The backend exposes transaction and category CRUD at `/transactions` and
 | `POST /chat` | Plan a read, create, update, or delete request. |
 | `POST /chat/category` | Accept or replace a proposed category. |
 | `POST /chat/apply` | Apply a server-issued write preview after confirmation. |
+| `GET /mcp/tools` | Diagnostic list of MCP tools visible to the backend. `503 mcp_disabled` when MCP is off, `502 mcp_unavailable` when the server cannot be reached. |
+| `POST /rag/refresh` | Rebuild the `transactions-records` RAG collection. `503 rag_disabled` when RAG is off, `502 rag_unavailable` when the server cannot be reached. |
 
 The database API also exposes
 `POST /transactions/<id>/category-correction` and
-`GET /category-corrections`. Transaction list queries support `q`,
+`GET /category-corrections`. Transaction list queries support `search_text`,
 `merchant`, `date_from`, `date_to`, `since`, `category_id`, `min_amount`,
 and `max_amount`.
 
@@ -127,6 +146,28 @@ Compose supplies production-ready defaults. The backend reads:
 | `AGENT_LOG_ENABLED` | `true` | Emit structured workflow logs. |
 | `AGENT_REQUEST_TTL_SECONDS` | `900` | Lifetime of pending category and preview state. |
 | `AI_TIMEOUT_SECONDS` | `90` | Ollama request timeout. |
+| `MCP_ENABLED` | `true` | MCP mode switch. CI sets `false`. |
+| `MCP_SERVER_URL` | `http://host.docker.internal:8000/mcp` | Shared MCP server. |
+| `MCP_TIMEOUT_SECONDS` | `30` | Per MCP tool call timeout. |
+| `MCP_ALLOWED_TOOLS` | `search_transactions` | Comma-separated tool allow list. |
+| `MCP_FALLBACK_TO_DATABASE` | `true` | Read from the database when MCP is unreachable. |
+| `RAG_ENABLED` | `true` | RAG mode switch. CI sets `false`. |
+| `RAG_SERVER_URL` | `http://host.docker.internal:5003` | Shared RAG server. |
+| `RAG_RECORDS_COLLECTION` | `transactions-records` | Backend-owned collection of transaction and correction documents. |
+| `RAG_GUIDE_COLLECTION` | `transactions` | Server-owned collection ingested from `sources/transactions/`. |
+| `RAG_TOP_K` | `6` | Records retrieved per suggestion. |
+| `RAG_GUIDE_TOP_K` | `3` | Guide chunks retrieved per suggestion. |
+| `RAG_TIMEOUT_SECONDS` | `15` | Per `/retrieve` and `/refresh` call timeout. |
+| `RAG_REFRESH_ON_START` | `true` | Refresh the records collection at startup. |
+| `RAG_REFRESH_AFTER_WRITE` | `true` | Refresh the records collection after a confirmed create. |
+| `RAG_HIGH` | `0.6` | Best distance below this, with two or more survivors, is `high` confidence. |
+| `RAG_MEDIUM` | `0.9` | Best distance below this is `medium` confidence. |
+| `RAG_LOW` | `1.2` | Best distance up to this is `low` confidence. Documents farther than this are not used as context; if none remain the result is insufficient context. |
+| `RAG_MODEL` | `qwen2.5:3b` | Model used for the grounded category choice. |
+
+The three distance thresholds must satisfy
+`0 < RAG_HIGH < RAG_MEDIUM < RAG_LOW`. An invalid
+combination logs one warning and falls back to the defaults.
 
 The database process reads `PORT` and `DB_PATH`; Compose uses port `6001` and
 `/app/data/transactions.db`. When a transaction is deleted, the database also

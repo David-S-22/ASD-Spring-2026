@@ -336,3 +336,26 @@ def test_chat_result_supports_category_selection_and_safe_apply():
     assert "Update preview" in result
     assert 'hx-disabled-elt="button"' in result
     assert 'name="request_id"' in result
+
+
+def test_compose_configures_mcp_and_rag_modes():
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    transactions_backend = compose.split("\n  transactions-backend:", 1)[1].split(
+        "\n  transactions-db:",
+        1,
+    )[0]
+    assert "MCP_ENABLED: ${MCP_ENABLED:-true}" in transactions_backend
+    assert "RAG_ENABLED: ${RAG_ENABLED:-true}" in transactions_backend
+    assert '- "host.docker.internal:host-gateway"' in transactions_backend
+
+
+def test_ci_starts_backend_with_mcp_and_rag_disabled():
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "janelle-ci.yml"
+    ).read_text(encoding="utf-8")
+
+    assert workflow.count("docker-compose.yml") == 2
+    assert 'MCP_ENABLED: "false"' in workflow
+    assert 'RAG_ENABLED: "false"' in workflow
+    assert "--no-deps" in workflow

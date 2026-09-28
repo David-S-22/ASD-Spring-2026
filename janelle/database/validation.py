@@ -277,7 +277,7 @@ def validate_correction_payload(data):
 
 def parse_transaction_filters(arguments):
 	filters = {
-		"q": arguments.get("q", "").strip(),
+		"search_text": arguments.get("search_text", "").strip(),
 		"merchant": arguments.get("merchant", "").strip(),
 		"date_from": parse_query_date(arguments.get("date_from"), "date_from"),
 		"date_to": parse_query_date(

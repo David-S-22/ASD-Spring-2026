@@ -1,6 +1,13 @@
 <tr data-id="{{ feedback.id }}">
     <td class="cell-id">{{ feedback.id }}</td>
     <td>{{ feedback.feedback }}</td>
+    <td class="cell-suggestion">
+        {% if feedback.suggestion_id %}
+        <span class="badge badge-suggestion">#{{ feedback.suggestion_id }}</span>
+        {% else %}
+        <span class="badge badge-general">General</span>
+        {% endif %}
+    </td>
     <td class="cell-actions">
         <button type="button" 
                 class="btn-edit" 
@@ -14,4 +21,3 @@
                 hx-swap="innerHTML">Delete</button>
     </td>
 </tr>
-

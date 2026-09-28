@@ -3,6 +3,7 @@
         <tr>
             <th>ID</th>
             <th>Feedback</th>
+            <th>Linked Suggestion</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -11,14 +12,15 @@
         {% include "feedback-row.jinja" %}
         {% else %}
         <tr>
-            <td colspan="3">No current feedback.</td>
+            <td colspan="4">No current feedback.</td>
         </tr>
         {% endfor %}
     </tbody>
     <tfoot>
         <tr class="create-row">
             <td class="cell-id">+</td>
-            <td><input type="text" name="feedback" placeholder="Feedback" required></td>
+            <td><input type="text" id="new-feedback-input" name="feedback" placeholder="Feedback" required></td>
+            <td class="cell-suggestion"><span class="badge badge-general">General</span></td>
             <td class="cell-actions">
                 <button type="button" 
                         class="btn-create" 
@@ -26,11 +28,13 @@
                         hx-include="closest tr" 
                         hx-target="#feedback" 
                         hx-swap="innerHTML" 
-                        hx-ext="json-enc">Create</button>
+                        hx-ext="json-enc"
+                        hx-indicator="closest tr"
+                        hx-disabled-elt="this, #new-feedback-input">
+                    <span class="btn-text-default">Create</span>
+                    <span class="btn-text-loading">Adding...</span>
+                </button>
             </td>
         </tr>
     </tfoot>
 </table>
-
-
-

@@ -1,4 +1,5 @@
 """Environment configuration for the transactions backend."""
+import logging
 import os
 
 
@@ -41,3 +42,79 @@ AGENT_REQUEST_TTL_SECONDS = max(
     int(os.environ.get("AGENT_REQUEST_TTL_SECONDS", "900")),
 )
 AI_TIMEOUT_SECONDS = float(os.environ.get("AI_TIMEOUT_SECONDS", "90"))
+
+# MCP mode
+MCP_ENABLED = _environment_flag("MCP_ENABLED", True)
+MCP_SERVER_URL = os.environ.get(
+    "MCP_SERVER_URL",
+    "http://host.docker.internal:8000/mcp",
+).rstrip("/")
+MCP_TIMEOUT_SECONDS = float(os.environ.get("MCP_TIMEOUT_SECONDS", "30"))
+MCP_ALLOWED_TOOLS = frozenset(
+    name.strip()
+    for name in os.environ.get(
+        "MCP_ALLOWED_TOOLS",
+        "search_transactions",
+    ).split(",")
+    if name.strip()
+)
+MCP_FALLBACK_TO_DATABASE = _environment_flag("MCP_FALLBACK_TO_DATABASE", True)
+
+# RAG mode
+RAG_ENABLED = _environment_flag("RAG_ENABLED", True)
+RAG_SERVER_URL = os.environ.get(
+    "RAG_SERVER_URL",
+    "http://host.docker.internal:5003",
+).rstrip("/")
+RAG_RECORDS_COLLECTION = os.environ.get(
+    "RAG_RECORDS_COLLECTION",
+    "transactions-records",
+)
+RAG_GUIDE_COLLECTION = os.environ.get("RAG_GUIDE_COLLECTION", "transactions")
+RAG_TOP_K = max(1, int(os.environ.get("RAG_TOP_K", "6")))
+RAG_GUIDE_TOP_K = max(1, int(os.environ.get("RAG_GUIDE_TOP_K", "3")))
+RAG_TIMEOUT_SECONDS = float(os.environ.get("RAG_TIMEOUT_SECONDS", "15"))
+RAG_REFRESH_ON_START = _environment_flag("RAG_REFRESH_ON_START", True)
+RAG_REFRESH_AFTER_WRITE = _environment_flag("RAG_REFRESH_AFTER_WRITE", True)
+RAG_MODEL = os.environ.get("RAG_MODEL", "qwen2.5:3b")
+
+_RAG_THRESHOLD_DEFAULTS = (0.6, 0.9, 1.2)
+
+
+def _rag_thresholds():
+    """Return the (high, medium, low) retrieval distance thresholds.
+
+    A best distance below RAG_HIGH is high confidence, below RAG_MEDIUM is
+    medium, and up to RAG_LOW is low. Documents farther than RAG_LOW are not
+    used as context at all. The values must satisfy 0 < high < medium < low;
+    an invalid or unparseable combination falls back to the defaults with one
+    warning rather than failing startup.
+    """
+    try:
+        high = float(os.environ.get(
+            "RAG_HIGH",
+            str(_RAG_THRESHOLD_DEFAULTS[0]),
+        ))
+        medium = float(os.environ.get(
+            "RAG_MEDIUM",
+            str(_RAG_THRESHOLD_DEFAULTS[1]),
+        ))
+        low = float(os.environ.get(
+            "RAG_LOW",
+            str(_RAG_THRESHOLD_DEFAULTS[2]),
+        ))
+    except ValueError:
+        high = medium = low = None
+
+    if high is not None and 0 < high < medium < low:
+        return high, medium, low
+
+    logging.getLogger(__name__).warning(
+        "Invalid RAG distance thresholds; using defaults "
+        "RAG_HIGH=%s RAG_MEDIUM=%s RAG_LOW=%s",
+        *_RAG_THRESHOLD_DEFAULTS,
+    )
+    return _RAG_THRESHOLD_DEFAULTS
+
+
+RAG_HIGH, RAG_MEDIUM, RAG_LOW = _rag_thresholds()

@@ -1,6 +1,13 @@
-<tr data-id="{{ feedback.id }}">
+<tr data-id="{{ feedback.id }}" class="edit-row">
     <td class="cell-id">{{ feedback.id }}</td>
     <td><input type="text" name="feedback" value="{{ feedback.feedback }}" required></td>
+    <td class="cell-suggestion">
+        {% if feedback.suggestion_id %}
+        <span class="badge badge-suggestion">#{{ feedback.suggestion_id }}</span>
+        {% else %}
+        <span class="badge badge-general">General</span>
+        {% endif %}
+    </td>
     <td class="cell-actions">
         <button type="button" 
                 class="btn-accept" 
@@ -9,7 +16,9 @@
                 hx-include="closest tr" 
                 hx-target="closest tr" 
                 hx-swap="outerHTML" 
-                hx-ext="json-enc">✓</button>
+                hx-ext="json-enc"
+                hx-indicator="closest tr"
+                hx-disabled-elt="this">✓</button>
         <button type="button" 
                 class="btn-cancel" 
                 title="Cancel" 
@@ -18,4 +27,3 @@
                 hx-swap="outerHTML">✗</button>
     </td>
 </tr>
-

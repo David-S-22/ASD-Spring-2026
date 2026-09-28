@@ -318,7 +318,15 @@ def test_feedback_to_dto():
     dto_obj = feedback.to_dto()
     assert dto_obj.id == 3
     assert dto_obj.feedback == "A feedback"
+    assert dto_obj.suggestion_id is None
     assert feedback.to_dto() == dto_obj
+
+    feedback_linked = Feedback(id=4, feedback="Linked feedback", suggestion_id=10)
+    dto_obj_linked = feedback_linked.to_dto()
+    assert dto_obj_linked.id == 4
+    assert dto_obj_linked.feedback == "Linked feedback"
+    assert dto_obj_linked.suggestion_id == 10
+    assert feedback_linked.to_dto() == dto_obj_linked
 
 @pytest.mark.usefixtures("app_ctx")
 def test_seed_database_if_empty():
@@ -343,4 +351,169 @@ def test_seed_database_if_empty():
     assert len(db.session.execute(db.select(Goal)).scalars().all()) == len(expected_goals)
     assert len(db.session.execute(db.select(Suggestion)).scalars().all()) == len(expected_suggestions)
     assert len(db.session.execute(db.select(Feedback)).scalars().all()) == len(expected_feedbacks)
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_valid_suggestion_id(client: FlaskClient):
+    suggestions = setup_suggestions()
+    suggestion_id = suggestions[0].id
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Linked feedback text", "suggestion_id": suggestion_id}),
+    )
+    assert response.status_code == 201
+    res_json = response.get_json()
+    assert res_json["feedback"] == "Linked feedback text"
+    assert res_json["suggestion_id"] == suggestion_id
+
+    created_feedback = db.session.execute(db.select(Feedback).where(Feedback.id == res_json["id"])).scalar_one()
+    assert created_feedback.feedback == "Linked feedback text"
+    assert created_feedback.suggestion_id == suggestion_id
+    assert created_feedback.suggestion.id == suggestion_id
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_nonexistent_suggestion_id(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Invalid link", "suggestion_id": 99999}),
+    )
+    assert response.status_code == 404
+    feedbacks = db.session.execute(db.select(Feedback)).scalars().all()
+    assert len(feedbacks) == 0
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_invalid_suggestion_id_type(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Invalid link", "suggestion_id": "not-an-int"}),
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_delete_suggestion_cascades_to_linked_feedback(client: FlaskClient):
+    suggestions = setup_suggestions()
+    s1, s2 = suggestions[0], suggestions[1]
+
+    # Linked feedback for suggestion 1
+    fb_linked1 = Feedback(feedback="Reason for suggestion 1", suggestion_id=s1.id)
+    # Linked feedback for suggestion 2
+    fb_linked2 = Feedback(feedback="Reason for suggestion 2", suggestion_id=s2.id)
+    # General feedback (unlinked)
+    fb_general = Feedback(feedback="General preference", suggestion_id=None)
+
+    db.session.add_all([fb_linked1, fb_linked2, fb_general])
+    db.session.commit()
+
+    fb1_id = fb_linked1.id
+    fb2_id = fb_linked2.id
+    fb_gen_id = fb_general.id
+
+    # Delete suggestion 1
+    response = client.delete(f"/suggestion/{s1.id}")
+    assert response.status_code == 204
+
+    # Verify suggestion 1 is deleted
+    assert db.session.get(Suggestion, s1.id) is None
+
+    # Verify linked feedback 1 is cascade deleted
+    assert db.session.get(Feedback, fb1_id) is None
+
+    # Verify suggestion 2 and its linked feedback 2 remain intact
+    assert db.session.get(Suggestion, s2.id) is not None
+    persisted_fb2 = db.session.get(Feedback, fb2_id)
+    assert persisted_fb2 is not None
+    assert persisted_fb2.suggestion_id == s2.id
+
+    # Verify general feedback remains intact
+    persisted_general = db.session.get(Feedback, fb_gen_id)
+    assert persisted_general is not None
+    assert persisted_general.suggestion_id is None
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_category_and_timeframe(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Cut dining costs", "category_id": 80, "timeframe": "2 weeks"}),
+    )
+    assert response.status_code == 201
+    res = response.get_json()
+    assert res["category_id"] == 80
+    assert res["timeframe"] == "2 weeks"
+
+    saved = db.session.get(Feedback, res["id"])
+    assert saved.category_id == 80
+    assert saved.timeframe == "2 weeks"
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_invalid_category_id(client: FlaskClient):
+    response = client.post(
+        "/feedback",
+        content_type="application/json",
+        data=dumps({"feedback": "Cut dining costs", "category_id": "not-an-int"}),
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_feedback_partial_category_and_timeframe(client: FlaskClient):
+    feedbacks = setup_feedback()
+    fb_id = feedbacks[0].id
+    orig_text = feedbacks[0].feedback
+
+    # Update only category_id
+    response = client.patch(f"/feedback/{fb_id}", json={"category_id": 70})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["category_id"] == 70
+    assert res["feedback"] == orig_text  # Text must NOT be wiped
+
+    # Update only timeframe
+    response = client.patch(f"/feedback/{fb_id}", json={"timeframe": "1 month"})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["timeframe"] == "1 month"
+    assert res["category_id"] == 70
+    assert res["feedback"] == orig_text
+
+    # Update timeframe to empty string normalizes to None
+    response = client.patch(f"/feedback/{fb_id}", json={"timeframe": ""})
+    assert response.status_code == 200
+    res = response.get_json()
+    assert res["timeframe"] is None
+
+    # Invalid category_id returns 400
+    response = client.patch(f"/feedback/{fb_id}", json={"category_id": "invalid"})
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_delete_feedbacks_by_category(client: FlaskClient):
+    fb1 = Feedback(feedback="Transport focus", category_id=70)
+    fb2 = Feedback(feedback="Another transport", category_id=70)
+    fb3 = Feedback(feedback="Dining focus", category_id=80)
+    db.session.add_all([fb1, fb2, fb3])
+    db.session.commit()
+    id1, id2, id3 = fb1.id, fb2.id, fb3.id
+
+    # Invalid category_id returns 400
+    response = client.delete("/feedbacks?category_id=abc")
+    assert response.status_code == 400
+
+    # Valid category_id deletes only matching
+    response = client.delete("/feedbacks?category_id=70")
+    assert response.status_code == 204
+
+    assert db.session.get(Feedback, id1) is None
+    assert db.session.get(Feedback, id2) is None
+    assert db.session.get(Feedback, id3) is not None
+
 

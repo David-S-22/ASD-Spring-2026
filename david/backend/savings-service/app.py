@@ -2,8 +2,9 @@ import os
 import requests
 from flask import Flask, abort, jsonify, make_response, render_template, request
 from shared.backend import dto
-from .helpers import fetch_suggestions, fetch_transactions, object_to_hook, try_parse_bool
-from .ollama_service import generate_savings_advice
+from .classifier_service import classify_feedback
+from .helpers import fetch_categories, object_to_hook, try_parse_bool
+from .suggestion_service import generate_savings_advice
 
 
 def setup_app(db_url: str, transactions_db_url: str) -> Flask:
@@ -140,7 +141,24 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         if not isinstance(feedback, dto.Feedback) or not str(feedback.feedback).strip():
             return jsonify({"error": "Missing feedback field"}), 400
 
-        resp = requests.post(f"{db_url}/feedback", json=payload)
+        category_id = payload.get("category_id")
+        timeframe = payload.get("timeframe")
+        if category_id == "":
+            category_id = None
+        if timeframe == "":
+            timeframe = None
+        if category_id is None and timeframe is None:
+            categories = fetch_categories(tx_url)
+            category_id, timeframe = classify_feedback(feedback.feedback, categories)
+
+        feedback_payload = {
+            "feedback": str(feedback.feedback).strip(),
+            "suggestion_id": feedback.suggestion_id,
+            "category_id": category_id,
+            "timeframe": timeframe,
+        }
+
+        resp = requests.post(f"{db_url}/feedback", json=feedback_payload)
         resp.raise_for_status()
         return make_response(*get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
@@ -164,8 +182,30 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/feedback/<int:id>", methods=["PATCH"])
     def update_feedback(id: int):
-        payload = request.get_json(silent=True) or request.form.to_dict()
-        resp = requests.patch(f"{db_url}/feedback/{id}", json=payload)
+        payload = request.get_json(silent=True) or request.form.to_dict() or {}
+        has_feedback = "feedback" in payload
+        feedback_text = str(payload.get("feedback", "")).strip() if has_feedback else ""
+        category_id = payload.get("category_id")
+        timeframe = payload.get("timeframe")
+
+        if category_id == "":
+            category_id = None
+        if timeframe == "":
+            timeframe = None
+
+        if has_feedback and feedback_text and "category_id" not in payload and "timeframe" not in payload:
+            categories = fetch_categories(tx_url)
+            category_id, timeframe = classify_feedback(feedback_text, categories)
+
+        update_payload = {}
+        if has_feedback:
+            update_payload["feedback"] = feedback_text
+        if "category_id" in payload or (has_feedback and feedback_text):
+            update_payload["category_id"] = category_id
+        if "timeframe" in payload or (has_feedback and feedback_text):
+            update_payload["timeframe"] = timeframe
+
+        resp = requests.patch(f"{db_url}/feedback/{id}", json=update_payload)
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
@@ -173,40 +213,102 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         return make_response(render_template("feedback-row.jinja", feedback=feedback), 200, {"HX-Trigger": "feedbackChanged"})
 
     @app.route("/feedback/<int:id>", methods=["DELETE"])
-    def delete_feedback(id: int):
+    def delete_feedback_by_id(id: int):
         resp = requests.delete(f"{db_url}/feedback/{id}")
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
         return make_response(*get_feedback(), {"HX-Trigger": "feedbackChanged"})
 
+    @app.route("/feedbacks", methods=["DELETE"])
+    def delete_feedbacks_by_category():
+        category_id = request.args.get("category_id")
+        params = {}
+        if category_id is not None:
+            params["category_id"] = category_id
+        resp = requests.delete(f"{db_url}/feedbacks", params=params)
+        if resp.status_code == 400:
+            return jsonify(resp.json()), 400
+        resp.raise_for_status()
+        return make_response(*get_feedback(), {"HX-Trigger": "feedbackChanged"})
+
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        transactions = fetch_transactions(tx_url)
-        has_transactions = len(transactions) > 0
-        suggestion = generate_savings_advice(db_url, tx_url)
-        return render_template("ai-suggestion.jinja", suggestion=suggestion, has_transactions=has_transactions), 200
+        suggestion, sources, confidence = generate_savings_advice(db_url, tx_url=tx_url)
+        return render_template(
+            "ai-suggestion.jinja",
+            suggestion=suggestion,
+            sources=sources,
+            confidence=confidence,
+        ), 200
 
     @app.route("/ai-suggestion/action", methods=["POST"])
     def action_ai_suggestion():
-        transactions = fetch_transactions(tx_url)
-        has_transactions = len(transactions) > 0
         payload = request.get_json(silent=True) or request.form.to_dict()
         suggestion_text = payload.get("suggestion", "").strip() if payload else ""
+        feedback_text = payload.get("feedback", "").strip() if payload else ""
         accepted_raw = request.args.get("accepted") if "accepted" in request.args else (payload.get("accepted") if payload else None)
         accepted = try_parse_bool(accepted_raw)
 
-        if suggestion_text and suggestion_text != "No current AI suggestion available." and not suggestion_text.startswith("Error") and not suggestion_text.startswith("You don't have") and accepted is not None:
-            try:
-                resp = requests.post(
-                    f"{db_url}/suggestion",
-                    json={"suggestion": suggestion_text, "accepted": accepted},
-                )
-                resp.raise_for_status()
-            except Exception as e:
-                app.logger.error(f"Error saving suggestion: {e}")
+        if (
+            not suggestion_text
+            or suggestion_text == "No current AI suggestion available."
+            or suggestion_text.startswith("Error")
+            or suggestion_text.startswith("You don't have")
+            or suggestion_text.startswith("No transactions found")
+            or suggestion_text.startswith("Insufficient context")
+        ):
+            return jsonify({"error": "No valid suggestion available to accept or reject."}), 400
 
-        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
+        if accepted is None:
+            return jsonify({"error": "Missing or invalid decision (accepted/rejected)."}), 400
+
+        if not feedback_text:
+            return jsonify({"error": "Please provide feedback explaining why you are accepting or rejecting this suggestion."}), 400
+
+        try:
+            resp = requests.post(
+                f"{db_url}/suggestion",
+                json={"suggestion": suggestion_text, "accepted": accepted},
+            )
+            resp.raise_for_status()
+            saved_suggestion = resp.json(object_hook=object_to_hook)
+            suggestion_id = (
+                getattr(saved_suggestion, "id", None)
+                if hasattr(saved_suggestion, "id")
+                else resp.json().get("id")
+            )
+
+            if suggestion_id is not None:
+                categories = fetch_categories(tx_url)
+                category_id, timeframe = classify_feedback(feedback_text, categories)
+                feedback_payload = {
+                    "feedback": feedback_text,
+                    "suggestion_id": suggestion_id,
+                    "category_id": category_id,
+                    "timeframe": timeframe,
+                }
+
+                feedback_response = requests.post(
+                    f"{db_url}/feedback",
+                    json=feedback_payload,
+                )
+                feedback_response.raise_for_status()
+        except Exception as e:
+            app.logger.error(f"Error saving suggestion action: {e}")
+            return jsonify({"error": f"Failed to save suggestion decision: {str(e)}"}), 500
+
+        return make_response(
+            render_template(
+                "ai-suggestion.jinja",
+                suggestion=None,
+                sources=None,
+                confidence=None,
+                loading=True,
+            ),
+            200,
+            {"HX-Trigger": "suggestionChanged, feedbackChanged"},
+        )
 
     return app
 

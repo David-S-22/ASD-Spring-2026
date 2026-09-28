@@ -87,6 +87,9 @@ main.content {
 }
 
 .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 11px 18px;
   background-color: var(--color-surface-alt);
   border-bottom: 1px solid var(--color-border);
@@ -286,12 +289,39 @@ button.btn-create,
 .app-container button.btn-create {
   background-color: #198754 !important;
   color: #ffffff !important;
-  padding: 4px 16px;
+  padding: 4px 14px;
+  min-width: 82px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button.btn-create:hover,
 .app-container button.btn-create:hover {
   background-color: #157347 !important;
+}
+
+button.btn-refresh,
+.app-container button.btn-refresh {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-muted) !important;
+  border: 1px solid var(--color-border) !important;
+  padding: 3px 10px !important;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+button.btn-refresh:hover,
+.app-container button.btn-refresh:hover {
+  background-color: var(--color-surface-alt) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
 }
 
 .ai-suggestion-panel {
@@ -308,8 +338,8 @@ button.btn-create:hover,
 .ai-suggestion-textbox {
   width: 100%;
   box-sizing: border-box;
-  min-height: 110px;
-  height: 110px;
+  min-height: 70px;
+  height: 85px;
   padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -328,6 +358,115 @@ button.btn-create:hover,
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 
+.ai-suggestion-meta-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.ai-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ai-meta-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.ai-meta-value {
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confidence-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.confidence-badge.confidence-high {
+  background-color: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.confidence-badge.confidence-medium {
+  background-color: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.confidence-badge.confidence-low {
+  background-color: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.confidence-badge.confidence-none {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: var(--color-text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.ai-suggestion-feedback-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.ai-suggestion-feedback-section label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.2px;
+}
+
+.ai-suggestion-feedback-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  resize: none;
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-suggestion-feedback-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+.ai-suggestion-feedback-input::placeholder {
+  color: var(--color-text-muted);
+}
+
 .ai-suggestion-actions {
   display: flex;
   gap: 8px;
@@ -339,17 +478,92 @@ button.btn-create:hover,
   font-size: 0.88rem;
 }
 
-#ai-suggestion-container.htmx-request .ai-suggestion-actions,
-.ai-suggestion-panel.htmx-request .ai-suggestion-actions,
-.ai-suggestion-body.htmx-request .ai-suggestion-actions,
-.htmx-request .ai-suggestion-actions {
-  display: none !important;
+#ai-suggestion-container.htmx-request,
+#ai-suggestion-container.htmx-request * {
+  cursor: wait !important;
 }
 
-#ai-suggestion-container.htmx-request .ai-suggestion-textbox,
-.ai-suggestion-body.htmx-request .ai-suggestion-textbox {
+#ai-suggestion-container.htmx-request button,
+#ai-suggestion-container.htmx-request textarea {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.create-row.htmx-request,
+.create-row.htmx-request * {
+  cursor: wait !important;
+}
+
+.create-row.htmx-request input {
   opacity: 0.6;
-  cursor: wait;
+  pointer-events: none;
+}
+
+.create-row.htmx-request button.btn-create,
+.app-container .create-row.htmx-request button.btn-create {
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.create-row .btn-text-loading {
+  display: none;
+}
+
+.create-row.htmx-request .btn-text-default {
+  display: none;
+}
+
+.create-row.htmx-request .btn-text-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit-row.htmx-request,
+.edit-row.htmx-request * {
+  cursor: wait !important;
+}
+
+.edit-row.htmx-request input,
+.edit-row.htmx-request button {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+button:disabled,
+button[disabled],
+textarea:disabled,
+textarea[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.badge-suggestion {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: var(--color-primary);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.badge-general {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--color-text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.cell-suggestion {
+  width: 95px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .status-badge {
