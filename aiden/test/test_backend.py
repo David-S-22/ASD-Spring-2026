@@ -373,12 +373,13 @@ def test_review_button_only_renders_when_unreviewed(client: FlaskClient):
             dto.Anomaly(id=0, transaction_id=2003, agent_reason_suspected="pending", is_confirmed_by_user=None))
 
     rows = client.get("/anomalies").text
-    assert f'openReviewModal({unreviewed.id})' in rows
+    assert f'data-anomaly-id="{unreviewed.id}"' in rows
+    assert "onclick=\"openReviewModal(this)\"" in rows
 
     client.post(f"/anomalies/{unreviewed.id}/confirm")
 
     rows = client.get("/anomalies").text
-    assert f'openReviewModal({unreviewed.id})' not in rows
+    assert f'data-anomaly-id="{unreviewed.id}"' not in rows
 
 
 def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
@@ -407,6 +408,44 @@ def test_anomaly_row_shows_transaction_date_and_merchant(client: FlaskClient, mo
     assert "Suspicious Merchant Co" in rows
     assert "2025-01-15" in rows
     assert "<td>4242</td>" not in rows
+
+
+def test_review_button_includes_transaction_details_and_anomaly_reason(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    reason = "A suspicious <script>alert('x')</script> charge."
+    with app.app_context():
+        anomaly = anomalies_api.create_anomaly(
+            dto.Anomaly(
+                id=0,
+                transaction_id=4243,
+                agent_reason_suspected=reason,
+                is_confirmed_by_user=None,
+            )
+        )
+
+    txn = dto.Transaction(
+        id=4243,
+        amount=125.5,
+        merchant="Corner & Co.",
+        date=datetime(2025, 1, 15, 9, 30),
+        description="Card payment <script>",
+        category_id=80,
+    )
+    monkeypatch.setattr("backend.app.transaction_api.get_all_transactions", lambda: [txn])
+
+    response = client.get("/anomalies")
+    rows = response.text
+
+    assert response.status_code == 200
+    assert f'data-anomaly-id="{anomaly.id}"' in rows
+    assert 'data-transaction-id="4243"' in rows
+    assert 'data-date="2025-01-15T09:30:00"' in rows
+    assert 'data-merchant="Corner &amp; Co."' in rows
+    assert 'data-amount="125.50"' in rows
+    assert 'data-description="Card payment &lt;script&gt;"' in rows
+    assert 'data-category-id="80"' in rows
+    assert 'data-reason="A suspicious &lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; charge."' in rows
 
 
 # Pytest fixtures

@@ -24,12 +24,50 @@
             padding: 1.5rem;
             border-radius: 8px;
             border: 1px solid var(--color-border, #cbd5e1);
-            max-width: 400px;
+            max-width: 620px;
             width: 90%;
+            max-height: 84vh;
+            overflow-y: auto;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
         .modal h2, .modal p, .modal label { color: var(--color-text, #1e293b); }
         .modal label { display: block; margin: 0.75rem 0 0.25rem; }
+        .review-details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+        .review-detail {
+            min-width: 0;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid var(--color-border, #cbd5e1);
+            border-radius: 6px;
+            background: var(--color-surface-alt, #f8fafc);
+        }
+        .review-detail dt {
+            margin-bottom: 0.3rem;
+            color: var(--color-text-muted, #64748b);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .review-detail dd {
+            margin: 0;
+            color: var(--color-text, #1e293b);
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+        .review-detail-reason {
+            grid-column: 1 / -1;
+            background: var(--color-surface-alt, #f8fafc);
+        }
+        .review-detail-reason dd { font-weight: 500; line-height: 1.5; }
+        @media (max-width: 520px) {
+            .review-details { grid-template-columns: 1fr; }
+            .review-detail-reason { grid-column: auto; }
+        }
         .modal select {
             width: 100%;
             padding: 0.4rem;
@@ -114,6 +152,36 @@
         <div class="modal">
             <h2 id="review-modal-title">Review anomaly</h2>
             <p>Your feedback will be used to better predict future anomalies.</p>
+            <dl class="review-details">
+                <div class="review-detail">
+                    <dt>Transaction ID</dt>
+                    <dd id="review-transaction-id"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Date</dt>
+                    <dd id="review-transaction-date"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Merchant</dt>
+                    <dd id="review-transaction-merchant"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Amount</dt>
+                    <dd id="review-transaction-amount"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Description</dt>
+                    <dd id="review-transaction-description"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Category ID</dt>
+                    <dd id="review-transaction-category"></dd>
+                </div>
+                <div class="review-detail review-detail-reason">
+                    <dt>Reason suspected</dt>
+                    <dd id="review-anomaly-reason"></dd>
+                </div>
+            </dl>
             <label for="review-decision">Decision</label>
             <select id="review-decision">
                 <option value="confirm">Accept</option>
@@ -130,8 +198,15 @@
         // Anomaly review modal: pick Accept/Reject from a dropdown, then submit.
         let reviewAnomalyId = null;
 
-        function openReviewModal(id) {
-            reviewAnomalyId = id;
+        function openReviewModal(button) {
+            reviewAnomalyId = Number(button.dataset.anomalyId);
+            document.getElementById('review-transaction-id').textContent = button.dataset.transactionId;
+            document.getElementById('review-transaction-date').textContent = button.dataset.date;
+            document.getElementById('review-transaction-merchant').textContent = button.dataset.merchant;
+            document.getElementById('review-transaction-amount').textContent = button.dataset.amount;
+            document.getElementById('review-transaction-description').textContent = button.dataset.description;
+            document.getElementById('review-transaction-category').textContent = button.dataset.categoryId;
+            document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
             document.getElementById('review-decision').value = 'confirm';
             document.getElementById('review-modal').hidden = false;
         }
