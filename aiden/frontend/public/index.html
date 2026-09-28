@@ -18,6 +18,8 @@
             z-index: 1000;
         }
         .modal-overlay[hidden] { display: none; }
+        .modal-overlay:not([hidden]) { animation: modal-fade-in 0.16s ease-out; }
+        .modal-overlay.closing { animation: modal-fade-out 0.16s ease-in forwards; }
         .modal {
             background: var(--color-surface, #ffffff);
             color: var(--color-text, #1e293b);
@@ -29,6 +31,24 @@
             max-height: 84vh;
             overflow-y: auto;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .modal-overlay:not([hidden]) .modal { animation: modal-pop-in 0.18s ease-out; }
+        .modal-overlay.closing .modal { animation: modal-pop-out 0.16s ease-in forwards; }
+        @keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes modal-pop-in {
+            from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes modal-pop-out {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(5px) scale(0.985); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .modal-overlay:not([hidden]), .modal-overlay.closing,
+            .modal-overlay:not([hidden]) .modal, .modal-overlay.closing .modal {
+                animation-duration: 0.01ms;
+            }
         }
         .modal h2, .modal p, .modal label { color: var(--color-text, #1e293b); }
         .modal label { display: block; margin: 0.75rem 0 0.25rem; }
@@ -208,13 +228,29 @@
             document.getElementById('review-transaction-category').textContent = button.dataset.categoryId;
             document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
             document.getElementById('review-decision').value = 'confirm';
-            document.getElementById('review-modal').hidden = false;
+            const modal = document.getElementById('review-modal');
+            modal.classList.remove('closing');
+            modal.hidden = false;
         }
 
         function closeReviewModal() {
+            const modal = document.getElementById('review-modal');
+            if (modal.hidden || modal.classList.contains('closing')) return;
+
             reviewAnomalyId = null;
-            document.getElementById('review-modal').hidden = true;
+            modal.classList.add('closing');
         }
+
+        document.getElementById('review-modal').addEventListener('animationend', function (event) {
+            if (event.target === this && this.classList.contains('closing')) {
+                this.hidden = true;
+                this.classList.remove('closing');
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') closeReviewModal();
+        });
 
         // Send the chosen decision to the backend and refresh the table.
         async function submitReview() {

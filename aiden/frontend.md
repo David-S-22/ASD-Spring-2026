@@ -15,7 +15,8 @@ confirm or dismiss the finding. The review dialog shows the complete
 transaction details (ID, date, merchant, amount, description, and category ID)
 in two columns, followed by a full-width suspected-reason row before
 collecting the user's decision. Labels are styled as small uppercase
-subheadings, with values emphasized in separate bordered cards.
+subheadings, with values emphasized in separate bordered cards. The dialog
+animates when opening and closing, and pressing Escape cancels the review.
 
 ## Backend communication
 
