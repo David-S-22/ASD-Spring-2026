@@ -60,7 +60,7 @@ The review is structured as a **Plan → Act → Observe → Adapt** loop:
 - **Adapt** — those reviewed confirm/dismiss decisions become context for the
   *next* review, so the agent aligns future judgements with the user's feedback.
 
-The [backend documentation](../../../aiden/backend.md#planactobserveadapt-workflow)
+The [backend documentation](../../../aiden/backend/README.md#planactobserveadapt-workflow)
 describes this loop in detail, including a Mermaid diagram of the flow.
 
 ## Routes and persistence
@@ -98,10 +98,10 @@ Documentation for the current implementation is maintained in the anomalies
 documentation:
 
 - [Anomalies overview](../../../aiden/README.md)
-- [Frontend documentation](../../../aiden/frontend.md)
-- [Backend documentation](../../../aiden/backend.md)
-- [Database documentation](../../../aiden/database.md)
-- [Test documentation](../../../aiden/tests.md)
+- [Frontend documentation](../../../aiden/frontend/README.md)
+- [Backend documentation](../../../aiden/backend/README.md)
+- [Database documentation](../../../aiden/database/README.md)
+- [Test documentation](../../../aiden/test/README.md)
 
 ## Evidence
 
