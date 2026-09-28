@@ -46,4 +46,5 @@ reverse-proxied to the URL provided by `ANOMALIES_BACKEND_URL`. The Dockerfile
 uses `nginx:alpine`, copies the static page into the image, and installs the
 templated nginx configuration. CSS and JavaScript are served through the
 `/anomalies-assets/` route so their paths work both standalone and when the
-page is embedded in the shared frontend.
+page is embedded in the shared frontend. The stylesheet link is part of the
+body fragment so it is retained when the shared shell loads the page via HTMX.
