@@ -6,15 +6,15 @@ services:
       - 11434:11434
     volumes:
       - ollama_data:/root/.ollama
-      - ./ai-services/entrypoint.sh:/ai-services/entrypoint.sh
-      - ./ai-services/healthcheck.sh:/ai-services/healthcheck.sh
+      - ./ai-services/ollama-server/entrypoint.sh:/ollama-server/entrypoint.sh
+      - ./ai-services/ollama-server/healthcheck.sh:/ollama-server/healthcheck.sh
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/ai-services/entrypoint.sh"]
+    entrypoint: ["/bin/sh", "/ollama-server/entrypoint.sh"]
     environment:
       # Any models you want to use must be listed here, to ensure they are installed on the container
       OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b
     healthcheck:
-      test: ["CMD", "/bin/sh", "/ai-services/healthcheck.sh"]
+      test: ["CMD", "/bin/sh", "/ollama-server/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
       start_period: 60s
       start_interval: 5s
