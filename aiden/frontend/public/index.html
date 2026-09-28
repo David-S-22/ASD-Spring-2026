@@ -125,6 +125,13 @@
             transition: background-color 0.15s ease;
         }
         button.review-btn:hover { background-color: #0369a1 !important; }
+        .no-actions {
+            display: inline-block;
+            width: 100%;
+            color: var(--color-text-muted, #64748b);
+            font-weight: 600;
+            text-align: center;
+        }
 
         /* Status badges (mirrors the savings accepted/rejected styling). */
         .status-badge {
@@ -150,17 +157,59 @@
             color: var(--color-text-muted, #475569);
             border: 1px solid rgba(148, 163, 184, 0.3);
         }
+        .content:has(.anomalies-page) {
+            max-width: 1300px;
+            padding-inline: 1.5rem;
+        }
+        .anomalies-page { width: 100%; }
+        .anomalies-table-wrap { width: 100%; overflow-x: auto; }
+        .anomalies-table { width: 100%; min-width: 900px; table-layout: auto; }
+        .anomalies-table th:first-child { width: 5.5rem; }
+        thead th .sort-btn, thead th .sort-btn:hover {
+            appearance: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            font-weight: inherit;
+            text-transform: inherit;
+            letter-spacing: inherit;
+            white-space: nowrap;
+            transition: none;
+            cursor: pointer;
+        }
+        .sort-icon {
+            display: inline-block;
+            flex: 0 0 auto;
+            width: 0.9em;
+            height: 0.9em;
+            vertical-align: -0.1em;
+            color: var(--color-text-muted, #64748b);
+        }
+        .sort-icon-active { display: none; }
+        th[aria-sort="ascending"] .sort-icon-neutral,
+        th[aria-sort="descending"] .sort-icon-neutral { display: none; }
+        th[aria-sort="ascending"] .sort-icon-active,
+        th[aria-sort="descending"] .sort-icon-active { display: inline; }
+        th[aria-sort="descending"] .sort-icon-active { transform: rotate(180deg); }
     </style>
+    <div class="anomalies-page">
     <h1>Anomalies</h1>
     <p>Review flagged transactions, see why each was suspected, and confirm or dismiss unreviewed anomalies.</p>
+    <div class="anomalies-table-wrap">
     <table>
         <thead>
             <tr>
-                <th>ID</th>
-                <th>Date</th>
-                <th>Merchant</th>
+                <th aria-sort="ascending"><button type="button" class="sort-btn" data-sort-key="id">ID<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="date">Date Flagged<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="merchant">Merchant<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
                 <th>Reason suspected</th>
-                <th>Status</th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="status">Status<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -168,6 +217,7 @@
             <tr><td colspan="6" style="text-align: center;">Loading…</td></tr>
         </tbody>
     </table>
+    </div>
 
     <div id="review-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
         <div class="modal">
@@ -213,9 +263,64 @@
                 <button type="button" class="btn-accept" onclick="submitReview()">Submit</button>
             </div>
         </div>
+        </div>
     </div>
 
     <script>
+        const anomaliesTable = document.getElementById('anomalies');
+        let sortKey = 'id';
+        let sortDirection = 1;
+
+        function sortAnomalies() {
+            const sortValues = {
+                id: row => Number(row.dataset.sortId),
+                date: row => Date.parse(row.dataset.sortDate),
+                merchant: row => row.dataset.sortMerchant,
+                status: row => ({ unreviewed: 0, confirmed: 1, dismissed: 2 }[row.dataset.sortStatus])
+            };
+            const getValue = sortValues[sortKey];
+            const rows = Array.from(anomaliesTable.querySelectorAll('tr[data-sort-row]'));
+
+            rows.sort((left, right) => {
+                const leftValue = getValue(left);
+                const rightValue = getValue(right);
+                if (typeof leftValue === 'string' && typeof rightValue === 'string') {
+                    return sortDirection * leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
+                }
+                const leftInvalid = Number.isNaN(leftValue);
+                const rightInvalid = Number.isNaN(rightValue);
+                if (leftInvalid || rightInvalid) {
+                    return leftInvalid === rightInvalid ? 0 : (leftInvalid ? 1 : -1);
+                }
+                return sortDirection * ((leftValue ?? -Infinity) - (rightValue ?? -Infinity));
+            });
+
+            rows.forEach(row => anomaliesTable.appendChild(row));
+        }
+
+        document.addEventListener('click', function (event) {
+            const button = event.target.closest('.sort-btn');
+            if (!button) return;
+
+            if (sortKey === button.dataset.sortKey) {
+                sortDirection *= -1;
+            } else {
+                sortKey = button.dataset.sortKey;
+                sortDirection = 1;
+            }
+            document.querySelectorAll('.sort-btn').forEach(header => {
+                const active = header === button;
+                header.closest('th').setAttribute('aria-sort', active
+                    ? (sortDirection === 1 ? 'ascending' : 'descending')
+                    : 'none');
+            });
+            sortAnomalies();
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            if (event.detail.target === anomaliesTable) sortAnomalies();
+        });
+
         // Anomaly review modal: pick Accept/Reject from a dropdown, then submit.
         let reviewAnomalyId = null;
 
@@ -276,7 +381,8 @@
             });
 
             if (resp.ok) {
-                document.getElementById('anomalies').innerHTML = await resp.text();
+                anomaliesTable.innerHTML = await resp.text();
+                sortAnomalies();
             }
 
             closeReviewModal();

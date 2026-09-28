@@ -1,7 +1,11 @@
 {% for anomaly in anomalies %}
 {% set txn = transactions.get(anomaly.transaction_id) %}
 {% set category_name = categories.get(txn.category_id) if txn else none %}
-<tr>
+<tr data-sort-row
+    data-sort-id="{{ anomaly.id }}"
+    data-sort-date="{{ txn.date.isoformat() if txn else '' }}"
+    data-sort-merchant="{{ (txn.merchant if txn else '')|e }}"
+    data-sort-status="{{ 'unreviewed' if anomaly.is_confirmed_by_user is none else ('confirmed' if anomaly.is_confirmed_by_user else 'dismissed') }}">
   <td>{{ anomaly.id }}</td>
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
@@ -22,6 +26,8 @@
             onclick="openReviewModal(this)">
       Review
     </button>
+    {% else %}
+    <span class="no-actions" aria-label="No actions available" title="No actions available">—</span>
     {% endif %}
   </td>
 </tr>

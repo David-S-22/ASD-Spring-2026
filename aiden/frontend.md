@@ -12,10 +12,13 @@ related transaction details, review status, and feedback controls.
 The page describes its table as a list of flagged transactions, their suspected
 reasons, and review status, with actions to confirm or dismiss unreviewed
 findings. Rows load from the backend and refresh periodically using HTMX. The
-review dialog shows the complete
-transaction details (ID, a locale-formatted date with weekday, merchant,
-amount, description, and category name) in two columns, followed by a full-width
-suspected-reason row before
+ID, Date Flagged, Merchant, and Status column headers are sortable; the current
+sort is shown with SVG indicators and kept when refreshed rows arrive. The
+anomaly table uses the available shell width, with horizontal scrolling on
+narrow screens.
+The review dialog shows the complete transaction details (ID, a
+locale-formatted date with weekday, merchant, amount, description, and category
+name) in two columns, followed by a full-width suspected-reason row before
 collecting the user's decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.

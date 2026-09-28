@@ -30,13 +30,13 @@ def test_index(client: FlaskClient):
 
 def test_create_anomaly(client: FlaskClient):
     resp = client.post("/dummy-anomaly")
-    assert resp.text.count("<tr>") == 1
+    assert resp.text.count("data-sort-row") == 1
 
     resp = client.post("/dummy-anomaly")
-    assert resp.text.count("<tr>") == 2
+    assert resp.text.count("data-sort-row") == 2
 
     resp = client.post("/dummy-anomaly")
-    assert resp.text.count("<tr>") == 3
+    assert resp.text.count("data-sort-row") == 3
 
 def test_check_transaction_accepts_and_queues(client: FlaskClient, monkeypatch: MonkeyPatch):
     intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Mock response from ollama"}')
@@ -70,13 +70,13 @@ def test_check_transaction_creates_anomaly_and_persists_it(client: FlaskClient, 
         category_id=0,
     )
 
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
     resp = client.post("/check-transaction", json=serialise(transaction))
     transaction_queue.join()
 
     assert resp.status_code == 202
     anomalies = client.get("/anomalies").text
-    assert anomalies.count("<tr>") == before + 1
+    assert anomalies.count("data-sort-row") == before + 1
     assert "Mock response from ollama" in anomalies
 
 
@@ -92,21 +92,21 @@ def test_check_transaction_no_anomaly_persists_nothing(client: FlaskClient, monk
         category_id=2,
     )
 
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
     resp = client.post("/check-transaction", json=serialise(transaction))
     transaction_queue.join()
 
     assert resp.status_code == 202
-    assert client.get("/anomalies").text.count("<tr>") == before
+    assert client.get("/anomalies").text.count("data-sort-row") == before
 
 
 def test_create_dummy_anomaly_increases_anomaly_list(client: FlaskClient):
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
 
     client.post("/dummy-anomaly")
     client.post("/dummy-anomaly")
 
-    assert client.get("/anomalies").text.count("<tr>") == before + 2
+    assert client.get("/anomalies").text.count("data-sort-row") == before + 2
 
 
 def test_check_transaction_retries_on_invalid_ollama_json(client: FlaskClient, monkeypatch: MonkeyPatch):
@@ -119,13 +119,13 @@ def test_check_transaction_retries_on_invalid_ollama_json(client: FlaskClient, m
         category_id=1,
     )
 
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
 
     intercept_ollama(monkeypatch, '{not valid json')
     first = client.post("/check-transaction", json=serialise(transaction))
     transaction_queue.join()
     assert first.status_code == 202
-    assert client.get("/anomalies").text.count("<tr>") == before
+    assert client.get("/anomalies").text.count("data-sort-row") == before
 
     intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "Retry worked"}')
     second = client.post("/check-transaction", json=serialise(transaction))
@@ -133,7 +133,7 @@ def test_check_transaction_retries_on_invalid_ollama_json(client: FlaskClient, m
 
     assert second.status_code == 202
     anomalies = client.get("/anomalies").text
-    assert anomalies.count("<tr>") == before + 1
+    assert anomalies.count("data-sort-row") == before + 1
     assert "Retry worked" in anomalies
 
 
@@ -149,12 +149,12 @@ def test_check_transaction_invalid_model_json_persists_nothing(client: FlaskClie
         category_id=0,
     )
 
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
     resp = client.post("/check-transaction", json=serialise(transaction))
     transaction_queue.join()
 
     assert resp.status_code == 202
-    assert client.get("/anomalies").text.count("<tr>") == before
+    assert client.get("/anomalies").text.count("data-sort-row") == before
 
 
 def test_check_transaction_non_bool_is_suspicious_persists_nothing(client: FlaskClient, monkeypatch: MonkeyPatch):
@@ -169,12 +169,12 @@ def test_check_transaction_non_bool_is_suspicious_persists_nothing(client: Flask
         category_id=0,
     )
 
-    before = client.get("/anomalies").text.count("<tr>")
+    before = client.get("/anomalies").text.count("data-sort-row")
     resp = client.post("/check-transaction", json=serialise(transaction))
     transaction_queue.join()
 
     assert resp.status_code == 202
-    assert client.get("/anomalies").text.count("<tr>") == before
+    assert client.get("/anomalies").text.count("data-sort-row") == before
 
 
 def test_check_transaction_persists_exact_anomaly_fields(client: FlaskClient, monkeypatch: MonkeyPatch):
@@ -380,6 +380,7 @@ def test_review_button_only_renders_when_unreviewed(client: FlaskClient):
 
     rows = client.get("/anomalies").text
     assert f'data-anomaly-id="{unreviewed.id}"' not in rows
+    assert 'aria-label="No actions available"' in rows
 
 
 def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
@@ -408,6 +409,10 @@ def test_anomaly_row_shows_transaction_date_and_merchant(client: FlaskClient, mo
     assert "Suspicious Merchant Co" in rows
     assert "2025-01-15" in rows
     assert "<td>4242</td>" not in rows
+    assert 'data-sort-id="' in rows
+    assert 'data-sort-date="2025-01-15T00:00:00"' in rows
+    assert 'data-sort-merchant="Suspicious Merchant Co"' in rows
+    assert 'data-sort-status="unreviewed"' in rows
 
 
 def test_review_button_includes_transaction_details_and_anomaly_reason(
