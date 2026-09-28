@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Anomalies</title>
+</head>
+<body>
+    <link rel="stylesheet" href="/anomalies-assets/anomalies.css">
+    <div class="anomalies-page">
+    <h1>Anomalies</h1>
+    <p>Review flagged transactions, see why each was suspected, and confirm or dismiss unreviewed anomalies.</p>
+    <div class="anomalies-table-wrap">
+    <table class="anomalies-table">
+        <thead>
+            <tr>
+                <th aria-sort="ascending"><button type="button" class="sort-btn" data-sort-key="id">ID<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="date">Date Flagged<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="merchant">Merchant<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th>Reason suspected</th>
+                <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="status">Status<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <tr><td colspan="6" style="text-align: center;">Loading…</td></tr>
+        </tbody>
+    </table>
+    </div>
+
+    <div id="review-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
+        <div class="modal">
+            <h2 id="review-modal-title">Review anomaly</h2>
+            <p>Your feedback will be used to better predict future anomalies.</p>
+            <dl class="review-details">
+                <div class="review-detail">
+                    <dt>Transaction ID</dt>
+                    <dd id="review-transaction-id"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Date</dt>
+                    <dd id="review-transaction-date"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Merchant</dt>
+                    <dd id="review-transaction-merchant"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Amount</dt>
+                    <dd id="review-transaction-amount"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Description</dt>
+                    <dd id="review-transaction-description"></dd>
+                </div>
+                <div class="review-detail">
+                    <dt>Category</dt>
+                    <dd id="review-transaction-category"></dd>
+                </div>
+                <div class="review-detail review-detail-reason">
+                    <dt>Reason suspected</dt>
+                    <dd id="review-anomaly-reason"></dd>
+                </div>
+            </dl>
+            <label for="review-decision">Decision</label>
+            <select id="review-decision">
+                <option value="confirm">Accept</option>
+                <option value="dismiss">Reject</option>
+            </select>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeReviewModal()">Cancel</button>
+                <button type="button" class="btn-accept" onclick="submitReview()">Submit</button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script src="/anomalies-assets/anomalies.js"></script>
+</body>
+</html>

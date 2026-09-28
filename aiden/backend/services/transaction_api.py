@@ -13,5 +13,13 @@ def get_all_transactions() -> List[dto.Transaction]:
 
     return [deserialise_or_abort(dto.Transaction, item) for item in resp.json()]
 
+
+def get_all_categories() -> List[dto.Category]:
+    resp = get(_url("/categories"))
+    resp.raise_for_status()
+
+    return [deserialise_or_abort(dto.Category, item) for item in resp.json()]
+
+
 def _url(path: str) -> str:
     return config.TRANSACTIONS_DB_URL + path
