@@ -59,7 +59,7 @@ def calculate_confidence_category(
         return "Medium"
 
     token_probs = [
-        math.exp(getattr(token_info, "logprob", 0.0))
+        math.exp(getattr(token_info, "logprob", -float('inf')))
         for token_info in logprobs_content
         if getattr(token_info, "logprob", None) is not None
     ]
