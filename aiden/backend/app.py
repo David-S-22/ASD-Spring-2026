@@ -34,8 +34,14 @@ def get_fact():
 def get_anomaly_rows():
     anomalies = anomalies_api.get_all_anomalies()
     transactions = {t.id: t for t in transaction_api.get_all_transactions()}
+    categories = {category.id: category.name for category in transaction_api.get_all_categories()}
 
-    return render_template("anomalies.jinja", anomalies=anomalies, transactions=transactions)
+    return render_template(
+        "anomalies.jinja",
+        anomalies=anomalies,
+        transactions=transactions,
+        categories=categories,
+    )
 
 @app.post("/check-transaction")
 def check_transaction():

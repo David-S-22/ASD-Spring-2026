@@ -14,7 +14,7 @@ reasons, and review status, with actions to confirm or dismiss unreviewed
 findings. Rows load from the backend and refresh periodically using HTMX. The
 review dialog shows the complete
 transaction details (ID, a locale-formatted date with weekday, merchant,
-amount, description, and category ID) in two columns, followed by a full-width
+amount, description, and category name) in two columns, followed by a full-width
 suspected-reason row before
 collecting the user's decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog

@@ -195,7 +195,7 @@
                     <dd id="review-transaction-description"></dd>
                 </div>
                 <div class="review-detail">
-                    <dt>Category ID</dt>
+                    <dt>Category</dt>
                     <dd id="review-transaction-category"></dd>
                 </div>
                 <div class="review-detail review-detail-reason">
@@ -239,7 +239,7 @@
             document.getElementById('review-transaction-merchant').textContent = button.dataset.merchant;
             document.getElementById('review-transaction-amount').textContent = button.dataset.amount;
             document.getElementById('review-transaction-description').textContent = button.dataset.description;
-            document.getElementById('review-transaction-category').textContent = button.dataset.categoryId;
+            document.getElementById('review-transaction-category').textContent = button.dataset.category;
             document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
             document.getElementById('review-decision').value = 'confirm';
             const modal = document.getElementById('review-modal');

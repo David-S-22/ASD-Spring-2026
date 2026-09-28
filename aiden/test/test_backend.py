@@ -444,7 +444,7 @@ def test_review_button_includes_transaction_details_and_anomaly_reason(
     assert 'data-merchant="Corner &amp; Co."' in rows
     assert 'data-amount="125.50"' in rows
     assert 'data-description="Card payment &lt;script&gt;"' in rows
-    assert 'data-category-id="80"' in rows
+    assert 'data-category="Dining"' in rows
     assert 'data-reason="A suspicious &lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; charge."' in rows
 
 

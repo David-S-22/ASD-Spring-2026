@@ -1,5 +1,6 @@
 {% for anomaly in anomalies %}
 {% set txn = transactions.get(anomaly.transaction_id) %}
+{% set category_name = categories.get(txn.category_id) if txn else none %}
 <tr>
   <td>{{ anomaly.id }}</td>
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
@@ -16,7 +17,7 @@
             data-merchant="{{ (txn.merchant if txn else '—')|e }}"
             data-amount="{{ ('%.2f'|format(txn.amount) if txn else '—')|e }}"
             data-description="{{ (txn.description if txn else '—')|e }}"
-            data-category-id="{{ (txn.category_id if txn else '—')|e }}"
+            data-category="{{ (category_name if category_name else ('Unknown category (' ~ txn.category_id ~ ')' if txn else '—'))|e }}"
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
             onclick="openReviewModal(this)">
       Review
