@@ -71,9 +71,9 @@ def _card(answer, citations, confidence, insufficient, retrieval, fallback, dura
 def ask(question):
     """Answer question from the bills corpus only; ModeError when a mode is off or the MCP call fails."""
     tools_service.require_modes(tools_service.RETRIEVAL_TOOL)
-    question = (question or "").strip()
-    if not question:
+    if not isinstance(question, str) or not question.strip():
         raise ServiceError("question is required")
+    question = question.strip()
     k = config.RAG_TOP_K
     chunks, duration_ms = retrieve(question, k)
     retrieval = [{"id": c["id"], "source": c["source"], "distance": round(c["distance"], 3)} for c in chunks]
