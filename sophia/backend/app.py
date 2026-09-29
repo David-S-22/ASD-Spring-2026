@@ -33,6 +33,7 @@ def create_app():
     app.register_blueprint(handoff.bp)
     app.register_blueprint(fragments.bp)
     app.register_blueprint(tools.bp)
+    app.register_blueprint(tools.ui)
     app.register_blueprint(evidence.bp)
 
     @app.errorhandler(ServiceError)
