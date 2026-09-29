@@ -48,4 +48,4 @@ MCP_ALLOWED_TOOLS = frozenset(
 RAG_ENABLED = _flag("RAG_ENABLED", False)
 RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "3"))
 RAG_HIGH, RAG_MEDIUM, RAG_LOW = _rag_thresholds(os.environ)
-GROUNDED_TIMEOUT_SECONDS = float(os.environ.get("GROUNDED_TIMEOUT_SECONDS", "25"))
+GROUNDED_TIMEOUT_SECONDS = float(os.environ.get("GROUNDED_TIMEOUT_SECONDS", "20"))
