@@ -262,7 +262,9 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
     evt.detail.elt &&
     (evt.detail.elt.closest(".chat-panel form") ||
       evt.detail.elt.closest(".preview-card") ||
-      evt.detail.elt.closest(".suggestion-card"))
+      evt.detail.elt.closest(".suggestion-card") ||
+      evt.detail.elt.closest(".tools-panel form") ||
+      evt.detail.elt.closest(".evidence-panel form"))
   ) {
     return;
   }
@@ -405,6 +407,18 @@ billsRoot.addEventListener("click", function (evt) {
       input.value = chip.getAttribute("data-chip");
       if (input.form && input.form.requestSubmit) {
         input.form.requestSubmit();
+      }
+    }
+    return;
+  }
+
+  var evidenceChip = evt.target.closest("[data-evidence-chip]");
+  if (evidenceChip) {
+    var question = document.querySelector('.evidence-panel input[name="question"]');
+    if (question) {
+      question.value = evidenceChip.getAttribute("data-evidence-chip");
+      if (question.form && question.form.requestSubmit) {
+        question.form.requestSubmit();
       }
     }
     return;
