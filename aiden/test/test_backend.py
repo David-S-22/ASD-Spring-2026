@@ -567,6 +567,8 @@ def test_anomaly_row_renders_confidence_badge(client: FlaskClient):
     rows = client.get("/anomalies").text
 
     assert 'data-sort-confidence="0.92"' in rows
+    assert '<td class="anomaly-confidence">' in rows
+    assert '<td class="anomaly-status">' in rows
     assert '<span class="status-badge confidence-high">High</span>' in rows
 
 

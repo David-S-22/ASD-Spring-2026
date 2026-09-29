@@ -12,8 +12,8 @@
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
-  <td>{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="status-badge confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
-  <td>{% if anomaly.is_confirmed_by_user is none %}<span class="status-badge status-unreviewed">Unreviewed</span>{% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>{% else %}<span class="status-badge status-rejected">Dismissed</span>{% endif %}</td>
+  <td class="anomaly-confidence">{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="status-badge confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
+  <td class="anomaly-status">{% if anomaly.is_confirmed_by_user is none %}<span class="status-badge status-unreviewed">Unreviewed</span>{% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>{% else %}<span class="status-badge status-rejected">Dismissed</span>{% endif %}</td>
   <td>
     {% if anomaly.is_confirmed_by_user is none %}
     <button type="button"

@@ -148,6 +148,10 @@ button.review-btn:hover { background-color: #0369a1 !important; }
     color: var(--color-text-muted, #475569);
     border: 1px solid rgba(148, 163, 184, 0.3);
 }
+.anomaly-confidence,
+.anomaly-status {
+    text-align: center;
+}
 
 /* Confidence badges (low/medium/high), mirroring the status badge styling. */
 .confidence-high {

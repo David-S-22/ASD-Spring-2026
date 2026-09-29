@@ -17,8 +17,9 @@ findings. Rows load from the backend and refresh periodically using HTMX. The
 ID, Date Flagged, Merchant, Confidence, and Status column headers are sortable;
 the current sort is shown with SVG indicators and kept when refreshed rows
 arrive. The Confidence column shows the model's certainty as a coloured
-Low/Medium/High status badge (or a dash when no score is available). The
-anomaly table uses the available shell width, with horizontal scrolling on
+Low/Medium/High status badge (or a dash when no score is available). Confidence
+and status badges are centered within their table cells. The anomaly table uses
+the available shell width, with horizontal scrolling on
 narrow screens.
 The review dialog shows the complete transaction details (ID, a
 locale-formatted date with weekday, merchant, amount, description, and category
