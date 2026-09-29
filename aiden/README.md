@@ -45,12 +45,13 @@ services, and routes are documented in
 
 Contains the anomalies persistence service. It is a Flask application backed by
 SQLAlchemy and SQLite, exposing a REST API for anomaly CRUD operations. Each
-record stores a transaction ID, the agent's reason, and the user's confirmation
-status. Transactions and anomalies are stored in separate databases, so the
-relationship is represented by ID rather than a database foreign key. A unique
-constraint allows at most one anomaly per transaction. The directory includes
-the model, routes, parsing helpers, requirements, and Dockerfile. Database
-design, routes, and ERDs are documented in [`database/README.md`](database/README.md).
+record stores a transaction ID, the agent's reason, an optional confidence
+score from `0` to `1`, and the user's confirmation status. Transactions and
+anomalies are stored in separate databases, so the relationship is represented
+by ID rather than a database foreign key. A unique constraint allows at most
+one anomaly per transaction. The directory includes the model, routes, parsing
+helpers, requirements, and Dockerfile. Database design, routes, and ERDs are
+documented in [`database/README.md`](database/README.md).
 
 ### `test/`
 

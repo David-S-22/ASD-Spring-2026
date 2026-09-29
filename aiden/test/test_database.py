@@ -329,7 +329,7 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
     seeded_transaction_ids = {transaction[0] for transaction in TRANSACTIONS}
     expected_transaction_ids = {
         transaction_id
-        for transaction_id, _, _ in SEED_ANOMALIES
+        for transaction_id, _, _, _ in SEED_ANOMALIES
         if transaction_id in seeded_transaction_ids
     }
 
@@ -360,6 +360,7 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
         assert existing["agent_reason_suspected"] == (
             "Existing anomaly must remain unchanged."
         )
+        assert existing["confidence"] is None
         assert len(anomalies) == 17
         statuses = [anomaly["is_confirmed_by_user"] for anomaly in anomalies]
         assert any(status is True for status in statuses)
@@ -369,12 +370,42 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
             anomaly["transaction_id"] in seeded_transaction_ids
             for anomaly in anomalies
         )
+        confidence_by_transaction = {
+            anomaly["transaction_id"]: anomaly["confidence"]
+            for anomaly in anomalies
+        }
+        for transaction_id, _, _, confidence in SEED_ANOMALIES:
+            if transaction_id in expected_transaction_ids and transaction_id != 26:
+                assert confidence_by_transaction[transaction_id] == confidence
         with app.app_context():
             assert seed_database_if_empty(seeded_transaction_ids) == 0
     finally:
         with app.app_context():
             db.session.query(Anomaly).delete()
             db.session.commit()
+
+
+def test_seed_confidence_scores_are_bounded_and_reflect_review_accuracy():
+    assert all(0 <= confidence <= 1 for _, _, _, confidence in SEED_ANOMALIES)
+
+    confirmed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is True
+    ]
+    dismissed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is False
+    ]
+    unreviewed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is None
+    ]
+
+    assert min(confirmed_scores) > max(unreviewed_scores)
+    assert min(unreviewed_scores) > max(dismissed_scores)
 
 
 # Pytest fixtures & helpers

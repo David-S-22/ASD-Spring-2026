@@ -6,6 +6,9 @@ The anomalies database is a Flask and SQLAlchemy application that exposes a
 REST API for storing and managing anomaly records. It persists data in SQLite.
 Each anomaly references a transaction by ID, and the unique constraint on
 `anomalies.transaction_id` allows each transaction to have at most one anomaly.
+An optional confidence score is stored from `0` to `1`; seeded scores are higher
+for findings supported by stronger evidence and confirmed as accurate, and
+lower for findings dismissed as false positives.
 
 The `transactions` table and `anomalies` table are stored in separate databases. Therefore, the relationship between `anomalies.transaction_id` and `transactions.id` is a logical cross-database reference rather than an enforced database foreign key. The `UNIQUE` constraint on `anomalies.transaction_id` ensures that each transaction can have zero or one anomaly.
 
@@ -21,7 +24,7 @@ container, so the API can serve requests immediately while the pass proceeds:
 2. It inserts any missing demo findings whose transaction IDs exist in the
    returned set, without overwriting existing anomalies or review decisions.
    The seed includes 17 findings with a mix of confirmed, dismissed, and
-   unreviewed user decisions.
+   unreviewed user decisions, each with a confidence score between `0` and `1`.
 3. It deletes any anomaly whose `transaction_id` is not present in the returned
    set of transactions.
 
@@ -75,6 +78,7 @@ erDiagram
         int transaction_id
         string agent_reason_suspected
         boolean is_confirmed_by_user
+        float confidence "0 to 1, nullable"
     }
 ```
 
@@ -100,6 +104,7 @@ erDiagram
         int transaction_id UK
         string agent_reason_suspected
         boolean is_confirmed_by_user
+        float confidence "0 to 1, nullable"
     }
 ```
 
@@ -125,5 +130,6 @@ erDiagram
         INTEGER transaction_id UK "NOT NULL"
         VARCHAR agent_reason_suspected "NOT NULL"
         BOOLEAN is_confirmed_by_user "NULLABLE"
+        FLOAT confidence "NULLABLE, 0 <= confidence <= 1"
     }
 ```
