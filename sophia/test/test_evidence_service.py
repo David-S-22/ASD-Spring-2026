@@ -9,11 +9,15 @@ from sophia.backend.clients import mcp_server
 from sophia.backend.services import evidence
 from sophia.backend.services.errors import ModeError, ServiceError
 
-BILL7 = {"id": "bills_bill-7-home-internet.md_0", "text": "# Home internet (bill)\n\n- Merchant: FibreLink\n- Amount: $79.00\n- Status: overdue",
-         "metadata": {"source": "bill-7-home-internet.md", "feature": "bills", "doc_type": "markdown"}, "distance": 1.083}
-BILL3 = {"id": "bills_bill-3-spotify.md_0", "text": "# Spotify (subscription)\n\n- Amount: $13.99\n- Status: paid",
-         "metadata": {"source": "bill-3-spotify.md", "feature": "bills", "doc_type": "markdown"}, "distance": 0.735}
-FAR = {"id": "bills_bill-1-rent.md_0", "text": "# Rent (bill)\n\n- Amount: $1,100.00", "metadata": {"source": "bill-1-rent.md"}, "distance": 1.9}
+BILL7 = {"id": "billing_bill-7-home-internet.md_0", "text": "# Home internet (bill)\n\n- Merchant: FibreLink\n- Amount: $79.00\n- Status: overdue",
+         "metadata": {"source": "bill-7-home-internet.md", "feature": "billing", "doc_type": "markdown"}, "distance": 1.083}
+BILL3 = {"id": "billing_bill-3-spotify.md_0", "text": "# Spotify (subscription)\n\n- Amount: $13.99\n- Status: paid",
+         "metadata": {"source": "bill-3-spotify.md", "feature": "billing", "doc_type": "markdown"}, "distance": 0.735}
+FAR = {"id": "billing_bill-1-rent.md_0", "text": "# Rent (bill)\n\n- Amount: $1,100.00", "metadata": {"source": "bill-1-rent.md"}, "distance": 1.9}
+OVERVIEW = {"id": "billing_billing_overview.md_0", "text": "# Billing overview\n\nBills are due on the date shown on each invoice.",
+            "metadata": {"source": "billing_overview.md", "feature": "billing", "doc_type": "markdown"}, "distance": 0.9}
+POLICY = {"id": "billing_billing_policy.pdf_0", "text": "Late fees apply after the grace period.",
+          "metadata": {"source": "billing_policy.pdf", "feature": "billing", "doc_type": "pdf", "page": 1}, "distance": 1.05}
 
 
 @pytest.fixture
@@ -68,7 +72,7 @@ def test_grounded_answer_cites_only_retrieved_sources_and_rates_the_cited_chunk(
     calls = fake_retrieval(monkeypatch, [BILL7, BILL3, FAR])
     attempts = fake_model(monkeypatch, {"answer": "Home internet (FibreLink, $79.00) is overdue.", "cited": ["bill-7-home-internet.md", "bill-99-invented.md"], "insufficient": False})
     result = evidence.ask("Which bill is overdue?")
-    assert calls == [("retrieve_context", {"feature": "bills", "question": "Which bill is overdue?", "k": 3})]
+    assert calls == [("retrieve_context", {"feature": "billing", "question": "Which bill is overdue?", "k": 3})]
     assert attempts[0][0] == config.CHAT_MODEL and attempts[0][2] == config.GROUNDED_TIMEOUT_SECONDS
     assert result["insufficient"] is False and result["fallback"] is False
     assert result["citations"] == [{"source": "bill-7-home-internet.md", "bill_id": 7, "title": "Home internet", "distance": 1.083}]
@@ -76,6 +80,30 @@ def test_grounded_answer_cites_only_retrieved_sources_and_rates_the_cited_chunk(
     assert [r["source"] for r in result["retrieval"]] == ["bill-3-spotify.md", "bill-7-home-internet.md", "bill-1-rent.md"]
     assert "bill-1-rent.md" not in attempts[0][1][0]["content"]
     assert result["duration_ms"] == 12.5
+
+
+def test_retrieve_keeps_only_bill_files_from_the_shared_billing_collection(modes, monkeypatch):
+    fake_retrieval(monkeypatch, [OVERVIEW, POLICY, dict(BILL7, distance=1.08)])
+    chunks, _ = evidence.retrieve("Which bill is overdue?", 3)
+    assert [chunk["source"] for chunk in chunks] == ["bill-7-home-internet.md"]
+
+
+def test_ask_never_uses_or_cites_the_hand_written_billing_files(modes, monkeypatch):
+    fake_retrieval(monkeypatch, [OVERVIEW, POLICY, dict(BILL7, distance=1.08)])
+    attempts = fake_model(monkeypatch, {"answer": "Home internet is overdue.", "cited": ["billing_overview.md", "billing_policy.pdf", "bill-7-home-internet.md"], "insufficient": False})
+    result = evidence.ask("Which bill is overdue?")
+    assert [citation["source"] for citation in result["citations"]] == ["bill-7-home-internet.md"]
+    assert [row["source"] for row in result["retrieval"]] == ["bill-7-home-internet.md"]
+    prompt = attempts[0][1][0]["content"]
+    assert "Billing overview" not in prompt and "Late fees" not in prompt
+
+
+def test_only_hand_written_billing_files_retrieved_is_insufficient_with_no_model_call(modes, monkeypatch):
+    fake_retrieval(monkeypatch, [OVERVIEW, POLICY])
+    attempts = fake_model(monkeypatch, {"answer": "should not be used", "cited": ["billing_overview.md"], "insufficient": False})
+    result = evidence.ask("When are late fees charged?")
+    assert attempts == []
+    assert result["insufficient"] is True and result["citations"] == [] and result["retrieval"] == []
 
 
 def test_confidence_follows_the_closest_cited_chunk(modes, monkeypatch):

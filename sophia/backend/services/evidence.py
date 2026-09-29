@@ -10,7 +10,7 @@ from sophia.backend.services.errors import ModeError, ServiceError
 
 logger = logging.getLogger(__name__)
 
-FEATURE = "bills"
+FEATURE = "billing"
 INSUFFICIENT_ANSWER = "Tally couldn't find a bill that covers that."
 FALLBACK_ANSWER = "Tally found matching bills but couldn't put an answer together; try again."
 SOURCE_PATTERN = re.compile(r"^bill-(\d+)-.*\.md$")
@@ -30,7 +30,7 @@ def _valid_chunk(item):
 
 
 def retrieve(question, k):
-    """Return (chunks closest first, duration_ms) from retrieve_context; a tool error means the RAG server is down."""
+    """Return (bill chunks closest first, duration_ms) from retrieve_context; a tool error means the RAG server is down, and other files in the shared billing folder are never used."""
     data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k})
     results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, list) or not all(_valid_chunk(item) for item in results):
@@ -39,7 +39,8 @@ def retrieve(question, k):
         {"id": r["id"], "source": str(r["metadata"].get("source", "")), "text": r["text"], "distance": float(r["distance"])}
         for r in results
     ]
-    return sorted(chunks, key=lambda chunk: chunk["distance"]), duration_ms
+    own_chunks = [chunk for chunk in chunks if SOURCE_PATTERN.match(chunk["source"])]
+    return sorted(own_chunks, key=lambda chunk: chunk["distance"]), duration_ms
 
 
 def confidence_for(chunks):
