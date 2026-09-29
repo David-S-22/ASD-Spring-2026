@@ -36,12 +36,22 @@ def test_ollama_prompt_requests_logprobs(monkeypatch: MonkeyPatch):
 
     def create(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(output_text="{}")
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="{}"),
+                ),
+            ],
+        )
 
     monkeypatch.setattr(
         ollama_api,
         "_get_client",
-        lambda: SimpleNamespace(responses=SimpleNamespace(create=create)),
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=create),
+            ),
+        ),
     )
 
     ollama_api.prompt(
@@ -52,35 +62,51 @@ def test_ollama_prompt_requests_logprobs(monkeypatch: MonkeyPatch):
         output_tokens=100,
     )
 
+    assert captured["messages"] == [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "user"},
+    ]
+    assert captured["logprobs"] is True
     assert captured["top_logprobs"] == ollama_api._TOP_LOGPROBS
-    assert captured["include"] == ["message.output_text.logprobs"]
+    assert captured["max_tokens"] == 100
 
 
 def test_ollama_prompt_returns_mean_confidence(monkeypatch: MonkeyPatch):
     import math
 
     response = {
-        "output": [
+        "choices": [
             {
-                "type": "message",
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": '{"is_suspicious": true}',
-                        "logprobs": [
-                            {"token": "a", "logprob": -0.1, "top_logprobs": [{"token": "b", "logprob": -5.0}]},
-                            {"token": "c", "logprob": -0.3, "top_logprobs": [{"token": "d", "logprob": -9.0}]},
-                        ],
-                    }
-                ],
+                "message": {
+                    "role": "assistant",
+                    "content": '{"is_suspicious": true}',
+                },
+                "logprobs": {
+                    "content": [
+                        {
+                            "token": "a",
+                            "logprob": -0.1,
+                            "top_logprobs": [{"token": "b", "logprob": -5.0}],
+                        },
+                        {
+                            "token": "c",
+                            "logprob": -0.3,
+                            "top_logprobs": [{"token": "d", "logprob": -9.0}],
+                        },
+                    ],
+                },
             }
-        ]
+        ],
     }
 
     monkeypatch.setattr(
         ollama_api,
         "_get_client",
-        lambda: SimpleNamespace(responses=SimpleNamespace(create=lambda **kwargs: response)),
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **kwargs: response),
+            ),
+        ),
     )
 
     result = ollama_api.prompt(
@@ -280,21 +306,20 @@ def test_check_transaction_persists_mean_confidence_from_logprobs(
     import math
 
     response = {
-        "output": [
+        "choices": [
             {
-                "type": "message",
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": '{"is_suspicious": true, "justification": "Confident finding"}',
-                        "logprobs": [
-                            {"token": "a", "logprob": -0.02},
-                            {"token": "b", "logprob": -0.05},
-                        ],
-                    }
-                ],
+                "message": {
+                    "role": "assistant",
+                    "content": '{"is_suspicious": true, "justification": "Confident finding"}',
+                },
+                "logprobs": {
+                    "content": [
+                        {"token": "a", "logprob": -0.02},
+                        {"token": "b", "logprob": -0.05},
+                    ],
+                },
             }
-        ]
+        ],
     }
     intercept_ollama_response(monkeypatch, response)
 
@@ -675,17 +700,29 @@ def intercept(app_to_inject: Flask, request: PreparedRequest):
         return resp.status_code, dict(resp.headers), resp.get_data()
 
 def intercept_ollama(monkeypatch: MonkeyPatch, model_response: str):
-    create=lambda **kwargs: SimpleNamespace(output_text=model_response)
-    responses=SimpleNamespace(create=create)
-    fake_client = SimpleNamespace(responses=responses)
+    create = lambda **kwargs: SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=model_response),
+            ),
+        ],
+    )
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        ),
+    )
 
     # Monkeypatch ollama api
     monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
 
 def intercept_ollama_response(monkeypatch: MonkeyPatch, response):
     """Intercept Ollama with a full response payload (e.g. including logprobs)."""
-    create=lambda **kwargs: response
-    responses=SimpleNamespace(create=create)
-    fake_client = SimpleNamespace(responses=responses)
+    create = lambda **kwargs: response
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        ),
+    )
 
     monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)

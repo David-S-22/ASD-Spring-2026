@@ -128,11 +128,15 @@ used for anomaly listings and agent context.
 ### `services/ollama_api.py`
 
 OpenAI-compatible client wrapper for the model server. It caches one client
-instance and sends system and user prompts with the configured model,
-temperature, token limit, and timeout. It requests token log probabilities and
-returns a `PromptResult` with the response `text` and the `mean_confidence`
-(the arithmetic mean of each chosen token's probability, `exp(logprob)`), or
-`None` when the server does not return log probabilities.
+instance and sends system and user prompts through Ollama's Chat Completions API
+with the configured model, temperature, token limit, and timeout. It requests
+token log probabilities and returns a `PromptResult` with the response `text`
+and the `mean_confidence` (the arithmetic mean of each chosen token's
+probability, `exp(logprob)`), or `None` when the server does not return log
+probabilities. Set
+`OLLAMA_LOG_LEVEL=DEBUG` to log the response's log-probability field locations,
+their shape, and the number of token scores extracted when investigating
+missing confidence values.
 
 ### `helpers.py`
 
