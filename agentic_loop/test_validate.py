@@ -184,3 +184,38 @@ def test_collect_rag_honours_RAG_SERVER_URL(monkeypatch):
 
     _ok, evidence = validate.collect_rag(get=get, post=lambda *a, **k: FakeResponse("", 500))
     assert seen["url"] == "http://127.0.0.1:5003/health" and "endpoint http://127.0.0.1:5003;" in evidence
+
+
+def test_prompt_families_exist_for_both_modes():
+    for family in ("mcp", "rag"):
+        for name in ("implementation/system_prompt.txt", "implementation/task_prompt.txt", "review/review_prompt.txt"):
+            path = REPO_ROOT / "prompts" / family / name
+            assert path.is_file(), path
+            assert path.read_text(encoding="utf-8").strip()
+
+
+def test_shared_record_round_trip_for_new_modes(tmp_path):
+    """Regression pin, not a new behaviour: the run-view line format the Release 1 captures cite."""
+    from agentic_loop.record import RunRecord
+
+    record = RunRecord(tmp_path / "reports")
+    record.start_mode("mcp", "MCP validation")
+    for step, message in (("PLAN", "Review target"), ("OBSERVE", "Collecting evidence"), ("OBSERVE", "Complete"), ("ACT", "impl"), ("ACT", "review"), ("ADAPT", "human")):
+        record.stage(step, message)
+    record.set(evidence="MCP evidence: endpoint x", implementation_output="o", review_output="r")
+    record.decision("edited", "corrected")
+    record.end_mode()
+    assert "[MCP validation] PLAN -> OBSERVE -> OBSERVE -> ACT -> ACT -> ADAPT => edited" in (tmp_path / "reports" / "run-view.md").read_text(encoding="utf-8")
+
+
+def test_modes_wiring(monkeypatch):
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=object))
+    monkeypatch.setitem(sys.modules, "dotenv", types.SimpleNamespace(load_dotenv=lambda *args, **kwargs: None))
+    sys.modules.pop("agentic_loop.main", None)
+    try:
+        main = importlib.import_module("agentic_loop.main")
+        assert main.MODES["architecture"][2] is main.collect_architecture
+        assert main.MODES["mcp"] == ("MCP validation", "mcp", validate.collect_mcp)
+        assert main.MODES["rag"] == ("RAG validation", "rag", validate.collect_rag)
+    finally:
+        sys.modules.pop("agentic_loop.main", None)

@@ -1,0 +1,7 @@
+Answer these five questions from the evidence, quoting the values:
+1. Which collections does /health list, and which of them have a registered benchmark?
+2. For each benchmark that ran, what was the closest distance and its source file?
+3. Is the off-topic distance larger than the on-topic distance it is compared with? Quote both numbers and answer yes or no.
+4. Was the unknown feature rejected with a 4xx, answered, or did the server error? Quote the status.
+5. In one sentence: did every benchmark that ran return at least one chunk, and is the off-topic distance larger than the on-topic one? Do not judge confidence; each backend applies its own bands.
+If the evidence says UNREACHABLE, answer that no collections were listed and no retrieval was made, and stop.

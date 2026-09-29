@@ -1,0 +1,6 @@
+Answer these four questions from the evidence, quoting the values:
+1. How many tools are registered and what are their names?
+2. Which smoke calls returned ok (with result shape and latency) and which did not (quote the status)? Tools marked "not exercised" were listed, not called.
+3. Were both boundary probes rejected? Quote each probe's status.
+4. In one sentence: is the MCP server fit to demonstrate, and why?
+If the evidence says UNREACHABLE, answer that no tools were listed and no calls were made, and stop.

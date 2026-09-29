@@ -10,6 +10,8 @@ on:
       - "shared/**"
       - "ai-services/rag-server/sources/bills/**"
       - "docker-compose.yml"
+      - "agentic_loop/**"
+      - "prompts/**"
   push:
     branches:
       - "main"
@@ -19,6 +21,8 @@ on:
       - "shared/**"
       - "ai-services/rag-server/sources/bills/**"
       - "docker-compose.yml"
+      - "agentic_loop/**"
+      - "prompts/**"
   workflow_dispatch:
 
 env:
@@ -42,6 +46,8 @@ jobs:
         run: python -m sophia.rag.build_corpus --from-seed --check
       - name: Run corpus tests
         run: python -m pytest sophia/rag -q
+      - name: Run shared loop tests
+        run: python -m pytest agentic_loop/test_validate.py -q
 
   docker-health:
     name: Bills container health with AI-Mode, MCP and RAG disabled

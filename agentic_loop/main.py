@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from .record import RunRecord
+from .validate import collect_mcp, collect_rag
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = REPO_ROOT / "prompts"
@@ -90,6 +91,8 @@ def collect_architecture():
 
 MODES = {
     "architecture": ("Architecture", "architecture", collect_architecture),
+    "mcp": ("MCP validation", "mcp", collect_mcp),
+    "rag": ("RAG validation", "rag", collect_rag),
 }
 
 
