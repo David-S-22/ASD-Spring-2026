@@ -35,6 +35,7 @@ def create_app():
     app.register_blueprint(tools.bp)
     app.register_blueprint(tools.ui)
     app.register_blueprint(evidence.bp)
+    app.register_blueprint(evidence.ui)
 
     @app.errorhandler(ServiceError)
     def handle_service_error(error):
