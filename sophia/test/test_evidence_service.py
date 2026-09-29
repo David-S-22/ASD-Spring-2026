@@ -72,7 +72,7 @@ def test_grounded_answer_cites_only_retrieved_sources_and_rates_the_cited_chunk(
     calls = fake_retrieval(monkeypatch, [BILL7, BILL3, FAR])
     attempts = fake_model(monkeypatch, {"answer": "Home internet (FibreLink, $79.00) is overdue.", "cited": ["bill-7-home-internet.md", "bill-99-invented.md"], "insufficient": False})
     result = evidence.ask("Which bill is overdue?")
-    assert calls == [("retrieve_context", {"feature": "billing", "question": "Which bill is overdue?", "k": 3})]
+    assert calls == [("retrieve_context", {"feature": "billing", "question": "Which bill is overdue?", "k": 6})]
     assert attempts[0][0] == config.CHAT_MODEL and attempts[0][2] == config.GROUNDED_TIMEOUT_SECONDS
     assert result["insufficient"] is False and result["fallback"] is False
     assert result["citations"] == [{"source": "bill-7-home-internet.md", "bill_id": 7, "title": "Home internet", "distance": 1.083}]
@@ -88,14 +88,32 @@ def test_retrieve_keeps_only_bill_files_from_the_shared_billing_collection(modes
     assert [chunk["source"] for chunk in chunks] == ["bill-7-home-internet.md"]
 
 
-def test_ask_never_uses_or_cites_the_hand_written_billing_files(modes, monkeypatch):
+def test_retrieve_fetches_past_the_shared_billing_files_so_k_bill_chunks_survive(modes, monkeypatch):
+    bills = [dict(BILL7, distance=1.083), dict(BILL3, distance=1.15), dict(FAR, distance=1.2)]
+    calls = fake_retrieval(monkeypatch, [OVERVIEW, POLICY] + bills)
+    chunks, _ = evidence.retrieve("Which bills do I have?", 3)
+    assert calls[0][1]["k"] == 3 + evidence.RETRIEVAL_MARGIN
+    assert [chunk["source"] for chunk in chunks] == ["bill-7-home-internet.md", "bill-3-spotify.md", "bill-1-rent.md"]
+
+
+def test_retrieve_returns_at_most_k_bill_chunks_closest_first(modes, monkeypatch):
+    bills = [dict(BILL7, id=f"billing_bill-{n}-x.md_0", metadata={"source": f"bill-{n}-x.md"}, distance=distance)
+             for n, distance in [(1, 1.3), (2, 1.0), (3, 1.2), (4, 0.9), (5, 1.1), (6, 1.25)]]
+    fake_retrieval(monkeypatch, bills)
+    chunks, _ = evidence.retrieve("Which bills do I have?", 3)
+    assert [chunk["source"] for chunk in chunks] == ["bill-4-x.md", "bill-2-x.md", "bill-5-x.md"]
+
+
+def test_ask_never_uses_or_cites_the_hand_written_billing_files(modes, monkeypatch, caplog):
     fake_retrieval(monkeypatch, [OVERVIEW, POLICY, dict(BILL7, distance=1.08)])
+    caplog.set_level("INFO", logger=evidence.logger.name)
     attempts = fake_model(monkeypatch, {"answer": "Home internet is overdue.", "cited": ["billing_overview.md", "billing_policy.pdf", "bill-7-home-internet.md"], "insufficient": False})
     result = evidence.ask("Which bill is overdue?")
     assert [citation["source"] for citation in result["citations"]] == ["bill-7-home-internet.md"]
     assert [row["source"] for row in result["retrieval"]] == ["bill-7-home-internet.md"]
     prompt = attempts[0][1][0]["content"]
     assert "Billing overview" not in prompt and "Late fees" not in prompt
+    assert "kept=1" in caplog.text and "results=" not in caplog.text
 
 
 def test_only_hand_written_billing_files_retrieved_is_insufficient_with_no_model_call(modes, monkeypatch):
