@@ -1,3 +1,4 @@
+import importlib
 import pathlib
 import sys
 
@@ -11,16 +12,12 @@ david_dir = pathlib.Path(__file__).resolve().parent.parent
 add_to_path(root_dir)
 add_to_path(david_dir)
 
-import backend.savings_service
-import backend.savings_service.app
-import backend.savings_service.classifier_service
-import backend.savings_service.helpers
-import backend.savings_service.ollama_service
-import backend.savings_service.suggestion_service
+# Map backend.savings-service to backend.savings_service so hyphenated directory can be imported
+pkg = importlib.import_module("backend.savings-service")
+sys.modules["backend.savings_service"] = pkg
+sys.modules["savings_service"] = pkg
 
-sys.modules["savings_service"] = backend.savings_service
-sys.modules["backend.savings-service"] = backend.savings_service
-for sub in ["app", "classifier_service", "helpers", "ollama_service", "suggestion_service"]:
-    mod = getattr(backend.savings_service, sub)
-    sys.modules[f"savings_service.{sub}"] = mod
-    sys.modules[f"backend.savings-service.{sub}"] = mod
+for sub in ["app", "helpers", "ollama_service", "classifier_service", "suggestion_service"]:
+    m = importlib.import_module(f"backend.savings-service.{sub}")
+    sys.modules[f"backend.savings_service.{sub}"] = m
+    sys.modules[f"savings_service.{sub}"] = m
