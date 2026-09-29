@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from sophia.backend import config
 from sophia.backend.clients import bills_db, mcp_server
+from sophia.backend.fragment_errors import register_fragment_error_handlers
 from sophia.backend.json_body import json_body
 from sophia.backend.services.errors import NotFound, ServiceError
 from sophia.backend.services.tools import call_allowed_tool
@@ -30,20 +31,8 @@ def call_tool(name):
 
 
 ui = Blueprint("tools_ui", __name__, url_prefix="/ui/tools")
+register_fragment_error_handlers(ui)
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
-
-
-@ui.errorhandler(ServiceError)
-def handle_ui_error(error):
-    status = error.status if error.status >= 500 else 422
-    return render_template("error_fragment.html", message=error.message), status
-
-
-@ui.errorhandler(Exception)
-def handle_unexpected_ui_error(error):
-    if isinstance(error, ServiceError):
-        raise error
-    return render_template("error_fragment.html", message="Something went wrong — try again."), 500
 
 
 def _display_date(value):
