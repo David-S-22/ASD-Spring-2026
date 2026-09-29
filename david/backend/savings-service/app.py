@@ -234,7 +234,10 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        suggestion, sources, confidence = generate_savings_advice(db_url, tx_url=tx_url)
+        previous_suggestion = request.args.get("suggestion")
+        suggestion, sources, confidence = generate_savings_advice(
+            db_url, tx_url=tx_url, previous_suggestion=previous_suggestion
+        )
         return render_template(
             "ai-suggestion.jinja",
             suggestion=suggestion,
