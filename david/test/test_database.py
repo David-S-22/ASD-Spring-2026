@@ -2,7 +2,7 @@ from database.models import Suggestion
 from typing import List
 from typing import List
 from database.models import Feedback
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
 from flask.testing import FlaskClient
 from flask import Flask
@@ -83,6 +83,39 @@ def test_get_all_goals(client: FlaskClient):
     assert expected_goals[1].cost == response_json[1]["cost"]
     assert expected_goals[1].name == response_json[1]["name"]
     assert expected_goals[1].date == parser.parse(response_json[1]["date"]).replace(tzinfo=None)
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_get_goals_active_only(client: FlaskClient):
+    now = datetime.now()
+    past_goal = Goal(name="Past Goal", cost=50, date=now - timedelta(days=10))
+    near_goal = Goal(name="Near Goal", cost=150, date=now + timedelta(days=5))
+    far_goal = Goal(name="Far Goal", cost=250, date=now + timedelta(days=20))
+    db.session.add_all([past_goal, near_goal, far_goal])
+    db.session.commit()
+
+    response = client.get("/goals?active_only=true")
+    assert response.status_code == 200
+    data = response.get_json()
+    names = [g["name"] for g in data]
+    assert "Past Goal" not in names
+    assert names == ["Near Goal", "Far Goal"]
+
+
+@pytest.mark.usefixtures("app_ctx")
+def test_get_goals_top_condition(client: FlaskClient):
+    now = datetime.now()
+    past_goal = Goal(name="Past Goal", cost=50, date=now - timedelta(days=10))
+    near_goal = Goal(name="Near Goal", cost=150, date=now + timedelta(days=5))
+    far_goal = Goal(name="Far Goal", cost=250, date=now + timedelta(days=20))
+    db.session.add_all([past_goal, near_goal, far_goal])
+    db.session.commit()
+
+    response = client.get("/goals?active_only=true&top=1")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data) == 1
+    assert data[0]["name"] == "Near Goal"
 
 
 @pytest.mark.usefixtures("app_ctx")

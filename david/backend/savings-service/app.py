@@ -125,7 +125,7 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
         if resp.status_code == 404:
             abort(404)
         resp.raise_for_status()
-        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged"})
+        return make_response(*get_suggestions(), {"HX-Trigger": "suggestionChanged, feedbackChanged"})
 
     @app.route("/feedback")
     def get_feedback():
@@ -234,7 +234,10 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
 
     @app.route("/ai-suggestion")
     def get_ai_suggestion():
-        suggestion, sources, confidence = generate_savings_advice(db_url, tx_url=tx_url)
+        previous_suggestion = request.args.get("suggestion")
+        suggestion, sources, confidence = generate_savings_advice(
+            db_url, tx_url=tx_url, previous_suggestion=previous_suggestion
+        )
         return render_template(
             "ai-suggestion.jinja",
             suggestion=suggestion,

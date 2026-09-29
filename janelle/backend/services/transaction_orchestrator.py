@@ -12,7 +12,7 @@ from uuid import uuid4
 from flask import current_app, has_app_context
 
 from .. import config
-from . import chat_service, ollama_service
+from . import category_grounding, chat_service, ollama_service, rag_corpus
 from .agent_cycle import SAFE_FAILURE, run_cycle
 
 
@@ -127,6 +127,8 @@ def run_category_selection(payload, db_url):
             "selected_category_name": names[selected_category_id],
             "requires_user_response": False,
         }
+        if "grounding" in pending:
+            category_selection["grounding"] = deepcopy(pending["grounding"])
         plan = {
             **pending["plan"],
             "fields": {
@@ -232,10 +234,34 @@ def run_confirmed_transaction(payload, db_url):
             cycle_result,
         )
         complete_apply(request_id, response)
-        return response
     except Exception:
         fail_apply(request_id)
         raise
+    schedule_after_write_refresh(response, db_url)
+    return response
+
+
+def schedule_after_write_refresh(response, db_url):
+    if (
+        response.get("operation") != "create"
+        or response.get("saved") is not True
+        or not config.RAG_ENABLED
+        or not config.RAG_REFRESH_AFTER_WRITE
+    ):
+        return
+    try:
+        rag_corpus.start_background_refresh(db_url, "after_write")
+    except Exception as error:
+        log_workflow_event({
+            "event": "RAG_REFRESH",
+            "trigger": "after_write",
+            "collection": config.RAG_RECORDS_COLLECTION,
+            "total": 0,
+            "kinds": {"transaction": 0, "correction": 0},
+            "duration_ms": 0,
+            "status": "failed",
+            "error": type(error).__name__,
+        })
 
 
 def plan_transaction(context):
@@ -450,16 +476,28 @@ def act_on_create(plan, context):
             "database_calls": [],
         }
 
-    suggested_category_id = corrected_category_suggestion(
-        clean["merchant"],
-        context,
+    database_calls = []
+    suggested_category_id, grounding = (
+        category_grounding.grounded_category_suggestion(clean, context)
     )
-    if suggested_category_id is None:
-        suggested_category_id = resolve_suggested_category(
-            fields,
-            context["category_names"],
-            context["category_ids"],
+    if grounding["status"] != "disabled":
+        database_calls.append("RAG /retrieve x2")
+    if suggested_category_id is None and grounding["status"] in {
+        "unavailable",
+        "disabled",
+        "insufficient",
+    }:
+        suggested_category_id = corrected_category_suggestion(
+            clean["merchant"],
+            context,
         )
+        database_calls.append("GET /category-corrections")
+        if suggested_category_id is None:
+            suggested_category_id = resolve_suggested_category(
+                fields,
+                context["category_names"],
+                context["category_ids"],
+            )
     suggested_category_name = context["category_names"].get(
         suggested_category_id
     )
@@ -471,13 +509,21 @@ def act_on_create(plan, context):
         "selected_category_name": None,
         "requires_user_response": True,
     }
+    pending_category = {
+        "message": context["message"],
+        "plan": deepcopy(plan),
+        "fields": clean,
+        "suggested_category_id": suggested_category_id,
+    }
+    # With the switch off the Release 0 payload is left byte-identical.
+    if grounding["status"] != "disabled":
+        category_selection["grounding"] = deepcopy(grounding)
+        pending_category["grounding"] = deepcopy(grounding)
     result = {
         **chat_service.build_base_response(plan),
-        "reply": (
-            f"I suggest {suggested_category_name}. "
-            f"Use {suggested_category_name}, or choose another category."
-            if suggested_category_name is not None
-            else "Choose a category before I prepare this transaction."
+        "reply": category_suggestion_reply(
+            suggested_category_name,
+            grounding,
         ),
         "requires_clarification": True,
         "category_selection": category_selection,
@@ -487,14 +533,23 @@ def act_on_create(plan, context):
         "type": "category_selection",
         "status": "succeeded",
         "result": result,
-        "pending_category": {
-            "message": context["message"],
-            "plan": deepcopy(plan),
-            "fields": clean,
-            "suggested_category_id": suggested_category_id,
-        },
-        "database_calls": ["GET /category-corrections"],
+        "pending_category": pending_category,
+        "database_calls": database_calls,
     }
+
+
+def category_suggestion_reply(suggested_category_name, grounding):
+    if grounding["status"] == "insufficient":
+        return (
+            "I couldn't find past transactions or notes similar enough to "
+            "suggest a category. Choose a category to continue."
+        )
+    if suggested_category_name is not None:
+        return (
+            f"I suggest {suggested_category_name}. "
+            f"Use {suggested_category_name}, or choose another category."
+        )
+    return "Choose a category before I prepare this transaction."
 
 
 def act_on_confirmed_transaction(plan, context):

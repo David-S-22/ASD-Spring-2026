@@ -122,3 +122,41 @@ def _rag_thresholds():
 
 
 RAG_HIGH, RAG_MEDIUM, RAG_LOW = _rag_thresholds()
+
+# Model log-probability gate on the grounded category answer.
+RAG_LOGPROBS = _environment_flag("RAG_LOGPROBS", True)
+_RAG_PROBABILITY_DEFAULTS = (0.8, 0.5)
+
+
+def _rag_probability_thresholds():
+    """Return the (high, medium) minimum answer probabilities.
+
+    Ollama returns per-token log probabilities when asked; the probability of
+    the category-name tokens must be at least RAG_PROB_HIGH to keep a high
+    band and at least RAG_PROB_MEDIUM to keep a medium band, otherwise the
+    band is downgraded one step. Values must satisfy 0 < medium < high <= 1.
+    """
+    try:
+        high = float(os.environ.get(
+            "RAG_PROB_HIGH",
+            str(_RAG_PROBABILITY_DEFAULTS[0]),
+        ))
+        medium = float(os.environ.get(
+            "RAG_PROB_MEDIUM",
+            str(_RAG_PROBABILITY_DEFAULTS[1]),
+        ))
+    except ValueError:
+        high = medium = None
+
+    if high is not None and 0 < medium < high <= 1:
+        return high, medium
+
+    logging.getLogger(__name__).warning(
+        "Invalid RAG probability thresholds; using defaults "
+        "RAG_PROB_HIGH=%s RAG_PROB_MEDIUM=%s",
+        *_RAG_PROBABILITY_DEFAULTS,
+    )
+    return _RAG_PROBABILITY_DEFAULTS
+
+
+RAG_PROB_HIGH, RAG_PROB_MEDIUM = _rag_probability_thresholds()

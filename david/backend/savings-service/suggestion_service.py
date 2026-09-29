@@ -37,36 +37,36 @@ def _format_active_goals(goals: list[dto.Goal] | list[dict[str, Any]] | None) ->
     ]
 
 def _format_past_suggestions(suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None) -> list[str]:
-    """Formats past suggestions with their acceptance status and feedback rationale."""
+    """Formats past suggestions with their acceptance status and user feedback rationale (newest first)."""
     formatted_suggestions = []
-    for suggestion in (suggestions or []):
+    for suggestion in reversed(suggestions or []):
         text = str(_get_item_field(suggestion, "suggestion", "") or "").strip()
+        if not text:
+            continue
         is_accepted = bool(_get_item_field(suggestion, "accepted", False))
         feedback_comment = _get_item_field(suggestion, "feedback", None)
         status = "ACCEPTED" if is_accepted else "REJECTED"
         if feedback_comment:
-            formatted_suggestions.append(f'[{status}] "{text}" -> Feedback: "{feedback_comment}"')
+            formatted_suggestions.append(f'[{status}] "{text}" -> User Feedback: "{feedback_comment}"')
         else:
             formatted_suggestions.append(f'[{status}] "{text}"')
     return formatted_suggestions
 
+
 def _format_feedback_for_planner(
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
-) -> list[dict[str, str]]:
-    """Formats general user feedback preferences for the planner prompt JSON block (newest first).
-
-    Feedbacks linked to past suggestions (suggestion_id is not None) are excluded here,
-    as they are already incorporated into the prompt within past suggestions.
-    """
+) -> list[dict[str, Any]]:
+    """Formats all user feedback and preferences for the planner prompt (newest first)."""
     preferences = []
     for feedback_item in reversed(feedbacks or []):
-        if _get_item_field(feedback_item, "suggestion_id") is not None:
-            continue
         rule_text = str(_get_item_field(feedback_item, "feedback", "") or "").strip()
         if not rule_text:
             continue
-        preference = {"rule": rule_text}
+        preference: dict[str, Any] = {"preference": rule_text}
+        sugg_id = _get_item_field(feedback_item, "suggestion_id")
+        if sugg_id is not None:
+            preference["on_suggestion_id"] = sugg_id
         category_id = _get_item_field(feedback_item, "category_id")
         if category_id is not None and category_id in category_map:
             preference["category"] = category_map[category_id]
@@ -128,10 +128,10 @@ def format_planner_prompt(
     """Constructs the structured JSON data block for the 8B planner prompt."""
     categories = fetch_categories(tx_url)
     category_map = {category.id: category.name for category in categories} if categories else {}
-    tables = {
+    tables: dict[str, Any] = {
         "active_goals": _format_active_goals(goals),
-        "past_suggestions": _format_past_suggestions(suggestions),
-        "general_user_preferences": _format_feedback_for_planner(feedbacks, category_map),
+        "recent_suggestions_and_feedback": _format_past_suggestions(suggestions),
+        "user_preferences_and_constraints": _format_feedback_for_planner(feedbacks, category_map),
     }
     return f"User Financial Data:\n{json.dumps(tables, indent=2)}"
 
@@ -215,43 +215,43 @@ def generate_context_retrieval_args(
     }
 
 def _format_transactions_for_prompt(
-    transactions: list[dict[str, Any]] | None,
+    transactions: list[dto.Transaction] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
 ) -> list[dict[str, str]]:
     """Formats and enriches transactions with readable dates, amounts, and category names."""
     formatted = []
     for tx in (transactions or []):
         item = {
-            "date": str(tx.get("date", ""))[:10],
-            "merchant": str(tx.get("merchant", "") or ""),
-            "description": str(tx.get("description", "") or ""),
-            "amount": _format_amount(tx.get("amount", 0)),
+            "date": str(_get_item_field(tx, "date", ""))[:10],
+            "merchant": str(_get_item_field(tx, "merchant", "") or ""),
+            "description": str(_get_item_field(tx, "description", "") or ""),
+            "amount": _format_amount(_get_item_field(tx, "amount", 0)),
         }
-        category_id = tx.get("category_id")
+        category_id = _get_item_field(tx, "category_id")
         if category_id is not None and category_id in category_map:
             item["category"] = category_map[category_id]
         formatted.append(item)
     return formatted
 
 def _aggregate_spending_by_merchant(
-    transactions: list[dict[str, Any]] | None,
+    transactions: list[dto.Transaction] | list[dict[str, Any]] | None,
     category_map: dict[int, str],
 ) -> list[dict[str, Any]]:
     """Aggregates spending totals and transaction counts grouped by merchant."""
     merchants: dict[str, dict[str, Any]] = {}
     for tx in (transactions or []):
-        merchant = str(tx.get("merchant") or "Unknown").strip()
+        merchant = str(_get_item_field(tx, "merchant") or "Unknown").strip()
         try:
-            amount = float(tx.get("amount", 0))
+            amount = float(_get_item_field(tx, "amount", 0))
         except (ValueError, TypeError):
             amount = 0.0
 
-        category_id = tx.get("category_id")
+        category_id = _get_item_field(tx, "category_id")
         category_name = None
         if category_id is not None and category_id in category_map:
             category_name = category_map[category_id]
-        elif "category" in tx:
-            category_name = tx.get("category")
+        elif _get_item_field(tx, "category") is not None:
+            category_name = _get_item_field(tx, "category")
 
         if merchant not in merchants:
             merchants[merchant] = {
@@ -349,14 +349,26 @@ def _build_advice_prompt(
     spending_summary: list[dict[str, Any]],
     formatted_transactions: list[dict[str, str]],
     rag_context_blocks: str,
+    previous_suggestion: str | None = None,
 ) -> str:
     """Constructs the prompt for the savings advice planner model."""
+    previous_block = ""
+    if previous_suggestion and str(previous_suggestion).strip():
+        previous_block = (
+            f"Previous Suggestion: \"{str(previous_suggestion).strip()}\"\n"
+            "Do not generate advice similar to or for the same area as the previous suggestion. Target a different spending area.\n\n"
+        )
+
     return (
         f"{user_data}\n\n"
+        f"{previous_block}"
         f"Pre-Calculated Spending Summary by Merchant:\n{json.dumps(spending_summary, indent=2)}\n\n"
         f"Retrieved Transactions:\n{json.dumps(formatted_transactions, indent=2)}\n\n"
         f"Retrieved Savings Advice Guidelines:\n{rag_context_blocks}\n\n"
-        "Deliver 1 or 2 personalized savings advice sentences in a single plain text paragraph based on the guidelines and spending data. "
+        "Output 1 or 2 direct savings advice sentences in a single plain text paragraph. "
+        "Start immediately with an action verb (e.g. 'Cancel...', 'Pause...', 'Trim...'). "
+        "Deliver personalized, actionable advice linked to an active goal name, respecting user feedback and exploring varied discretionary areas. "
+        "Do NOT include any intro, preamble, quotation marks, or closing notes/disclaimers. "
         "If context is insufficient, reply strictly with: Insufficient context to generate savings advice."
     )
 
@@ -366,6 +378,7 @@ def generate_advice(
     suggestions: list[dto.Suggestion] | list[dict[str, Any]] | None,
     feedbacks: list[dto.Feedback] | list[dict[str, Any]] | None,
     tx_url: str | None = None,
+    previous_suggestion: str | None = None,
 ) -> tuple[str, str | None, str | None]:
     """Coordinates retrieval of transactions & RAG context via MCP and prompts the planner model to generate savings advice."""
     if not goals:
@@ -387,13 +400,19 @@ def generate_advice(
 
     user_data = format_planner_prompt(goals, suggestions, feedbacks, tx_url=tx_url)
     system_prompt = load_prompt("savings_prompt.txt")
-    user_prompt = _build_advice_prompt(user_data, spending_summary, formatted_transactions, rag_context_blocks)
+    user_prompt = _build_advice_prompt(
+        user_data,
+        spending_summary,
+        formatted_transactions,
+        rag_context_blocks,
+        previous_suggestion=previous_suggestion,
+    )
 
     raw_advice, confidence_category = get_ai_text_and_calculate_confidence(
         user_prompt,
         model=planner_model,
         system_prompt=system_prompt,
-        temperature=0.25,
+        temperature=0.6,
     )
 
     if not raw_advice or raw_advice.strip().lower().startswith("insufficient context"):
@@ -404,22 +423,32 @@ def generate_advice(
     return advice_paragraph, sources_str, str(confidence_category)
 
 
-def generate_savings_advice(db_url: str, tx_url: str | None = None) -> tuple[str, str | None, str | None]:
+def generate_savings_advice(
+    db_url: str,
+    tx_url: str | None = None,
+    previous_suggestion: str | None = None,
+) -> tuple[str, str | None, str | None]:
     """Top-level entry point to fetch data and generate personalized savings advice."""
-    goals = fetch_goals(db_url)
-    if not goals:
-        return (
-            "You don't have any active savings goals yet. "
-            "Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!",
-            None,
-            None,
-        )
-
-    feedbacks = fetch_feedbacks(db_url)
-    suggestions = fetch_suggestions(db_url)
-
     try:
-        advice, sources, confidence = generate_advice(goals, suggestions, feedbacks, tx_url=tx_url)
+        goals = fetch_goals(db_url, active_only=True, top=3)
+        if not goals:
+            return (
+                "You don't have any active savings goals yet. "
+                "Add a goal in the Savings Goals table to receive personalized, adaptive savings advice!",
+                None,
+                None,
+            )
+
+        feedbacks = fetch_feedbacks(db_url)
+        suggestions = fetch_suggestions(db_url)
+
+        if not previous_suggestion and suggestions:
+            latest = suggestions[-1]
+            previous_suggestion = _get_item_field(latest, "suggestion", None)
+
+        advice, sources, confidence = generate_advice(
+            goals, suggestions, feedbacks, tx_url=tx_url, previous_suggestion=previous_suggestion
+        )
         if advice:
             return advice, sources, confidence
         return "Error: Could not generate AI savings suggestion (empty response received from AI model).", None, None

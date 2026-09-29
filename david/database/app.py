@@ -21,7 +21,20 @@ def setup_app(database_path) -> Flask:
 
     @app.route("/goals")
     def get_goals():
-        goals = db.session.execute(db.select(Goal)).scalars().all()
+        query = db.select(Goal)
+        active_only = request.args.get("active_only")
+        if active_only and active_only.lower() in ("true", "1"):
+            today = datetime.datetime.now()
+            query = query.where(Goal.date >= today).order_by(Goal.date.asc())
+
+        top = request.args.get("top") or request.args.get("limit")
+        if top:
+            try:
+                query = query.limit(int(top))
+            except (ValueError, TypeError):
+                pass
+
+        goals = db.session.execute(query).scalars().all()
         return jsonify([goal.to_dto() for goal in goals])
 
     @app.route("/suggestions")
