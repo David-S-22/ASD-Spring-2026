@@ -34,7 +34,10 @@ def create_app():
 
     @app.errorhandler(ServiceError)
     def handle_service_error(error):
-        return jsonify({"error": error.message}), error.status
+        payload = {"error": error.message}
+        if error.code:
+            payload["code"] = error.code
+        return jsonify(payload), error.status
 
     @app.get("/health")
     def health():
