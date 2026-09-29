@@ -156,3 +156,10 @@ def test_blank_question_is_a_400(modes, monkeypatch):
     with pytest.raises(ServiceError) as info:
         evidence.ask("   ")
     assert info.value.status == 400 and calls == []
+
+
+def test_non_string_question_is_a_400(modes, monkeypatch):
+    calls = fake_retrieval(monkeypatch, [BILL7])
+    with pytest.raises(ServiceError) as info:
+        evidence.ask(5)
+    assert info.value.status == 400 and calls == []
