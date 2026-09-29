@@ -75,7 +75,7 @@ jobs:
           cat evidence.json; echo
           test "$code" = "503" || exit 1
           grep '"code":"mcp_disabled"' evidence.json || exit 1
-          code=$(curl --silent --output tool.json --write-out '%{http_code}' -X POST http://127.0.0.1:5005/api/tools/retrieve_context -H 'content-type: application/json' -d '{"feature":"bills","question":"Which bill is overdue?","k":2}')
+          code=$(curl --silent --output tool.json --write-out '%{http_code}' -X POST http://127.0.0.1:5005/api/tools/retrieve_context -H 'content-type: application/json' -d '{"feature":"billing","question":"Which bill is overdue?","k":2}')
           cat tool.json; echo
           test "$code" = "503" || exit 1
           grep '"code":"mcp_disabled"' tool.json || exit 1
