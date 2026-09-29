@@ -1,4 +1,4 @@
-"""Hand-written validators for the two AI response shapes. No jsonschema/pydantic."""
+"""Hand-written validators for the AI response shapes. No jsonschema/pydantic."""
 
 
 def validate_dispute_draft(data):
@@ -61,4 +61,22 @@ def validate_chat_response(data):
             return 'op "create" requires fields'
         if op in ("update", "delete") and not isinstance(data.get("id"), int):
             return f'op "{op}" requires an integer id'
+    return None
+
+
+def validate_grounded_answer(data):
+    """Return an error message string, or None when data satisfies the grounded-answer shape."""
+    if not isinstance(data, dict):
+        return "response must be a JSON object"
+    answer = data.get("answer")
+    if not isinstance(answer, str) or len(answer) > 300:
+        return "answer must be a string of at most 300 characters"
+    cited = data.get("cited")
+    if not isinstance(cited, list) or not all(isinstance(s, str) for s in cited):
+        return "cited must be a list of source file names"
+    insufficient = data.get("insufficient")
+    if not isinstance(insufficient, bool):
+        return "insufficient must be true or false"
+    if not insufficient and not answer.strip():
+        return "answer must not be empty unless insufficient is true"
     return None
