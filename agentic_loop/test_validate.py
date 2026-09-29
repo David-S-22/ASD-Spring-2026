@@ -174,6 +174,39 @@ def test_collect_rag_keeps_going_when_one_retrieval_fails_after_health_ok():
     assert "Unknown feature no-such-feature -> error (read timed out)" in evidence
 
 
+MALFORMED_RESULT_SHAPES = [
+    pytest.param([{"id": "x", "text": "t", "metadata": {"source": "s"}}], id="missing_distance"),
+    pytest.param([{"id": "x", "text": "t", "metadata": {"source": "s"}, "distance": "near"}], id="string_distance"),
+    pytest.param([{"id": "x", "text": "t", "metadata": {"source": "s"}, "distance": None}], id="none_distance"),
+    pytest.param(
+        [
+            {"id": "a", "text": "t", "metadata": {"source": "s"}, "distance": None},
+            {"id": "b", "text": "t", "metadata": {"source": "s"}, "distance": 1.0},
+        ],
+        id="mixed_none_distance",
+    ),
+    pytest.param([{"id": "x", "text": "t", "metadata": "bills", "distance": 1.0}], id="non_dict_metadata"),
+]
+
+
+@pytest.mark.parametrize("results", MALFORMED_RESULT_SHAPES)
+def test_collect_rag_records_a_malformed_result_as_an_error_not_a_crash(monkeypatch, results):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", {"bills": "Which bill is overdue?"})
+    get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): results})
+    ok, evidence = validate.collect_rag(get=get, post=post)
+    assert ok is True
+    assert 'bills "Which bill is overdue?" -> error (' in evidence
+
+
+def test_collect_rag_stringifies_a_non_string_text_instead_of_erroring(monkeypatch):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", {"bills": "Which bill is overdue?"})
+    results = [{"id": "x", "text": 42, "metadata": {"source": "s"}, "distance": 1.0}]
+    get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): results})
+    ok, evidence = validate.collect_rag(get=get, post=post)
+    assert ok is True
+    assert '("42")' in evidence
+
+
 def test_collect_rag_honours_RAG_SERVER_URL(monkeypatch):
     monkeypatch.setenv("RAG_SERVER_URL", "http://127.0.0.1:5003/")
     seen = {}

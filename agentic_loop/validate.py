@@ -132,19 +132,19 @@ def _retrieve(post, url, feature, question):
         if response.status_code != 200:
             return {"status": response.status_code, "detail": "", "ms": ms, "count": 0, "closest": None, "source": None, "text": ""}
         results = [r for r in (response.json().get("results") or []) if isinstance(r, dict)]
+        top = min(results, key=lambda r: r["distance"]) if results else None
+        return {
+            "status": 200,
+            "detail": "",
+            "ms": ms,
+            "count": len(results),
+            "closest": float(top["distance"]) if top else None,
+            "source": (top.get("metadata") or {}).get("source", "?") if top else None,
+            "text": " ".join(str(top.get("text") or "").lstrip("# ").split())[:60] if top else "",
+        }
     except Exception as exc:
         ms = round((time.perf_counter() - started) * 1000)
         return {"status": "error", "detail": _one_line(exc), "ms": ms, "count": 0, "closest": None, "source": None, "text": ""}
-    top = min(results, key=lambda r: r.get("distance", float("inf"))) if results else None
-    return {
-        "status": 200,
-        "detail": "",
-        "ms": ms,
-        "count": len(results),
-        "closest": float(top["distance"]) if top else None,
-        "source": (top.get("metadata") or {}).get("source", "?") if top else None,
-        "text": " ".join((top.get("text") or "").lstrip("# ").split())[:60] if top else "",
-    }
 
 
 def _format_benchmark(probe):
