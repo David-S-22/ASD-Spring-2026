@@ -121,3 +121,92 @@ def collect_mcp(probe=None):
     except Exception as exc:
         return True, f"MCP evidence: endpoint {url} UNREACHABLE ({_one_line(exc)}). No tools listed, no calls made."
     return True, _format_mcp(url, result)
+
+
+def _retrieve(post, url, feature, question):
+    """POST /retrieve once and summarise the closest chunk; a failure is recorded on this probe only."""
+    started = time.perf_counter()
+    try:
+        response = post(f"{url}/retrieve", json={"feature": feature, "question": question, "k": 3}, timeout=HTTP_TIMEOUT)
+        ms = round((time.perf_counter() - started) * 1000)
+        if response.status_code != 200:
+            return {"status": response.status_code, "detail": "", "ms": ms, "count": 0, "closest": None, "source": None, "text": ""}
+        results = [r for r in (response.json().get("results") or []) if isinstance(r, dict)]
+    except Exception as exc:
+        ms = round((time.perf_counter() - started) * 1000)
+        return {"status": "error", "detail": _one_line(exc), "ms": ms, "count": 0, "closest": None, "source": None, "text": ""}
+    top = min(results, key=lambda r: r.get("distance", float("inf"))) if results else None
+    return {
+        "status": 200,
+        "detail": "",
+        "ms": ms,
+        "count": len(results),
+        "closest": float(top["distance"]) if top else None,
+        "source": (top.get("metadata") or {}).get("source", "?") if top else None,
+        "text": " ".join((top.get("text") or "").lstrip("# ").split())[:60] if top else "",
+    }
+
+
+def _format_benchmark(probe):
+    """Render one benchmark probe as 'feature "question" -> …' for the evidence line."""
+    if probe["absent"]:
+        return f"{probe['feature']}: collection absent, no benchmark run"
+    if probe["status"] == "error":
+        return f"{probe['feature']} \"{probe['question']}\" -> error ({probe['detail']})"
+    if probe["status"] != 200:
+        return f"{probe['feature']} \"{probe['question']}\" -> HTTP {probe['status']}, no results"
+    if probe["closest"] is None:
+        return f"{probe['feature']} \"{probe['question']}\" -> 0 results, {probe['ms']}ms"
+    return (f"{probe['feature']} \"{probe['question']}\" -> {probe['count']} results, closest {probe['closest']:.3f} "
+            f"from {probe['source']} (\"{probe['text']}\"), {probe['ms']}ms")
+
+
+def _format_rag(url, collections, probes, off_topic, unknown):
+    """Render the collections, benchmarks, off-topic and unknown-feature probes as the one-paragraph OBSERVE evidence."""
+    benchmarks = "; ".join(_format_benchmark(p) for p in probes) or "none"
+    extras = "; ".join(f"{name}: collection listed, no benchmark registered" for name in collections if name not in RAG_BENCHMARKS)
+    if off_topic is None:
+        off_text = "Off-topic probe skipped (no benchmark returned results)"
+    elif off_topic["status"] == "error":
+        off_text = f"Off-topic probe on {off_topic['feature']} -> error ({off_topic['detail']})"
+    elif off_topic["closest"] is None:
+        off_text = f"Off-topic probe on {off_topic['feature']} -> no results"
+    else:
+        off_text = f"Off-topic probe on {off_topic['feature']} -> closest {off_topic['closest']:.3f} (on-topic {off_topic['on_topic']:.3f})"
+    if unknown["status"] == "error":
+        unknown_text = f"error ({unknown['detail']})"
+    elif unknown["status"] == 200:
+        unknown_text = f"NOT rejected ({unknown['count']} results)"
+    elif 400 <= unknown["status"] < 500:
+        unknown_text = f"rejected (HTTP {unknown['status']})"
+    else:
+        unknown_text = f"server error (HTTP {unknown['status']}), not a clean rejection"
+    return (
+        f"RAG evidence: endpoint {url}; /health ok, {len(collections)} collections: {', '.join(collections) or 'none'}. "
+        f"Benchmarks: {benchmarks}{'; ' + extras if extras else ''}. {off_text}. "
+        f"Unknown feature {UNKNOWN_FEATURE} -> {unknown_text}."
+    )
+
+
+def collect_rag(get=None, post=None):
+    """RAG validation evidence: collections, one benchmark per registered feature, an off-topic and an unknown-feature probe."""
+    url = os.getenv("RAG_SERVER_URL", DEFAULT_RAG_URL).rstrip("/")
+    get = get or requests.get
+    post = post or requests.post
+    try:
+        collections = [str(c) for c in (get(f"{url}/health", timeout=HTTP_TIMEOUT).json().get("collections") or [])]
+    except Exception as exc:
+        return True, f"RAG evidence: endpoint {url} UNREACHABLE ({_one_line(exc)}). No collections listed, no retrieval made."
+    probes = []
+    for feature, question in RAG_BENCHMARKS.items():
+        if feature not in collections:
+            probes.append({"feature": feature, "question": question, "absent": True})
+            continue
+        probes.append({"feature": feature, "question": question, "absent": False, **_retrieve(post, url, feature, question)})
+    answered = [p for p in probes if not p["absent"] and p["status"] == 200 and p["closest"] is not None]
+    off_topic = None
+    if answered:
+        first = answered[0]
+        off_topic = {"feature": first["feature"], "on_topic": first["closest"], **_retrieve(post, url, first["feature"], OFF_TOPIC_QUESTION)}
+    unknown = _retrieve(post, url, UNKNOWN_FEATURE, OFF_TOPIC_QUESTION)
+    return True, _format_rag(url, collections, probes, off_topic, unknown)

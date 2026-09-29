@@ -83,3 +83,104 @@ def test_collect_mcp_honours_MCP_SERVER_URL(monkeypatch):
 
     _ok, evidence = validate.collect_mcp(probe=probe)
     assert seen["url"] == "http://127.0.0.1:8000/mcp" and "endpoint http://127.0.0.1:8000/mcp" in evidence
+
+
+class FakeResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+
+def _chunk(source, distance, text="# Home internet (bill)\n\n- Merchant: FibreLink"):
+    return {"id": f"x_{source}_0", "text": text, "metadata": {"source": source}, "distance": distance}
+
+
+def fake_rag(collections, retrievals, unknown_status=500):
+    posts = []
+
+    def get(url, timeout=None):
+        assert url.endswith("/health")
+        return FakeResponse({"ok": True, "collections": collections})
+
+    def post(url, json=None, timeout=None):
+        posts.append(json)
+        if json["feature"] == validate.UNKNOWN_FEATURE:
+            return FakeResponse("<html>500</html>" if unknown_status >= 500 else {"error": "unknown feature"}, unknown_status)
+        return FakeResponse({"results": retrievals[(json["feature"], json["question"])]})
+
+    return get, post, posts
+
+
+BENCHMARKS = {"bills": "Which bill is overdue?", "savings": "advice about how to generate savings advice", "transactions": "Which category does a supermarket purchase belong to?"}
+
+
+def test_collect_rag_reports_collections_distances_and_off_topic(monkeypatch):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", BENCHMARKS)
+    retrievals = {
+        ("bills", "Which bill is overdue?"): [_chunk("bill-1-rent.md", 1.5), _chunk("bill-7-home-internet.md", 1.083)],
+        ("bills", validate.OFF_TOPIC_QUESTION): [_chunk("bill-1-rent.md", 1.62)],
+        ("savings", BENCHMARKS["savings"]): [_chunk("savings_advice_guide.md", 0.9, "Save ten percent")],
+    }
+    get, post, posts = fake_rag(["billing", "bills", "savings"], retrievals)
+    ok, evidence = validate.collect_rag(get=get, post=post)
+    assert ok is True
+    assert evidence.startswith("RAG evidence: endpoint http://localhost:5003; /health ok, 3 collections: billing, bills, savings.")
+    assert 'bills "Which bill is overdue?" -> 2 results, closest 1.083 from bill-7-home-internet.md ("Home internet (bill) - Merchant: FibreLink")' in evidence
+    assert "transactions: collection absent, no benchmark run" in evidence
+    assert "Off-topic probe on bills -> closest 1.620 (on-topic 1.083)" in evidence
+    assert "Unknown feature no-such-feature -> server error (HTTP 500), not a clean rejection" in evidence
+    assert "billing: collection listed, no benchmark registered" in evidence
+    assert all(p["feature"] != "transactions" for p in posts)
+
+
+def test_collect_rag_reports_a_4xx_unknown_feature_as_rejected():
+    get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): [_chunk("bill-7-home-internet.md", 1.0)], ("bills", validate.OFF_TOPIC_QUESTION): [_chunk("bill-1-rent.md", 1.5)]}, unknown_status=404)
+    assert "Unknown feature no-such-feature -> rejected (HTTP 404)" in validate.collect_rag(get=get, post=post)[1]
+
+
+def test_collect_rag_reports_an_unknown_feature_that_was_not_rejected():
+    get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): [_chunk("bill-7-home-internet.md", 1.0)], ("bills", validate.OFF_TOPIC_QUESTION): [_chunk("bill-1-rent.md", 1.5)]})
+
+    def accepting_post(url, json=None, timeout=None):
+        if json["feature"] == validate.UNKNOWN_FEATURE:
+            return FakeResponse({"results": []})
+        return post(url, json=json, timeout=timeout)
+
+    assert "Unknown feature no-such-feature -> NOT rejected (0 results)" in validate.collect_rag(get=get, post=accepting_post)[1]
+
+
+def test_collect_rag_unreachable():
+    def get(url, timeout=None):
+        raise requests.exceptions.ConnectionError("connection refused")
+
+    ok, evidence = validate.collect_rag(get=get, post=lambda *a, **k: None)
+    assert ok is True and "UNREACHABLE (connection refused)" in evidence and "No collections listed" in evidence
+
+
+def test_collect_rag_keeps_going_when_one_retrieval_fails_after_health_ok():
+    get, _post, _posts = fake_rag(["bills"], {})
+
+    def post(url, json=None, timeout=None):
+        raise requests.exceptions.ReadTimeout("read timed out")
+
+    ok, evidence = validate.collect_rag(get=get, post=post)
+    assert ok is True
+    assert evidence.startswith("RAG evidence: endpoint http://localhost:5003; /health ok, 1 collections: bills.")
+    assert 'bills "Which bill is overdue?" -> error (read timed out)' in evidence
+    assert "Off-topic probe skipped (no benchmark returned results)" in evidence
+    assert "Unknown feature no-such-feature -> error (read timed out)" in evidence
+
+
+def test_collect_rag_honours_RAG_SERVER_URL(monkeypatch):
+    monkeypatch.setenv("RAG_SERVER_URL", "http://127.0.0.1:5003/")
+    seen = {}
+
+    def get(url, timeout=None):
+        seen["url"] = url
+        return FakeResponse({"ok": True, "collections": []})
+
+    _ok, evidence = validate.collect_rag(get=get, post=lambda *a, **k: FakeResponse("", 500))
+    assert seen["url"] == "http://127.0.0.1:5003/health" and "endpoint http://127.0.0.1:5003;" in evidence
