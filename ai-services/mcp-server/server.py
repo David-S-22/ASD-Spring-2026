@@ -9,6 +9,8 @@ mcp = FastMCP("Transactions")
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
 RAG_SERVER_URL = os.getenv("RAG_SERVER_URL", "http://localhost:5003")
+MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")
+MCP_PORT = int(os.getenv("MCP_PORT", "8000"))
 
 
 @mcp.resource("docs://readme", mime_type="text/markdown")
@@ -103,5 +105,5 @@ def retrieve_context(feature: str, question: str, k: int = 3) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http", port=8000)
+    mcp.run(transport="http", host=MCP_HOST, port=MCP_PORT)
 
