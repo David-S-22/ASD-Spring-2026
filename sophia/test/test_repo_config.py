@@ -22,3 +22,22 @@ def test_compose_bills_backend_block_carries_the_switches_and_keeps_the_r0_ollam
     assert "host.docker.internal:host-gateway" in block["extra_hosts"]
     assert block["depends_on"] == ["bills-db", "ollama"]
     assert "network_mode" not in block
+
+
+def test_sophia_ci_disables_mcp_and_rag_and_asserts_it():
+    text = (REPO_ROOT / ".github" / "workflows" / "Sophia-CI.yml").read_text(encoding="utf-8")
+    workflow = yaml.safe_load(text)
+    triggers = workflow[True]
+    for event in ("pull_request", "push"):
+        assert "docker-compose.yml" in triggers[event]["paths"]
+        assert "ai-services/rag-server/sources/bills/**" in triggers[event]["paths"]
+    assert "workflow_dispatch" in triggers
+    assert workflow["env"] == {"MCP_ENABLED": "false", "RAG_ENABLED": "false"}
+    assert set(workflow["jobs"]) >= {"test", "docker-health"}
+    assert "rag" not in workflow["jobs"]
+    assert "--no-deps" in text
+    assert '"mcp":"disabled"' in text and '"rag":"disabled"' in text
+    assert '"ai":"unavailable"' in text and '"ollama":"down"' in text
+    assert '"code":"mcp_disabled"' in text and "/api/evidence" in text and "/api/tools/retrieve_context" in text
+    assert "- run: sleep 5" not in text and "seq 1 12" in text
+    assert ": #" not in text
