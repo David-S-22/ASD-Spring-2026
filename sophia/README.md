@@ -138,6 +138,37 @@ Integer cents everywhere internally. `format_actual` renders exact amounts
 dollars, half rounding up, and collapse an equal lo/hi range to a single
 figure ("$379–415", or "$379" when lo == hi).
 
+## RAG corpus (Bills)
+
+The shared retrieval server (`ai-services/rag-server/`) ingests every folder
+under its `sources/` directory into a Chroma collection named after the
+folder. Bills' folder is `ai-services/rag-server/sources/bills/`: one Markdown
+file per bill (name, merchant, type, cadence, amount, next billing date, stored
+status, payment method, last payment, open disputes), generated from the bills
+database by `sophia/rag/build_corpus.py` and committed, so the server can
+ingest at startup without `bills-db` running. Each file stays under 800
+characters so the server's splitter keeps it as one chunk; the `bill-*.md` files
+are never hand-written.
+
+Regenerate from the repo root whenever the seed or the demo data changes:
+
+```
+BILLS_DB_API_URL=http://localhost:6005 python -m sophia.rag.build_corpus   # from a running bills-db
+python -m sophia.rag.build_corpus --from-seed                                 # from sophia/database/seed.py
+python -m sophia.rag.build_corpus --from-seed --check                         # what Sophia-CI runs
+```
+
+Never edit the folder by hand: the `--check` form exits 1 when the committed
+`bill-*.md` files differ from a fresh build (other files in the folder are
+not managed), and the `test` job in Sophia-CI runs it.
+RAG itself never runs in CI (the rubric has AI Mode, MCP and RAG disabled
+during CI/CD): `sophia/rag/test_sources_bills.py`, which loads the folder
+through the shared server's loader and checks retrieval order, runs locally
+and skips in CI. The backend reaches retrieval only through the MCP tool
+`retrieve_context(feature="bills", question, k)` (that wiring is a separate
+PR); `sophia/rag/mcp_ragtest.py` is the end-to-end check through the tool.
+Decision record: `docs/release-1/sophia/adr-bills-corpus-folder-model.md`.
+
 ## Inbound contracts
 
 See `docs/release-0/sophia/contracts-inbound.md` (first written 22 Aug 2026,
