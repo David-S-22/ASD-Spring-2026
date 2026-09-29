@@ -58,6 +58,10 @@
                     <dt>Category</dt>
                     <dd id="review-transaction-category"></dd>
                 </div>
+                <div class="review-detail">
+                    <dt>Confidence</dt>
+                    <dd><span id="review-confidence" class="confidence-indicator" hidden></span><span id="review-confidence-missing">—</span></dd>
+                </div>
                 <div class="review-detail review-detail-reason">
                     <dt>Reason suspected</dt>
                     <dd id="review-anomaly-reason"></dd>
@@ -65,8 +69,8 @@
             </dl>
             <label for="review-decision">Decision</label>
             <select id="review-decision">
-                <option value="confirm">Accept</option>
-                <option value="dismiss">Reject</option>
+                <option value="confirm">Confirm</option>
+                <option value="dismiss">Dismiss</option>
             </select>
             <div class="modal-actions">
                 <button type="button" class="btn-cancel" onclick="closeReviewModal()">Cancel</button>

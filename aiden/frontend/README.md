@@ -23,9 +23,10 @@ Dismissed status badges. Confidence indicators and status badges are centered
 within their table cells. The anomaly table uses the available shell width,
 with horizontal scrolling on narrow screens.
 The review dialog shows the complete transaction details (ID, a
-locale-formatted date with weekday, merchant, amount, description, and category
-name) in two columns, followed by a full-width suspected-reason row before
-collecting the user's decision. Labels are styled as small uppercase
+locale-formatted date with weekday, merchant, amount, description, category
+name, and confidence level with percentage) in two columns, followed by a
+full-width suspected-reason row before collecting the user's Confirm or Dismiss
+decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.
 

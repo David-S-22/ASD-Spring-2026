@@ -26,6 +26,8 @@
             data-description="{{ (txn.description if txn else '—')|e }}"
             data-category="{{ (category_name if category_name else ('Unknown category (' ~ txn.category_id ~ ')' if txn else '—'))|e }}"
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
+            data-confidence="{{ '%.1f'|format(anomaly.confidence * 100) if anomaly.confidence is not none else '' }}"
+            data-confidence-level="{{ confidence_level or '' }}"
             onclick="openReviewModal(this)">
       Review
     </button>

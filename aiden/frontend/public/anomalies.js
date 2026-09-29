@@ -77,6 +77,18 @@ function openReviewModal(button) {
     document.getElementById('review-transaction-description').textContent = button.dataset.description;
     document.getElementById('review-transaction-category').textContent = button.dataset.category;
     document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
+    const confidence = document.getElementById('review-confidence');
+    const confidenceMissing = document.getElementById('review-confidence-missing');
+    const confidenceLevel = button.dataset.confidenceLevel;
+    if (confidenceLevel) {
+        confidence.className = `confidence-indicator confidence-${confidenceLevel}`;
+        confidence.textContent = `${confidenceLevel[0].toUpperCase()}${confidenceLevel.slice(1)} (${button.dataset.confidence}%)`;
+        confidence.hidden = false;
+        confidenceMissing.hidden = true;
+    } else {
+        confidence.hidden = true;
+        confidenceMissing.hidden = false;
+    }
     document.getElementById('review-decision').value = 'confirm';
     const modal = document.getElementById('review-modal');
     modal.classList.remove('closing');

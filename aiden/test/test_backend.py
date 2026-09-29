@@ -626,6 +626,7 @@ def test_review_button_includes_transaction_details_and_anomaly_reason(
                 transaction_id=4243,
                 agent_reason_suspected=reason,
                 is_confirmed_by_user=None,
+                confidence=0.834,
             )
         )
 
@@ -650,6 +651,8 @@ def test_review_button_includes_transaction_details_and_anomaly_reason(
     assert 'data-amount="125.50"' in rows
     assert 'data-description="Card payment &lt;script&gt;"' in rows
     assert 'data-category="Dining"' in rows
+    assert 'data-confidence="83.4"' in rows
+    assert 'data-confidence-level="high"' in rows
     assert 'data-reason="A suspicious &lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; charge."' in rows
 
 
