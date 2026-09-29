@@ -153,22 +153,32 @@ button.review-btn:hover { background-color: #0369a1 !important; }
     text-align: center;
 }
 
-/* Confidence badges (low/medium/high), mirroring the status badge styling. */
-.confidence-high {
-    background-color: rgba(74, 222, 128, 0.15);
-    color: var(--color-success, #15803d);
-    border: 1px solid rgba(74, 222, 128, 0.3);
+/* Dot-and-label confidence indicators, distinct from the status badges. */
+.anomalies-page .confidence-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
-.confidence-medium {
-    background-color: rgba(251, 191, 36, 0.15);
-    color: var(--color-warning, #b45309);
-    border: 1px solid rgba(251, 191, 36, 0.35);
+.anomalies-page .confidence-indicator::before {
+    display: block;
+    flex: 0 0 0.55rem;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    content: "";
 }
-.confidence-low {
-    background-color: rgba(248, 113, 113, 0.15);
-    color: var(--color-danger, #b91c1c);
-    border: 1px solid rgba(248, 113, 113, 0.3);
-}
+.anomalies-page .confidence-high { color: #d8b4fe; }
+.anomalies-page .confidence-high::before { background-color: #c084fc; }
+.anomalies-page .confidence-medium { color: #a5b4fc; }
+.anomalies-page .confidence-medium::before { background-color: #818cf8; }
+.anomalies-page .confidence-low { color: #7dd3fc; }
+.anomalies-page .confidence-low::before { background-color: #38bdf8; }
 .content:has(.anomalies-page) {
     max-width: 1300px;
     padding-inline: 1.5rem;

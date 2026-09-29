@@ -569,7 +569,7 @@ def test_anomaly_row_renders_confidence_badge(client: FlaskClient):
     assert 'data-sort-confidence="0.92"' in rows
     assert '<td class="anomaly-confidence">' in rows
     assert '<td class="anomaly-status">' in rows
-    assert '<span class="status-badge confidence-high">High</span>' in rows
+    assert '<span class="confidence-indicator confidence-high">High</span>' in rows
 
 
 def test_anomaly_row_renders_dash_when_confidence_missing(client: FlaskClient):
