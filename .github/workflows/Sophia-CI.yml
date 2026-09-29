@@ -8,7 +8,7 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
-      - "ai-services/rag-server/sources/bills/**"
+      - "ai-services/rag-server/**"
   push:
     branches:
       - "main"
@@ -16,7 +16,8 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
-      - "ai-services/rag-server/sources/bills/**"
+      - "ai-services/rag-server/**"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -35,6 +36,19 @@ jobs:
         run: python -m sophia.rag.build_corpus --from-seed --check
       - name: Run corpus tests
         run: python -m pytest sophia/rag -q
+
+  rag: # Check bills retrieval through the shared RAG server code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r sophia/requirements.txt -r ai-services/rag-server/requirements.txt
+      - name: Run RAG tests
+        run: python -m pytest sophia/rag ai-services/rag-server -q
 
   docker-health: # Check bills container health after startup
     runs-on: ubuntu-latest
