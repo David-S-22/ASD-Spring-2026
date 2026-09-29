@@ -5,7 +5,7 @@ import re
 from sophia.backend import config
 from sophia.backend.ai import grounded_prompt, guard
 from sophia.backend.ai.schemas import validate_grounded_answer
-from sophia.backend.clients import mcp_server
+from sophia.backend.services import tools as tools_service
 from sophia.backend.services.errors import ModeError, ServiceError
 
 logger = logging.getLogger(__name__)
@@ -31,12 +31,7 @@ def _valid_chunk(item):
 
 def retrieve(question, k):
     """Return (chunks closest first, duration_ms) from retrieve_context; a tool error means the RAG server is down."""
-    try:
-        data, duration_ms = mcp_server.call_tool("retrieve_context", {"feature": FEATURE, "question": question, "k": k})
-    except ModeError as exc:
-        if exc.code == "mcp_tool_error":
-            raise ModeError("rag_unavailable") from None
-        raise
+    data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k})
     results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, list) or not all(_valid_chunk(item) for item in results):
         raise ModeError("mcp_invalid_result")
@@ -75,10 +70,7 @@ def _card(answer, citations, confidence, insufficient, retrieval, fallback, dura
 
 def ask(question):
     """Answer question from the bills corpus only; ModeError when a mode is off or the MCP call fails."""
-    if not config.MCP_ENABLED:
-        raise ModeError("mcp_disabled")
-    if not config.RAG_ENABLED:
-        raise ModeError("rag_disabled")
+    tools_service.require_modes(tools_service.RETRIEVAL_TOOL)
     question = (question or "").strip()
     if not question:
         raise ServiceError("question is required")
