@@ -39,7 +39,7 @@ def test_module_defaults_keep_both_modes_off(monkeypatch):
         assert fresh.MCP_ALLOWED_TOOLS == frozenset({"retrieve_context", "search_transactions"})
         assert fresh.RAG_TOP_K == 3
         assert (fresh.RAG_HIGH, fresh.RAG_MEDIUM, fresh.RAG_LOW) == fresh.RAG_DEFAULT_THRESHOLDS == (0.8, 1.1, 1.4)
-        assert fresh.GROUNDED_TIMEOUT_SECONDS == 25
+        assert fresh.GROUNDED_TIMEOUT_SECONDS == 20
     finally:
         monkeypatch.undo()
         importlib.reload(config)
