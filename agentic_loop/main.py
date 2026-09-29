@@ -10,7 +10,6 @@ prompts/<your-family>/ and one entry to MODES below.
 import asyncio
 import calendar
 import os
-import re
 import time
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -19,6 +18,7 @@ from pathlib import Path
 import requests
 import yaml
 from dotenv import load_dotenv
+from fastmcp import Client
 from openai import OpenAI
 
 from .record import RunRecord
@@ -97,11 +97,11 @@ def collect_architecture():
     )
 
 
-def _timeout():
+def http_timeout():
     return float(os.getenv("LOOP_HTTP_TIMEOUT", "30"))
 
 
-def _parse_date(value):
+def parse_row_date(value):
     """Rows come back RFC 2822 ("Wed, 15 Jul 2026 00:00:00 GMT") or ISO."""
     try:
         return parsedate_to_datetime(str(value)).date()
@@ -109,42 +109,72 @@ def _parse_date(value):
         return datetime.fromisoformat(str(value)[:10]).date()
 
 
-def _month_window(day):
-    last = calendar.monthrange(day.year, day.month)[1]
-    return day.replace(day=1).isoformat(), day.replace(day=last).isoformat()
+def month_window(day):
+    """First and last day of the month containing `day`, as ISO strings."""
+    last_day = calendar.monthrange(day.year, day.month)[1]
+    return day.replace(day=1).isoformat(), day.replace(day=last_day).isoformat()
 
 
-def _tool_rows(result):
+# -- MCP validation ---------------------------------------------------------
+
+def rows_from_tool_result(result):
     data = result.data if result.data is not None else result.structured_content
     if isinstance(data, dict) and isinstance(data.get("result"), list):
-        data = data["result"]              # fastmcp wraps a bare list result
+        data = data["result"]
     return data if isinstance(data, list) else []
 
 
-def _mcp_probe(url, unrelated_merchant):
+async def timed_search(client, args):
+    """Call search_transactions; return (rows, duration in ms)."""
+    started = time.perf_counter()
+    result = await client.call_tool("search_transactions", args)
+    return rows_from_tool_result(result), (time.perf_counter() - started) * 1000
+
+
+def filters_from_row(row):
+    """Filters that should match `row`: its merchant and its calendar month."""
+    start_date, end_date = month_window(parse_row_date(row.get("date")))
+    return {"start_date": start_date, "end_date": end_date, "merchant": row.get("merchant")}
+
+
+async def probe_mcp_server(url, impossible_merchant):
     """One session: list tools, an unfiltered call, a filtered call derived
     from the first row, and a call for a merchant that cannot exist."""
-    from fastmcp import Client
+    async with Client(url, timeout=http_timeout()) as client:
+        tools = await client.list_tools()
+        all_rows, all_ms = await timed_search(client, {})
 
-    async def timed(client, args):
-        started = time.perf_counter()
-        result = await client.call_tool("search_transactions", args)
-        return _tool_rows(result), (time.perf_counter() - started) * 1000
+        seed_args, seed_rows, seed_ms = None, [], None
+        if all_rows and isinstance(all_rows[0], dict):
+            seed_args = filters_from_row(all_rows[0])
+            seed_rows, seed_ms = await timed_search(client, seed_args)
 
-    async def probe():
-        async with Client(url, timeout=_timeout()) as client:
-            tools = await client.list_tools()
-            all_rows, all_ms = await timed(client, {})
-            args, rows, ms = None, [], None
-            if all_rows and isinstance(all_rows[0], dict):
-                seed = all_rows[0]
-                start, end = _month_window(_parse_date(seed.get("date")))
-                args = {"start_date": start, "end_date": end, "merchant": seed.get("merchant")}
-                rows, ms = await timed(client, args)
-            none_rows, _ = await timed(client, {"merchant": unrelated_merchant})
-            return tools, (all_rows, all_ms), (args, rows, ms), none_rows
+        none_rows, _ = await timed_search(client, {"merchant": impossible_merchant})
 
-    return asyncio.run(probe())
+    return {"tools": tools, "all_rows": all_rows, "all_ms": all_ms,
+            "seed_args": seed_args, "seed_rows": seed_rows, "seed_ms": seed_ms,
+            "none_rows": none_rows}
+
+
+def describe_filtered_call(seed_args, rows, ms, total_rows, row_keys):
+    """Evidence sentence for the seeded, filtered search_transactions call."""
+    shape_ok = bool(rows) and all(isinstance(row, dict) and row_keys <= row.keys() for row in rows)
+    merchants_ok = bool(rows) and all(row.get("merchant") == seed_args["merchant"] for row in rows)
+    try:
+        dates_ok = bool(rows) and all(
+            seed_args["start_date"] <= parse_row_date(row.get("date")).isoformat() <= seed_args["end_date"]
+            for row in rows)
+    except (TypeError, ValueError):
+        dates_ok = False
+    sample_row = {key: rows[0].get(key) for key in sorted(row_keys)} if rows else None
+
+    return (f"Filtered call (seeded from the first row) with arguments {seed_args} returned "
+            f"{len(rows)} rows in {ms:.0f} ms. "
+            f"Result is a list of rows with id, date, merchant, amount: {'PASS' if shape_ok else 'FAIL'}. "
+            f"Every row has merchant '{seed_args['merchant']}': {merchants_ok}. "
+            f"Every row dated within {seed_args['start_date']}..{seed_args['end_date']}: {dates_ok}. "
+            f"Filtered count not above unfiltered count: {len(rows) <= total_rows}. "
+            f"Sample row: {sample_row}.")
 
 
 def collect_mcp():
@@ -153,91 +183,92 @@ def collect_mcp():
     url = os.getenv("MCP_SERVER_URL", "http://localhost:8000/mcp")
     row_keys = {"id", "date", "merchant", "amount"}
     filter_params = ("start_date", "end_date", "merchant")
-    unrelated_merchant = "Quantum Llama Rentals"      # negative control: expects 0 rows
+    impossible_merchant = "Quantum Llama Rentals"
+
     try:
-        tools, (all_rows, all_ms), (args, rows, ms), none_rows = _mcp_probe(url, unrelated_merchant)
+        probe = asyncio.run(probe_mcp_server(url, impossible_merchant))
     except Exception as exc:
         return False, f"MCP server unreachable or tool call failed at {url}: {type(exc).__name__}"
-    names = [t.name for t in tools]
-    tool = next((t for t in tools if t.name == "search_transactions"), None)
-    schema = (getattr(tool, "input_schema", None) or {}) if tool else {}
-    params = set((schema.get("properties") or {}).keys())
-    missing = [name for name in filter_params if name not in params]
 
-    lines = [f"MCP server: {url}. Registered tools: {', '.join(names) or 'none'}. "
-             f"search_transactions registered: {tool is not None}. "
-             f"Filter parameters in its schema: {', '.join(sorted(params)) or 'none'}; "
-             f"missing: {', '.join(missing) or 'none'}. "
-             f"Unfiltered call returned {len(all_rows)} rows in {all_ms:.0f} ms."]
-    if args is None:
-        lines.append("No rows available, so the filtered call was skipped: "
-                     "result shape FAIL, filters honoured FAIL.")
+    tool_names = [tool.name for tool in probe["tools"]]
+    search_tool = None
+    for tool in probe["tools"]:
+        if tool.name == "search_transactions":
+            search_tool = tool
+    schema = (getattr(search_tool, "input_schema", None) or {}) if search_tool else {}
+    schema_params = set((schema.get("properties") or {}).keys())
+    missing_params = [name for name in filter_params if name not in schema_params]
+
+    evidence = [
+        f"MCP server: {url}. Registered tools: {', '.join(tool_names) or 'none'}. "
+        f"search_transactions registered: {search_tool is not None}. "
+        f"Filter parameters in its schema: {', '.join(sorted(schema_params)) or 'none'}; "
+        f"missing: {', '.join(missing_params) or 'none'}. "
+        f"Unfiltered call returned {len(probe['all_rows'])} rows in {probe['all_ms']:.0f} ms."
+    ]
+
+    if probe["seed_args"] is None:
+        evidence.append("No rows available, so the filtered call was skipped: "
+                        "result shape FAIL, filters honoured FAIL.")
     else:
-        valid = bool(rows) and all(isinstance(r, dict) and row_keys <= r.keys() for r in rows)
-        merchants_ok = bool(rows) and all(r.get("merchant") == args["merchant"] for r in rows)
-        try:
-            dates_ok = bool(rows) and all(
-                args["start_date"] <= _parse_date(r.get("date")).isoformat() <= args["end_date"]
-                for r in rows)
-        except (TypeError, ValueError):
-            dates_ok = False
-        sample = {k: rows[0].get(k) for k in sorted(row_keys)} if rows else None
-        lines.append(
-            f"Filtered call (seeded from the first row) with arguments {args} returned "
-            f"{len(rows)} rows in {ms:.0f} ms. "
-            f"Result is a list of rows with id, date, merchant, amount: {'PASS' if valid else 'FAIL'}. "
-            f"Every row has merchant '{args['merchant']}': {merchants_ok}. "
-            f"Every row dated within {args['start_date']}..{args['end_date']}: {dates_ok}. "
-            f"Filtered count not above unfiltered count: {len(rows) <= len(all_rows)}. "
-            f"Sample row: {sample}.")
-    lines.append(f"Call with merchant '{unrelated_merchant}' returned {len(none_rows)} rows "
-                 f"(expected 0): {'PASS' if not none_rows else 'FAIL'}.")
-    return True, " ".join(lines)
+        evidence.append(describe_filtered_call(
+            probe["seed_args"], probe["seed_rows"], probe["seed_ms"],
+            total_rows=len(probe["all_rows"]), row_keys=row_keys))
+
+    none_rows = probe["none_rows"]
+    evidence.append(f"Call with merchant '{impossible_merchant}' returned {len(none_rows)} rows "
+                    f"(expected 0): {'FAIL' if none_rows else 'PASS'}.")
+
+    return True, " ".join(evidence)
 
 
-def _retrieve(url, feature, question, k=3, where=None):
+# -- RAG validation ---------------------------------------------------------
+
+def post_retrieve(url, collection, question, k=3, where=None):
     """POST /retrieve; returns (results, ms) or raises with the failure text."""
-    body = {"feature": feature, "question": question, "k": k}
+    body = {"feature": collection, "question": question, "k": k}
     if where:
         body["where"] = where
     started = time.perf_counter()
-    response = requests.post(f"{url}/retrieve", json=body, timeout=_timeout())
+    response = requests.post(f"{url}/retrieve", json=body, timeout=http_timeout())
     ms = (time.perf_counter() - started) * 1000
     if not response.ok:
         raise RuntimeError(f"HTTP {response.status_code} in {ms:.0f} ms")
-    return ((response.json() or {}).get("results") or []), ms
+    results = (response.json() or {}).get("results") or []
+    return results, ms
 
 
-def _seed_record(url, records):
-    """Best chunk for a generic query, restricted to transaction rows; returns
-    (question, merchant) or (None, None) when the collection has nothing."""
-    results, _ = _retrieve(url, records, "transaction", k=1, where={"kind": "transaction"})
+def seed_merchant_from_corpus(url, records_collection):
+    """Merchant of the best transaction chunk for a generic query, used as the
+    seeded question; None when the collection holds no transaction chunks."""
+    results, _ = post_retrieve(url, records_collection, "transaction", k=1,
+                               where={"kind": "transaction"})
     if not results:
-        return None, None
-    best = results[0]
-    merchant = (best.get("metadata") or {}).get("merchant") or ""
-    described = re.search(r"for '([^']*)'", best.get("text") or "")
-    description = described.group(1) if described else ""
-    question = " ".join(part for part in (merchant, description) if part).strip()
-    return (question or None), merchant
+        return None
+    return (results[0].get("metadata") or {}).get("merchant") or None
 
 
-def _retrieve_line(url, label, feature, question, threshold, expect_merchant=None):
+def describe_retrieve(url, label, collection, question, threshold, expect_merchant=None):
     try:
-        results, ms = _retrieve(url, feature, question)
+        results, ms = post_retrieve(url, collection, question)
     except requests.RequestException as exc:
-        return f"[{feature}/{label}] retrieve failed: {type(exc).__name__}."
+        return f"[{collection}/{label}] retrieve failed: {type(exc).__name__}."
     except RuntimeError as exc:
-        return f"[{feature}/{label}] retrieve failed: {exc}."
+        return f"[{collection}/{label}] retrieve failed: {exc}."
     if not results:
-        return f"[{feature}/{label}] 0 results in {ms:.0f} ms."
-    best = min(results, key=lambda r: r.get("distance", float("inf")))
-    distance = best.get("distance")
-    metadata = best.get("metadata") or {}
-    under = distance is not None and distance <= threshold
-    parts = [f"[{feature}/{label}] {len(results)} results", f"best distance {distance:.3f}",
-             f"under_threshold: {under}", f"doc_type: {metadata.get('doc_type')}",
-             f"kind: {metadata.get('kind')}", f"category_id: {metadata.get('category_id')}"]
+        return f"[{collection}/{label}] 0 results in {ms:.0f} ms."
+
+    best_chunk = min(results, key=lambda chunk: chunk.get("distance", float("inf")))
+    distance = best_chunk.get("distance")
+    metadata = best_chunk.get("metadata") or {}
+    under_threshold = distance is not None and distance <= threshold
+
+    parts = [f"[{collection}/{label}] {len(results)} results",
+             f"best distance {distance:.3f}",
+             f"under_threshold: {under_threshold}",
+             f"doc_type: {metadata.get('doc_type')}",
+             f"kind: {metadata.get('kind')}",
+             f"category_id: {metadata.get('category_id')}"]
     if expect_merchant:
         parts.append(f"best chunk merchant '{metadata.get('merchant')}' matches seed: "
                      f"{metadata.get('merchant') == expect_merchant}")
@@ -252,33 +283,37 @@ def collect_rag():
     threshold = float(os.getenv("RAG_INSUFFICIENT_ABOVE", "1.2"))
     records, guide = "transactions-records", "transactions"
     unrelated_question = "Quantum Llama Rentals equipment hire"   # negative control: expects insufficient
+
     try:
-        health = requests.get(f"{url}/health", timeout=_timeout()).json()
+        health = requests.get(f"{url}/health", timeout=http_timeout()).json()
     except Exception as exc:
         return False, f"RAG server unreachable at {url}: {type(exc).__name__}"
     collections = health.get("collections") or []
-    lines = [f"RAG server: {url}. Insufficient threshold (distance above): {threshold}. "
-             f"Collections: {', '.join(collections) or 'none'}. "
-             f"{guide} present: {guide in collections}. "
-             f"{records} present: {records in collections}."]
+    evidence = [
+        f"RAG server: {url}. Insufficient threshold (distance above): {threshold}. "
+        f"Collections: {', '.join(collections) or 'none'}. "
+        f"{guide} present: {guide in collections}. "
+        f"{records} present: {records in collections}."
+    ]
 
     try:
-        seeded_question, seed_merchant = _seed_record(url, records)
+        seed_merchant = seed_merchant_from_corpus(url, records)
     except (requests.RequestException, RuntimeError) as exc:
-        seeded_question, seed_merchant = None, None
-        lines.append(f"Seed lookup on {records} failed: {exc}.")
-    if seeded_question:
-        lines.append(f"Question (seeded from the corpus, merchant '{seed_merchant}'): "
-                     f"'{seeded_question}'.")
-        lines.append(_retrieve_line(url, "seeded", records, seeded_question, threshold,
-                                    expect_merchant=seed_merchant))
-        lines.append(_retrieve_line(url, "seeded", guide, seeded_question, threshold))
+        seed_merchant = None
+        evidence.append(f"Seed lookup on {records} failed: {exc}.")
+    if seed_merchant:
+        evidence.append(f"Question (seeded from the corpus): '{seed_merchant}'.")
+        evidence.append(describe_retrieve(url, "seeded", records, seed_merchant, threshold,
+                                          expect_merchant=seed_merchant))
+        evidence.append(describe_retrieve(url, "seeded", guide, seed_merchant, threshold))
     else:
-        lines.append(f"No transaction chunk found in {records}; seeded question skipped.")
-    lines.append(f"Question (unrelated, fixed): '{unrelated_question}'.")
-    for feature in (records, guide):
-        lines.append(_retrieve_line(url, "unrelated", feature, unrelated_question, threshold))
-    return True, " ".join(lines)
+        evidence.append(f"No transaction chunk found in {records}; seeded question skipped.")
+
+    evidence.append(f"Question (unrelated, fixed): '{unrelated_question}'.")
+    evidence.append(describe_retrieve(url, "unrelated", records, unrelated_question, threshold))
+    evidence.append(describe_retrieve(url, "unrelated", guide, unrelated_question, threshold))
+
+    return True, " ".join(evidence)
 
 
 MODES = {
