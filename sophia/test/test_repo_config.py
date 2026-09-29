@@ -30,7 +30,7 @@ def test_sophia_ci_disables_mcp_and_rag_and_asserts_it():
     triggers = workflow[True]
     for event in ("pull_request", "push"):
         assert "docker-compose.yml" in triggers[event]["paths"]
-        assert "ai-services/rag-server/sources/bills/**" in triggers[event]["paths"]
+        assert "ai-services/rag-server/sources/billing/**" in triggers[event]["paths"]
     assert "workflow_dispatch" in triggers
     assert workflow["env"] == {"MCP_ENABLED": "false", "RAG_ENABLED": "false"}
     assert set(workflow["jobs"]) >= {"test", "docker-health"}

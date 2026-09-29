@@ -15,7 +15,7 @@ splitters and stored under the folder's name, at server start-up and on
 
 ## Decision
 
-Bills adopts the folder model. `ai-services/rag-server/sources/bills/` holds
+Bills adopts the folder model. `ai-services/rag-server/sources/billing/` holds
 one Markdown file per bill — name, merchant, type, cadence, amount, next
 billing date, the stored status, payment method, last payment and the count of
 open disputes — generated from the bills database by
@@ -60,3 +60,17 @@ as the end-to-end check.
   CI/CD, so Sophia-CI's `rag` job is removed. The `test` job runs the
   freshness check and the two non-RAG corpus test files; the retrieval-order
   test above is a local check that skips in CI.
+
+## Amendment, 29 Sep 2026
+
+The generated files now live in `ai-services/rag-server/sources/billing/`,
+beside the two hand-written files already there (`billing_overview.md` and
+`billing_policy.pdf`), so the server ingests them into the `billing`
+collection; there is no `bills` collection. Bills answers use only its own
+`bill-*.md` sources: the hand-written overview and policy PDF are not Bills
+data, and `evidence.retrieve` drops them before the distance gate and the
+citations. Measured with all chunks in one collection, every Bills question's
+best match is unchanged, but the overview enters the second and third slots
+inside the low-confidence threshold for four on-topic questions and a late-fee
+question pulls in both hand-written files, hence the filter by source. The
+build and its `--check` only ever touch `bill-*.md`.

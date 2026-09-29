@@ -8,7 +8,7 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
-      - "ai-services/rag-server/sources/bills/**"
+      - "ai-services/rag-server/sources/billing/**"
       - "docker-compose.yml"
   push:
     branches:
@@ -17,7 +17,7 @@ on:
       - "sophia/**"
       - ".github/workflows/Sophia-CI.yml"
       - "shared/**"
-      - "ai-services/rag-server/sources/bills/**"
+      - "ai-services/rag-server/sources/billing/**"
       - "docker-compose.yml"
   workflow_dispatch:
 

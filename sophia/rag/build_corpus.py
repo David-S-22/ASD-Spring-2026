@@ -1,4 +1,6 @@
-"""Build the bills corpus folder for the shared RAG server from the bills database.
+"""Build the bill files in the shared RAG server's billing folder from the bills database.
+
+Only bill-*.md files are ever written, checked or removed; the other files in that folder are not Bills' to touch.
 
 Run from the repository root:
 
@@ -27,7 +29,7 @@ from sophia.backend.clients import bills_db
 from sophia.rag.bills_corpus import render_corpus
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCES_DIR = REPO_ROOT / "ai-services" / "rag-server" / "sources" / "bills"
+SOURCES_DIR = REPO_ROOT / "ai-services" / "rag-server" / "sources" / "billing"
 DATABASE_DIR = REPO_ROOT / "sophia" / "database"
 
 
@@ -97,8 +99,8 @@ def check_corpus(files, out_dir):
 
 def main(argv=None):
     """Build or check the corpus folder and return the process exit code."""
-    parser = argparse.ArgumentParser(description="Build the bills corpus folder for the shared RAG server.")
-    parser.add_argument("--out", type=Path, default=SOURCES_DIR, help="folder to write; defaults to the server's sources/bills")
+    parser = argparse.ArgumentParser(description="Build the bill files in the shared RAG server's billing folder.")
+    parser.add_argument("--out", type=Path, default=SOURCES_DIR, help="folder to write; defaults to the server's sources/billing")
     parser.add_argument("--check", action="store_true", help="exit 1 if the folder differs from a fresh build")
     parser.add_argument("--from-seed", action="store_true", help="read the seed data instead of BILLS_DB_API_URL")
     args = parser.parse_args(argv)

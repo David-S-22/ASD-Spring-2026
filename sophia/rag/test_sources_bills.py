@@ -1,6 +1,7 @@
 """Check the committed bills corpus through the shared server's own loader and retrieval."""
 import os
 import sys
+from fnmatch import fnmatch
 from pathlib import Path
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "ai-services", "rag-server"))
@@ -12,22 +13,24 @@ corpus = pytest.importorskip("corpus")
 import query
 from database import client
 
-SOURCES_BILLS = Path(__file__).resolve().parents[2] / "ai-services" / "rag-server" / "sources" / "bills"
+SOURCES_BILLING = Path(__file__).resolve().parents[2] / "ai-services" / "rag-server" / "sources" / "billing"
 FEATURE = "bills-ragtest"
 
 
 @pytest.fixture
 def feature():
     """Ingest the committed folder into a throwaway collection and delete it afterwards."""
-    corpus.ingest_folder(FEATURE, SOURCES_BILLS)
+    corpus.ingest_folder(FEATURE, SOURCES_BILLING)
     yield FEATURE
     client.delete_collection(name=FEATURE)
 
 
 def test_each_bill_file_is_exactly_one_chunk():
-    """The loader yields one chunk per committed file, so no bill is split or merged."""
-    chunks = corpus.load_markdown_chunks(SOURCES_BILLS, "bills")
-    assert sorted(chunk.metadata["source"] for chunk in chunks) == sorted(path.name for path in SOURCES_BILLS.glob("*.md"))
+    """The loader yields one chunk per committed bill file, so no bill is split or merged; the folder's other files are not compared."""
+    chunks = corpus.load_markdown_chunks(SOURCES_BILLING, "billing")
+    bill_files = sorted(path.name for path in SOURCES_BILLING.glob("bill-*.md"))
+    assert bill_files
+    assert sorted(chunk.metadata["source"] for chunk in chunks if fnmatch(chunk.metadata["source"], "bill-*.md")) == bill_files
 
 
 def test_retrieve_finds_the_overdue_bill(feature):

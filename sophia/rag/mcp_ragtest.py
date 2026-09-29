@@ -4,7 +4,7 @@ import os
 from fastmcp import Client
 
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8000/mcp")
-FEATURE = "bills"
+FEATURE = "billing"
 QUESTION = "Which bill is overdue?"
 
 

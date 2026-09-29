@@ -142,13 +142,16 @@ figure ("$379–415", or "$379" when lo == hi).
 
 The shared retrieval server (`ai-services/rag-server/`) ingests every folder
 under its `sources/` directory into a Chroma collection named after the
-folder. Bills' folder is `ai-services/rag-server/sources/bills/`: one Markdown
-file per bill (name, merchant, type, cadence, amount, next billing date, stored
-status, payment method, last payment, open disputes), generated from the bills
-database by `sophia/rag/build_corpus.py` and committed, so the server can
-ingest at startup without `bills-db` running. Each file stays under 800
-characters so the server's splitter keeps it as one chunk; the `bill-*.md` files
-are never hand-written.
+folder. Bills' files live in `ai-services/rag-server/sources/billing/`, beside
+the two hand-written files that folder already held (`billing_overview.md`,
+`billing_policy.pdf`), so the server ingests them into the `billing`
+collection. Bills' own files are one Markdown file per bill (name, merchant,
+type, cadence, amount, next billing date, stored status, payment method, last
+payment, open disputes), generated from the bills database by
+`sophia/rag/build_corpus.py` and committed, so the server can ingest at startup
+without `bills-db` running. Each file stays under 800 characters so the
+server's splitter keeps it as one chunk; the `bill-*.md` files are never
+hand-written, and Bills answers use only them, never the two hand-written files.
 
 Regenerate from the repo root whenever the seed or the demo data changes:
 
@@ -158,14 +161,14 @@ python -m sophia.rag.build_corpus --from-seed                                 # 
 python -m sophia.rag.build_corpus --from-seed --check                         # what Sophia-CI runs
 ```
 
-Never edit the folder by hand: the `--check` form exits 1 when the committed
-`bill-*.md` files differ from a fresh build (other files in the folder are
-not managed), and the `test` job in Sophia-CI runs it.
+Never edit the `bill-*.md` files by hand: the `--check` form exits 1 when the
+committed `bill-*.md` files differ from a fresh build (other files in the
+folder are not managed), and the `test` job in Sophia-CI runs it.
 RAG itself never runs in CI (the rubric has AI Mode, MCP and RAG disabled
 during CI/CD): `sophia/rag/test_sources_bills.py`, which loads the folder
 through the shared server's loader and checks retrieval order, runs locally
 and skips in CI. The backend reaches retrieval only through the MCP tool
-`retrieve_context(feature="bills", question, k)` (that wiring is a separate
+`retrieve_context(feature="billing", question, k)` (that wiring is a separate
 PR); `sophia/rag/mcp_ragtest.py` is the end-to-end check through the tool.
 Decision record: `docs/release-1/sophia/adr-bills-corpus-folder-model.md`.
 
