@@ -151,6 +151,99 @@ lists them under `residual_filters`.
 The safe ACT trace summary names the tool or the fallback. Creates, category
 selections, and confirmations report an empty list.
 
+### RAG-grounded category suggestion
+
+When a Tally create has no category in the message and `RAG_ENABLED=true`,
+`backend/services/category_grounding.py` asks
+`backend/services/rag_answer.py` for a grounded suggestion before the
+Release 0 correction vote runs. The question is built from the merchant and
+description only. The steps are:
+
+1. Two `POST /retrieve` calls on the shared RAG server: the records
+   collection (`RAG_RECORDS_COLLECTION`, `RAG_TOP_K` results) and the guide
+   collection (`RAG_GUIDE_COLLECTION`, `RAG_GUIDE_TOP_K` results). If either
+   call fails there is no partial grounding.
+2. Results are merged by distance and anything farther than `RAG_LOW` is
+   dropped. With nothing left the result is `insufficient` and no model call
+   is made.
+3. Ollama (`RAG_MODEL`, temperature 0) is asked to choose exactly one live
+   category name using only the numbered context and to cite it as `[n]`.
+   The reply is matched exactly against live category names; markers that
+   point outside the context, or at a record whose `category_id` disagrees
+   with the chosen category, are discarded.
+4. Confidence is deterministic and combines two signals. The retrieval
+   band comes from the distances: `high` when the best distance is below
+   `RAG_HIGH` and at least two documents survived, `medium` below
+   `RAG_MEDIUM`, otherwise `low`. The model's own certainty then gates that
+   band: the request asks Ollama for `logprobs`, the log probabilities of
+   the category-name tokens (before the first `[`) are summed into
+   `model_probability`, and a `high` band needs at least `RAG_PROB_HIGH`
+   while a `medium` band needs at least `RAG_PROB_MEDIUM`, each failure
+   dropping one step. A server that returns no log probabilities leaves
+   `model_probability` as `null` and keeps the distance band. An answer with
+   no surviving marker is downgraded one further step, flagged `uncited`,
+   and cites the surviving records that agree with it. An answer that is not a live category (or `NONE`),
+   or one with no supporting record, falls back to a majority vote over the
+   surviving records' `category_id` (guide chunks do not vote), downgraded one
+   step and flagged `derived_from_votes`. With no records to vote over the
+   result is `insufficient`.
+
+The two collections hold different things. `transactions` is server-owned
+and ingested from `ai-services/rag-server/sources/transactions/categories.md`.
+`transactions-records` is backend-owned: `backend/services/rag_corpus.py`
+builds one document per transaction (`tx-<id>`) and one per category
+correction (`corr-<id>`) with scalar metadata (`kind`, `transaction_id`,
+`date`, `merchant`, `category`, `category_id`, `category_type`, `amount`),
+so a refresh is a whole-collection, idempotent replacement.
+
+`category_selection` in `POST /chat` and `POST /chat/category` carries
+`grounding`:
+
+```json
+{"status": "grounded", "answer": "Fitness", "confidence": "high",
+ "insufficient_context": false, "uncited": false, "derived_from_votes": false,
+ "citations": [
+   {"marker": 1, "id": "tx-7", "collection": "transactions-records",
+    "source": "transaction 7", "excerpt": "Transaction 7 on 2026-06-24: ...",
+    "distance": 0.31, "category_id": 31, "category": "Fitness",
+    "date": "2026-06-24", "merchant": "Anytime Fitness Ultimo", "amount": 17.5},
+   {"marker": 2, "id": "transactions_categories.md_2", "collection": "transactions",
+    "source": "categories.md", "excerpt": "Fitness: ...", "distance": 0.52}],
+ "retrieved": 9, "survivors": 3, "best_distance": 0.31, "model_probability": 0.93,
+ "model": "qwen2.5:3b",
+ "thresholds": {"insufficient_above": 1.2, "high_below": 0.6, "medium_below": 0.9,
+                "probability_high_at_least": 0.8, "probability_medium_at_least": 0.5}}
+```
+
+`status` is one of:
+
+| Status | Meaning | Suggestion source | Reply |
+|---|---|---|---|
+| `grounded` | Context supported a live category; always has at least one citation. | The grounded answer. | "I suggest {name}. Use {name}, or choose another category." |
+| `insufficient` | Nothing similar enough was retrieved; no citations. | The Release 0 correction vote still runs and may pre-select the dropdown. | "I couldn't find past transactions or notes similar enough to suggest a category. Choose a category to continue." |
+| `unavailable` | Any `RAGError`, including the HTTP 500 the server returns for a collection that does not exist yet; carries the safe `error` code. | Release 0 correction vote, then the planner's category. | Release 0 text. |
+| `disabled` | `RAG_ENABLED=false`. The `grounding` key is omitted so the Release 0 payload is byte-identical. | Release 0. | Release 0 text. |
+
+In the Ask Tally card, a grounded or insufficient suggestion shows a
+confidence chip (`HIGH`, `MEDIUM`, `LOW`, or `INSUFFICIENT`). A grounded one
+lists its sources under "Based on:", labelling transaction records
+(`[1] transaction 7 · 24 Jun 2026 · Anytime Fitness Ultimo · $17.50 · Fitness`)
+differently from guide chunks (`[2] guide categories.md: "..."`). The one-click
+"Accept suggestion" button appears only for `high` or `medium` confidence, or
+for a Release 0 correction-vote suggestion; a `low` suggestion is pre-selected
+in the dropdown instead. `disabled` and `unavailable` render the Release 0
+markup.
+
+The records collection is refreshed three ways, each logged as `RAG_REFRESH`:
+on a background thread at process start when `RAG_REFRESH_ON_START=true`
+(up to ten attempts three seconds apart, because the RAG server may still be
+ingesting its own sources), on a background thread after a confirmed create
+when `RAG_REFRESH_AFTER_WRITE=true`, and on demand via `POST /rag/refresh`,
+which returns `{"feature", "total", "kinds": {"transaction", "correction"},
+"duration_ms"}`. Background refresh failures are logged and never change a
+write result. The startup thread is started from `python -m backend`, not on
+import, so the test client never opens a socket.
+
 ### Logging
 
 When `AGENT_LOG_ENABLED=true`, the backend emits one structured `AI_WORKFLOW`
@@ -175,6 +268,24 @@ the `fallback_database`, `failed`, and `skipped_disabled` outcomes, and one
 `arguments` only ever carries filter values from the validated plan, and
 `error` is a safe code, so no user text, prompt, or model output reaches the
 record.
+
+Grounded category suggestions emit one `RAG_GROUNDING` record per attempt
+(including `disabled` and `unavailable`) and every records refresh emits one
+`RAG_REFRESH` record:
+
+```json
+{"event": "RAG_GROUNDING", "request_id": "...", "phase": "initial", "iteration": 1,
+ "stage": "ACT", "collections": ["transactions-records", "transactions"],
+ "retrieved": 9, "survivors": 3, "best_distance": 0.31, "model_probability": 0.93,
+ "confidence": "high", "status": "grounded", "derived_from_votes": false, "uncited": false,
+ "citations": 2, "model": "qwen2.5:3b", "duration_ms": 1480.2, "error": null}
+{"event": "RAG_REFRESH", "trigger": "startup", "collection": "transactions-records",
+ "total": 42, "kinds": {"transaction": 38, "correction": 4},
+ "duration_ms": 312.7, "status": "succeeded", "error": null}
+```
+
+Neither record carries document text, excerpts, the merchant, the
+description, or the user's message; `citations` is a count.
 
 `AGENT_TRACE_ENABLED` independently controls whether the safe stage trace is
 returned in API responses.
@@ -231,10 +342,14 @@ Compose supplies production-ready defaults. The backend reads:
 | `RAG_MEDIUM` | `0.9` | Best distance below this is `medium` confidence. |
 | `RAG_LOW` | `1.2` | Best distance up to this is `low` confidence. Documents farther than this are not used as context; if none remain the result is insufficient context. |
 | `RAG_MODEL` | `qwen2.5:3b` | Model used for the grounded category choice. |
+| `RAG_LOGPROBS` | `true` | Ask Ollama for per-token log probabilities and gate the confidence band on the answer's probability. |
+| `RAG_PROB_HIGH` | `0.8` | Minimum joint probability of the category-name tokens to keep a `high` band; below it the band drops to `medium`. |
+| `RAG_PROB_MEDIUM` | `0.5` | Minimum probability to keep a `medium` band; below it the band drops to `low`. |
 
 The three distance thresholds must satisfy
-`0 < RAG_HIGH < RAG_MEDIUM < RAG_LOW`. An invalid
-combination logs one warning and falls back to the defaults.
+`0 < RAG_HIGH < RAG_MEDIUM < RAG_LOW`, and the two probability thresholds
+`0 < RAG_PROB_MEDIUM < RAG_PROB_HIGH <= 1`. An invalid combination logs one
+warning and falls back to the defaults.
 
 The database process reads `PORT` and `DB_PATH`; Compose uses port `6001` and
 `/app/data/transactions.db`. When a transaction is deleted, the database also
