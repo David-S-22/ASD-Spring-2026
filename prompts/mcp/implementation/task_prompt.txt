@@ -1,0 +1,6 @@
+Given the evidence, state PASS or FAIL for each of these, one line each, quoting the evidence value you used:
+1. Tool registered: search_transactions appears in the registered tools and its schema is missing none of start_date, end_date, merchant.
+2. Structured result: the filtered call's result is a list of rows with id, date, merchant, amount, and its row count is at least 1.
+3. Filters honoured: every filtered row has the seeded merchant and is dated within the window, the filtered count is not above the unfiltered count, and the impossible merchant returned 0 rows.
+4. Latency: the filtered call duration is under 3000 ms.
+Then one sentence overall. If the evidence starts with OBSERVE FAILED or names an unreachable server, write FAIL for all four and say the server was unreachable.
