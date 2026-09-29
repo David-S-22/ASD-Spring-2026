@@ -172,6 +172,15 @@ and skips in CI. The backend reaches retrieval only through the MCP tool
 PR); `sophia/rag/mcp_ragtest.py` is the end-to-end check through the tool.
 Decision record: `docs/release-1/sophia/adr-bills-corpus-folder-model.md`.
 
+## MCP and RAG (Bills)
+
+bills-backend reaches the shared MCP server through `clients/mcp_server.py` (a `fastmcp.Client` behind an allow-list; `MCP_SERVER_URL`, default `http://host.docker.internal:8000/mcp`). The server binds 127.0.0.1, so a container reaches it through `host.docker.internal`; if that does not resolve on a Linux host, start it as `FASTMCP_HOST=0.0.0.0 python ai-services/mcp-server/server.py`.
+Two tools are called: `search_transactions(merchant=<bill.merchant>)` (Tools card, "Match transactions") and `retrieve_context(feature="bills", question, k)` (Ask with evidence). Retrieval is reached only through the MCP tool, so there is no `RAG_SERVER_URL`; the shared server is retrieval-only (team ruling 18/23 Sep), and the grounded answer, citations and confidence category are produced in `services/evidence.py` with `CHAT_MODEL`. Confidence is the L2 distance of the cited chunks: `high` < `RAG_HIGH`, `medium` < `RAG_MEDIUM`, `low` ≤ `RAG_LOW`; when nothing retrieved is within `RAG_LOW` the card says insufficient context and no model is called.
+Switches and knobs: `MCP_ENABLED`, `RAG_ENABLED` (code default off; compose `${…:-true}`; CI `"false"`), `MCP_TIMEOUT_SECONDS` (15), `MCP_ALLOWED_TOOLS`, `RAG_TOP_K` (3), `RAG_HIGH`/`RAG_MEDIUM`/`RAG_LOW` (0.8/1.1/1.4), `GROUNDED_TIMEOUT_SECONDS` (20 s per model attempt).
+Codes: 503 `mcp_disabled`, `rag_disabled`, `mcp_connection`, `mcp_timeout`, `rag_unavailable` (the RAG server failing behind the MCP server); 502 `mcp_tool_error`, `mcp_invalid_result`; 400 `tool_not_allowed`. User copy never names a host, port or upstream text.
+Routes: `GET /api/tools`, `POST /api/tools/<name>`, `POST /api/evidence`; fragments `GET /ui/tools`, `POST /ui/tools/search_transactions`, `GET /ui/evidence`, `POST /ui/evidence`.
+Start order for a live run: `docker compose up -d`, then `python ai-services/rag-server/server.py`, then `python ai-services/mcp-server/server.py`. Sophia-CI runs with both switches `"false"` and asserts the refusal; it has no `rag` job and its path filter stays `ai-services/rag-server/sources/bills/**` (override 6); `python sophia/rag/mcp_ragtest.py` is the terminal check of both tools.
+
 ## Inbound contracts
 
 See `docs/release-0/sophia/contracts-inbound.md` (first written 22 Aug 2026,
@@ -236,7 +245,8 @@ report's evidence lives under `docs/`; this file and
 ## Pull requests
 
 All 56 of this feature owner's PRs are merged to `main`, each squash-merged
-after review (verified 7 Sep 2026: every merge commit has one parent). Four
+by the author after a Sophia-CI green run; the ruleset requires no approving
+review (verified 7 Sep 2026: every merge commit has one parent). Four
 are shared work rather than Bills — the team agentic loop #78, #81, #82 and
 the repo-structure chore #85. The other 52 are this feature:
 
