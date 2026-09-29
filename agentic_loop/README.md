@@ -56,8 +56,8 @@ The RAG mode calls the RAG server directly because it validates that server;
 feature backends do not — they reach retrieval only through the MCP
 `retrieve_context` tool (team decision 13 Sep). The RAG mode validates
 retrieval (collections, chunks, distances), not grounded answers, which each
-backend produces. Captured Release 1 runs:
-`docs/release-1/agentic-loop/mcp-run.md`, `rag-run.md`. For real model output
+backend produces. The run record lands in `reports/` like the other modes;
+captures of Release 1 runs are committed separately. For real model output
 ollama must be up (`docker compose up -d ollama`; the models are the two
 `ai-services` already pulls, ~5 GB on first start). If the model is
 unreachable the run still completes and records the failure as part of the
@@ -86,6 +86,22 @@ derived student directories, required-directory check); the `MODES` dict
 each printed as a `[mode][STAGE]` banner and recorded); `adapt` (the
 accept / reject / edit prompt — closes cleanly if input ends); and `main`
 (a numbered menu built from `MODES`).
+
+**`validate.py` (~212 lines)** — the two live collectors, read top to
+bottom: the registries (`SMOKE_CALLS`, `BOUNDARY_PROBES`, `RAG_BENCHMARKS`),
+then the shared formatters `_shape`/`_one_line`; the MCP half —
+`_timed_call`, `_probe_mcp`, `_format_mcp`, `collect_mcp` — lists the
+server's tools and runs the registered smoke calls and boundary probes; the
+RAG half — `_retrieve`, `_format_benchmark`, `_format_rag`, `collect_rag` —
+runs one benchmark question per registered collection. Both `collect_mcp`
+and `collect_rag` always return `(ok, evidence)`: a server that cannot be
+reached is honest `UNREACHABLE` evidence, not a crash; a boundary probe the
+server refuses is `rejected`, one it accepts instead is flagged
+`NOT rejected` (that is itself a finding, not a pass). Add your own feature
+with one registry line in your own PR — a smoke call,
+`SMOKE_CALLS["get_transactions_with_confirmed_anomalies"] = {}`, or a
+benchmark, `RAG_BENCHMARKS["savings"] = "advice about how to generate
+savings advice"` — no engine edit, no test edit.
 
 **`record.py` (~55 lines)** — accumulates each reviewed mode and rewrites
 the three `reports/` files after every completed mode, so a crash cannot
