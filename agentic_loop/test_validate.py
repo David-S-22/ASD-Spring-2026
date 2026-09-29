@@ -136,12 +136,14 @@ def test_collect_rag_reports_collections_distances_and_off_topic(monkeypatch):
     assert all(p["feature"] != "transactions" for p in posts)
 
 
-def test_collect_rag_reports_a_4xx_unknown_feature_as_rejected():
+def test_collect_rag_reports_a_4xx_unknown_feature_as_rejected(monkeypatch):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", {"bills": "Which bill is overdue?"})
     get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): [_chunk("bill-7-home-internet.md", 1.0)], ("bills", validate.OFF_TOPIC_QUESTION): [_chunk("bill-1-rent.md", 1.5)]}, unknown_status=404)
     assert "Unknown feature no-such-feature -> rejected (HTTP 404)" in validate.collect_rag(get=get, post=post)[1]
 
 
-def test_collect_rag_reports_an_unknown_feature_that_was_not_rejected():
+def test_collect_rag_reports_an_unknown_feature_that_was_not_rejected(monkeypatch):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", {"bills": "Which bill is overdue?"})
     get, post, _posts = fake_rag(["bills"], {("bills", "Which bill is overdue?"): [_chunk("bill-7-home-internet.md", 1.0)], ("bills", validate.OFF_TOPIC_QUESTION): [_chunk("bill-1-rent.md", 1.5)]})
 
     def accepting_post(url, json=None, timeout=None):
@@ -160,7 +162,8 @@ def test_collect_rag_unreachable():
     assert ok is True and "UNREACHABLE (connection refused)" in evidence and "No collections listed" in evidence
 
 
-def test_collect_rag_keeps_going_when_one_retrieval_fails_after_health_ok():
+def test_collect_rag_keeps_going_when_one_retrieval_fails_after_health_ok(monkeypatch):
+    monkeypatch.setattr(validate, "RAG_BENCHMARKS", {"bills": "Which bill is overdue?"})
     get, _post, _posts = fake_rag(["bills"], {})
 
     def post(url, json=None, timeout=None):
