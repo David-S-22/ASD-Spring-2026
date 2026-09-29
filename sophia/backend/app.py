@@ -1,5 +1,6 @@
 """Flask application factory for the bills backend (:5005)."""
 import os
+import logging
 
 import requests
 from flask import Flask, jsonify
@@ -7,7 +8,7 @@ from flask_cors import CORS
 
 from sophia.backend import config
 from sophia.backend.clients import bills_db, transactions
-from sophia.backend.routes import bills, chat, disputes, fragments, handoff, payments, views
+from sophia.backend.routes import bills, chat, disputes, evidence, fragments, handoff, payments, tools, views
 from sophia.backend.services.errors import ServiceError
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
@@ -31,10 +32,15 @@ def create_app():
     app.register_blueprint(chat.bp)
     app.register_blueprint(handoff.bp)
     app.register_blueprint(fragments.bp)
+    app.register_blueprint(tools.bp)
+    app.register_blueprint(evidence.bp)
 
     @app.errorhandler(ServiceError)
     def handle_service_error(error):
-        return jsonify({"error": error.message}), error.status
+        payload = {"error": error.message}
+        if error.code:
+            payload["code"] = error.code
+        return jsonify(payload), error.status
 
     @app.get("/health")
     def health():
@@ -44,13 +50,19 @@ def create_app():
         except requests.RequestException:
             db_api = "down"
         _rows, transactions_source = transactions.list_transactions()
+        ollama = _ollama_status()
         return jsonify(
             {
                 "ok": db_api == "up",
                 "today": config.DEMO_TODAY.isoformat(),
                 "db_api": db_api,
                 "transactions_api": transactions_source,
-                "ollama": _ollama_status(),
+                "ollama": ollama,
+                "modes": {
+                    "ai": "enabled" if ollama == "up" else "unavailable",
+                    "mcp": "enabled" if config.MCP_ENABLED else "disabled",
+                    "rag": "enabled" if config.RAG_ENABLED else "disabled",
+                },
             }
         )
 
@@ -58,5 +70,6 @@ def create_app():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     application = create_app()
     application.run(host="0.0.0.0", port=config.PORT)

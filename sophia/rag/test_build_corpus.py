@@ -72,6 +72,18 @@ def test_rebuild_removes_stale_files_after_writing(seed_api, tmp_path):
     assert bill_files(tmp_path) == SEEDED_FILES
 
 
+def test_build_and_check_leave_other_files_in_the_folder_alone(seed_api, tmp_path, capsys):
+    """A non-bill file beside the bill files is neither rewritten, removed nor reported as stale."""
+    other = tmp_path / "billing_overview.md"
+    other.write_bytes(b"# Billing overview\n\nWritten by hand, not by the build.\n")
+    before = other.read_bytes()
+    assert build_corpus.main(["--out", str(tmp_path)]) == 0
+    assert build_corpus.main(["--out", str(tmp_path), "--check"]) == 0
+    assert other.read_bytes() == before
+    assert "billing_overview.md" not in capsys.readouterr().out
+    assert bill_files(tmp_path) == SEEDED_FILES
+
+
 def test_from_seed_matches_a_build_from_the_api(seed_api, tmp_path):
     """--from-seed writes byte for byte what a live database holding the seed writes, and restores the client URL."""
     api_dir, seed_dir = tmp_path / "api", tmp_path / "seed"
