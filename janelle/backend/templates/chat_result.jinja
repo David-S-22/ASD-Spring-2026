@@ -48,8 +48,26 @@
 
     {% if result.category_selection and result.category_selection.requires_user_response %}
     {% set selection = result.category_selection %}
+    {% set grounding = selection.grounding %}
+    {% set grounded_status = grounding.status if grounding else none %}
+    {% set accept_allowed = selection.suggested_category_name and (
+        not grounding
+        or grounded_status in ("unavailable", "disabled")
+        or grounding.confidence in ("high", "medium")
+    ) %}
     <section class="transaction-chat-category">
         <h3>Suggested category</h3>
+        {% if grounded_status in ("grounded", "insufficient") %}
+        <span class="transaction-chat-confidence {{ grounding.confidence }}">
+            {{ grounding.confidence|upper }} confidence
+        </span>
+        {% endif %}
+        {% if grounded_status == "insufficient" %}
+        <p class="transaction-chat-insufficient">
+            I couldn't find past transactions or notes similar enough to
+            suggest a category for this merchant.
+        </p>
+        {% endif %}
         {% if selection.suggested_category_name %}
         <p>
             <strong>{{ selection.suggested_category_name }}</strong>
@@ -57,6 +75,29 @@
             Accept it or choose another category to continue.
             Nothing will be saved until you confirm the transaction.
         </p>
+        {% if grounded_status == "grounded" and grounding.citations %}
+        <p class="transaction-chat-citations-label">Based on:</p>
+        <ul class="transaction-chat-citations">
+            {% for citation in grounding.citations %}
+            <li class="{% if citation.collection == 'transactions-records' %}record{% else %}guide{% endif %}">
+                <span class="transaction-chat-citation-marker">[{{ citation.marker }}]</span>
+                {% if citation.collection == "transactions-records" %}
+                {%- set record_parts = [] %}
+                {%- if citation.date %}{% set _ = record_parts.append(citation.date|transaction_date) %}{% endif %}
+                {%- if citation.merchant %}{% set _ = record_parts.append(citation.merchant) %}{% endif %}
+                {%- if citation.amount is defined and citation.amount is not none %}{% set _ = record_parts.append(citation.amount|currency) %}{% endif %}
+                {%- if citation.category %}{% set _ = record_parts.append(citation.category) %}{% endif %}
+                {{ record_parts|join(" · ") }}
+                {%- if citation.source and citation.source.startswith("correction") %} (correction){% endif %}
+                {% else %}
+                guide {{ citation.source }}: &ldquo;{{ citation.excerpt }}&rdquo;
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endif %}
+        {% if accept_allowed %}
         <form hx-post="/transactions-backend/ui/chat/category"
               hx-target="#transaction-chat-response"
               hx-swap="innerHTML"
@@ -75,7 +116,8 @@
             {% endif %}
             <button type="submit">Accept suggestion</button>
         </form>
-        {% else %}
+        {% endif %}
+        {% if not selection.suggested_category_name %}
         <p>
             Choose a category to continue.
             Nothing will be saved until you confirm the transaction.
@@ -110,14 +152,14 @@
                 {% endfor %}
             </select>
             <button type="submit">Use selected category</button>
+            <button type="button"
+                    class="transaction-chat-cancel"
+                    hx-get="/transactions-backend/ui/chat/clear"
+                    hx-target="#transaction-chat-response"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
         </form>
-        <button type="button"
-                class="transaction-chat-cancel"
-                hx-get="/transactions-backend/ui/chat/clear"
-                hx-target="#transaction-chat-response"
-                hx-swap="innerHTML">
-            Cancel
-        </button>
     </section>
     {% endif %}
 

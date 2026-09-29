@@ -12,3 +12,16 @@ def mcp_disabled_by_default(monkeypatch: MonkeyPatch):
     exercise the MCP path re-enable it and install a fake client.
     """
     monkeypatch.setattr(config, "MCP_ENABLED", False)
+
+
+@fixture(autouse=True)
+def rag_disabled_by_default(monkeypatch: MonkeyPatch):
+    """Keep RAG off unless a test switches it on, for the same reason.
+
+    With the switch off the Release 0 create flow is byte-identical, so the
+    Release 0 suite keeps passing unchanged. Tests that exercise grounding
+    re-enable it and install a fake ``rag_client``.
+    """
+    monkeypatch.setattr(config, "RAG_ENABLED", False)
+    monkeypatch.setattr(config, "RAG_REFRESH_AFTER_WRITE", False)
+    monkeypatch.setattr(config, "RAG_REFRESH_ON_START", False)

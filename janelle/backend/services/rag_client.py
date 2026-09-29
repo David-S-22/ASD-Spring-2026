@@ -16,6 +16,7 @@ SAFE_MESSAGES = {
     "rag_timeout": "The RAG server did not respond in time.",
     "rag_http_error": "The RAG server returned an error.",
     "rag_invalid_response": "The RAG server returned an invalid response.",
+    "rag_generation_failed": "The grounded category model did not respond.",
 }
 
 
