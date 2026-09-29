@@ -1,0 +1,12 @@
+{# Structured result of one MCP tool call: tool, arguments, row count, duration, rows. #}
+<div class="tool-result">
+  <p class="tool-meta"><code>{{ name }}</code> {{ arguments }} → {{ rows|length }} row{{ '' if rows|length == 1 else 's' }} in {{ duration_ms }} ms</p>
+  {% if not rows %}
+  <p class="tool-empty">No matching rows.</p>
+  {% else %}
+  <table class="tool-table">
+    <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Amount</th></tr></thead>
+    <tbody>{% for row in rows %}<tr><td>{{ row.date }}</td><td>{{ row.description }}</td><td>{{ row.amount }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
