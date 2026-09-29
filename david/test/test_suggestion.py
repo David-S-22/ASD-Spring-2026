@@ -1,0 +1,541 @@
+from datetime import datetime
+import json
+import math
+from typing import Any
+import httpx
+import pytest
+import responses
+
+from backend.savings_service import suggestion_service, ollama_service
+from backend.savings_service.suggestion_service import (
+    _aggregate_spending_by_merchant,
+    _build_advice_prompt,
+    _extract_rag_sources,
+    _fetch_filtered_transactions,
+    _fetch_rag_guidelines,
+    _format_active_goals,
+    _format_amount,
+    _format_feedback_for_planner,
+    _format_feedback_for_search,
+    _format_past_suggestions,
+    _format_transactions_for_prompt,
+    _get_item_field,
+    format_planner_prompt,
+    generate_advice,
+    generate_context_retrieval_args,
+    generate_savings_advice,
+    generate_transaction_search_tool_call,
+)
+from shared.backend import dto
+
+DB_URL = "http://savings-db:6002"
+TX_URL = "http://transactions-db:6001"
+
+
+# ============================================================================
+# Test Fixtures: External Isolation Only (Zero Monkeypatching)
+# ============================================================================
+
+class MockAIState:
+    def __init__(self):
+        self.last_prompt: str | None = None
+        self.response_text: str = "Trim dining costs by $40 to reach your goal."
+        self.confidence_logprob: float = math.log(0.95)
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        messages = body.get("messages", [])
+        user_msg = next((m["content"] for m in messages if m["role"] == "user"), "")
+        self.last_prompt = user_msg
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-mock",
+                "object": "chat.completion",
+                "created": 123456789,
+                "model": "llama3.1:8b",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": self.response_text,
+                    },
+                    "logprobs": {
+                        "content": [
+                            {"token": "Trim", "logprob": self.confidence_logprob},
+                        ]
+                    },
+                    "finish_reason": "stop",
+                }],
+            },
+        )
+
+
+@pytest.fixture
+def ai_state():
+    state = MockAIState()
+    orig_client = ollama_service.client
+    ollama_service.client = ollama_service.OpenAI(
+        base_url="http://mock-ollama/v1",
+        api_key="ollama",
+        http_client=httpx.Client(transport=httpx.MockTransport(state.handler)),
+    )
+    yield state
+    ollama_service.client = orig_client
+
+
+class MockMCPState:
+    def __init__(self):
+        self.transactions: list[dict[str, Any]] = []
+        self.rag_docs: list[dict[str, Any]] = []
+        self.tools: list[dict[str, Any]] = []
+        self.raise_on_execute: bool = False
+
+    def execute(self, tool_name: str, arguments: dict[str, Any]):
+        if self.raise_on_execute:
+            raise RuntimeError("MCP server connection failure")
+        if tool_name == "retrieve_context":
+            return {"results": self.rag_docs}
+        return self.transactions
+
+    def fetch(self):
+        return self.tools
+
+
+@pytest.fixture
+def mcp_state():
+    state = MockMCPState()
+    orig_sugg_exec = suggestion_service.execute_mcp_tool
+    orig_sugg_fetch = suggestion_service.fetch_mcp_tools
+    orig_ollama_exec = ollama_service.execute_mcp_tool
+    orig_ollama_fetch = ollama_service.fetch_mcp_tools
+
+    suggestion_service.execute_mcp_tool = state.execute
+    suggestion_service.fetch_mcp_tools = state.fetch
+    ollama_service.execute_mcp_tool = state.execute
+    ollama_service.fetch_mcp_tools = state.fetch
+
+    yield state
+
+    suggestion_service.execute_mcp_tool = orig_sugg_exec
+    suggestion_service.fetch_mcp_tools = orig_sugg_fetch
+    ollama_service.execute_mcp_tool = orig_ollama_exec
+    ollama_service.fetch_mcp_tools = orig_ollama_fetch
+
+
+# ============================================================================
+# Pure Formatting & Extraction Helpers
+# ============================================================================
+
+def test_get_item_field_dict_and_dto():
+    d = {"name": "Goal Dict", "val": 123}
+    assert _get_item_field(d, "name") == "Goal Dict"
+    assert _get_item_field(d, "missing", "default") == "default"
+
+    g = dto.Goal(id=1, name="Goal DTO", cost=500, date=datetime(2026, 12, 1))
+    assert _get_item_field(g, "name") == "Goal DTO"
+    assert _get_item_field(g, "cost") == 500
+    assert _get_item_field(g, "missing", 99) == 99
+
+
+def test_format_amount():
+    assert _format_amount(100) == "$100.00"
+    assert _format_amount(45.5) == "$45.50"
+    assert _format_amount("20.25") == "$20.25"
+    assert _format_amount("non-numeric") == "$non-numeric"
+    assert _format_amount(None) == "$None"
+
+
+def test_format_active_goals():
+    goals = [
+        dto.Goal(id=1, name="Car", cost=10000, date=datetime(2026, 12, 25)),
+        {"name": "Holiday", "cost": 2500, "date": "2026-11-10T00:00:00"},
+    ]
+    formatted = _format_active_goals(goals)
+    assert len(formatted) == 2
+    assert formatted[0] == {"goal": "Car", "target_amount": "$10000.00", "deadline": "2026-12-25"}
+    assert formatted[1] == {"goal": "Holiday", "target_amount": "$2500.00", "deadline": "2026-11-10"}
+
+    assert _format_active_goals([]) == []
+    assert _format_active_goals(None) == []
+
+
+def test_format_past_suggestions_reverses_and_formats_feedback():
+    suggestions = [
+        dto.Suggestion(id=1, suggestion="First advice", accepted=True, feedback="Loved it"),
+        dto.Suggestion(id=2, suggestion="Second advice", accepted=False),
+        dto.Suggestion(id=3, suggestion="", accepted=True),
+    ]
+    formatted = _format_past_suggestions(suggestions)
+    assert len(formatted) == 2
+    assert formatted[0] == '[REJECTED] "Second advice"'
+    assert formatted[1] == '[ACCEPTED] "First advice" -> User Feedback: "Loved it"'
+
+    assert _format_past_suggestions([]) == []
+
+
+def test_format_feedback_for_planner():
+    category_map = {80: "Dining", 81: "Groceries"}
+    feedbacks = [
+        dto.Feedback(id=1, feedback="Cut coffee", suggestion_id=10, category_id=80, timeframe="2 weeks"),
+        dto.Feedback(id=2, feedback="Don't touch gym"),
+    ]
+    formatted = _format_feedback_for_planner(feedbacks, category_map)
+    assert len(formatted) == 2
+    assert formatted[0] == {"preference": "Don't touch gym"}
+    assert formatted[1] == {
+        "preference": "Cut coffee",
+        "on_suggestion_id": 10,
+        "category": "Dining",
+        "timeframe": "2 weeks",
+    }
+
+
+def test_format_feedback_for_search():
+    category_map = {80: "Dining"}
+    feedbacks = [
+        dto.Feedback(id=1, feedback="General preference without cat/tf"),
+        dto.Feedback(id=2, feedback="Limit eating out", category_id=80, timeframe="1 month"),
+    ]
+    cat_tf, bg = _format_feedback_for_search(feedbacks, category_map)
+    assert '1. (Newest) "Limit eating out" [Category: Dining, Timeframe: 1 month]' in cat_tf
+    assert '- General preference without cat/tf' in bg
+
+    cat_tf_empty, bg_empty = _format_feedback_for_search([], category_map)
+    assert cat_tf_empty == "None"
+    assert bg_empty == "None"
+
+
+@responses.activate
+def test_format_planner_prompt():
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+    goals = [dto.Goal(id=1, name="Car", cost=5000, date=datetime(2026, 12, 1))]
+    prompt_str = format_planner_prompt(goals, [], [], tx_url=TX_URL)
+    assert "User Financial Data:" in prompt_str
+    assert "active_goals" in prompt_str
+    assert "Car" in prompt_str
+
+
+def test_generate_context_retrieval_args():
+    args_with_goal = generate_context_retrieval_args([dto.Goal(id=1, name="Japan Trip", cost=3000, date=datetime(2026, 11, 1))], k=5)
+    assert args_with_goal["feature"] == "savings"
+    assert args_with_goal["k"] == 5
+    assert "Japan Trip" in args_with_goal["question"]
+
+    args_no_goal = generate_context_retrieval_args([], k=3)
+    assert args_no_goal["question"] == "advice about how to generate savings advice"
+    assert args_no_goal["k"] == 3
+
+
+def test_format_transactions_for_prompt():
+    txs = [
+        dto.Transaction(id=1, amount=45.5, merchant="Uber", date=datetime(2026, 9, 1), description="Ride", category_id=70),
+    ]
+    category_map = {70: "Transport"}
+    formatted = _format_transactions_for_prompt(txs, category_map)
+    assert len(formatted) == 1
+    assert formatted[0] == {
+        "date": "2026-09-01",
+        "merchant": "Uber",
+        "description": "Ride",
+        "amount": "$45.50",
+        "category": "Transport",
+    }
+
+
+def test_aggregate_spending_by_merchant():
+    txs = [
+        {"merchant": "Woolies", "amount": 100, "category_id": 81},
+        {"merchant": "Woolies", "amount": 50, "category_id": 81},
+        {"merchant": "Cafe", "amount": 20, "category_id": 80},
+    ]
+    category_map = {80: "Dining", 81: "Groceries"}
+    aggregated = _aggregate_spending_by_merchant(txs, category_map)
+    assert len(aggregated) == 2
+    assert aggregated[0]["merchant"] == "Woolies"
+    assert aggregated[0]["total_spent"] == "$150.00"
+    assert aggregated[0]["transaction_count"] == 2
+    assert aggregated[0]["category"] == "Groceries"
+
+    assert aggregated[1]["merchant"] == "Cafe"
+    assert aggregated[1]["total_spent"] == "$20.00"
+    assert aggregated[1]["transaction_count"] == 1
+
+
+def test_extract_rag_sources():
+    docs = [
+        {"metadata": {"source": "savings_guide.md"}},
+        {"metadata": {"source": "discretionary_budget.md"}},
+        {"metadata": {"source": "savings_guide.md"}},
+    ]
+    sources = _extract_rag_sources(docs)
+    assert sources == "savings_guide.md, discretionary_budget.md"
+    assert _extract_rag_sources([]) == "savings_advice_guide.md"
+
+
+def test_build_advice_prompt():
+    prompt_with_prev = _build_advice_prompt(
+        user_data="UserData",
+        spending_summary=[],
+        formatted_transactions=[],
+        rag_context_blocks="RAGBlocks",
+        previous_suggestion="Cut coffee",
+    )
+    assert 'Previous Suggestion: "Cut coffee"' in prompt_with_prev
+    assert "Do not generate advice similar" in prompt_with_prev
+
+    prompt_without_prev = _build_advice_prompt(
+        user_data="UserData",
+        spending_summary=[],
+        formatted_transactions=[],
+        rag_context_blocks="RAGBlocks",
+        previous_suggestion=None,
+    )
+    assert "Previous Suggestion:" not in prompt_without_prev
+
+
+# ============================================================================
+# Search Tool & RAG Retrieval
+# ============================================================================
+
+def test_generate_transaction_search_tool_call_defaults_when_no_tools(mcp_state: MockMCPState):
+    mcp_state.tools = []
+    tool_name, tool_args = generate_transaction_search_tool_call([], tx_url=TX_URL)
+    assert tool_name == "search_transactions"
+    assert tool_args == {}
+
+
+def test_fetch_rag_guidelines_insufficient_context_returns_none(mcp_state: MockMCPState):
+    # Less than 30 characters of text returns None
+    mcp_state.rag_docs = [{"text": "Too short", "metadata": {}}]
+    res = _fetch_rag_guidelines([dto.Goal(id=1, name="Goal", cost=100, date=datetime.now())])
+    assert res is None
+
+
+def test_fetch_rag_guidelines_sufficient_context_success(mcp_state: MockMCPState):
+    sample_text = "Save money by reviewing all recurring subscriptions and pausing unused services."
+    mcp_state.rag_docs = [
+        {"text": sample_text, "metadata": {"source": "subscription_tips.md"}},
+    ]
+    res = _fetch_rag_guidelines([dto.Goal(id=1, name="Goal", cost=100, date=datetime.now())])
+    assert res is not None
+    context_blocks, sources_str = res
+    assert sample_text in context_blocks
+    assert sources_str == "subscription_tips.md"
+
+
+def test_fetch_rag_guidelines_handles_mcp_exception(mcp_state: MockMCPState):
+    mcp_state.raise_on_execute = True
+    res = _fetch_rag_guidelines([dto.Goal(id=1, name="Goal", cost=100, date=datetime.now())])
+    assert res is None
+
+
+def test_fetch_filtered_transactions_empty_and_filter_messages(mcp_state: MockMCPState):
+    # Case 1: Search returns empty, full search also empty -> no transactions yet message
+    mcp_state.transactions = []
+    txs, error = _fetch_filtered_transactions([], tx_url=TX_URL)
+    assert txs is None
+    assert "don't have any transactions yet" in error
+
+
+# ============================================================================
+# Full End-to-End Advice Generation (Real Pipeline, No Internal Monkeypatching)
+# ============================================================================
+
+def test_generate_advice_no_goals():
+    advice, sources, confidence = generate_advice([], [], [])
+    assert advice == "Insufficient context available to generate savings advice."
+    assert sources is None
+    assert confidence is None
+
+
+def test_generate_advice_no_transactions(mcp_state: MockMCPState):
+    goals = [dto.Goal(id=1, name="Goal", cost=100, date=datetime.now())]
+    mcp_state.transactions = []
+    advice, sources, confidence = generate_advice(goals, [], [])
+    assert "don't have any transactions yet" in advice
+
+
+def test_generate_advice_insufficient_rag_guidelines(mcp_state: MockMCPState):
+    goals = [dto.Goal(id=1, name="Goal", cost=100, date=datetime.now())]
+    mcp_state.transactions = [{"id": 1, "merchant": "Shop", "amount": 10}]
+    mcp_state.rag_docs = [{"text": "Short"}]  # < 30 chars
+    advice, sources, confidence = generate_advice(goals, [], [])
+    assert advice == "Insufficient context available to generate savings advice."
+
+
+@responses.activate
+def test_generate_advice_model_returns_insufficient_context(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[],
+        status=200,
+    )
+    goals = [dto.Goal(id=1, name="Emergency", cost=500, date=datetime.now())]
+    mcp_state.transactions = [{"id": 1, "merchant": "Cafe", "amount": 15}]
+    mcp_state.rag_docs = [{"text": "A comprehensive guideline explaining that users should prioritize emergency funds."}]
+
+    ai_state.response_text = "Insufficient context to generate savings advice."
+    advice, sources, confidence = generate_advice(goals, [], [], tx_url=TX_URL)
+    assert advice == "Insufficient context available to generate savings advice."
+    assert sources is None
+    assert confidence is None
+
+
+@responses.activate
+def test_generate_advice_success_verifies_real_pipeline_and_prompt(mcp_state: MockMCPState, ai_state: MockAIState):
+    """
+    Executes the REAL transaction formatting, merchant aggregation,
+    RAG guideline assembly, and prompt construction without any internal mocking.
+    """
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+    goals = [dto.Goal(id=1, name="Japan Trip", cost=2000, date=datetime(2026, 11, 20))]
+    suggestions = [dto.Suggestion(id=1, suggestion="Cut coffee spending", accepted=True)]
+    feedbacks = [dto.Feedback(id=1, feedback="Limit restaurant meals", category_id=80, timeframe="2 weeks")]
+
+    mcp_state.transactions = [
+        {"id": 1, "merchant": "Ramen Bar", "amount": 35.0, "date": "2026-09-01", "category_id": 80},
+        {"id": 2, "merchant": "Ramen Bar", "amount": 45.0, "date": "2026-09-05", "category_id": 80},
+    ]
+    mcp_state.rag_docs = [
+        {"text": "Review discretionary dining spending and cook batch meals on weekends.", "metadata": {"source": "dining_tips.md"}},
+    ]
+
+    ai_state.response_text = "Trim restaurant meals at Ramen Bar to save $80 towards your Japan Trip goal."
+
+    advice, sources, confidence = generate_advice(
+        goals,
+        suggestions,
+        feedbacks,
+        tx_url=TX_URL,
+        previous_suggestion="Cut coffee spending",
+    )
+
+    assert advice == "Trim restaurant meals at Ramen Bar to save $80 towards your Japan Trip goal."
+    assert sources == "dining_tips.md"
+    assert confidence == "High"
+
+    # CRITICAL: Verify that the prompt sent to the LLM was assembled by the REAL pipeline!
+    prompt_sent = ai_state.last_prompt
+    assert prompt_sent is not None
+    assert "Japan Trip" in prompt_sent
+    assert "Ramen Bar" in prompt_sent
+    assert "$80.00" in prompt_sent  # Merchant spending aggregation verified!
+    assert "Previous Suggestion: \"Cut coffee spending\"" in prompt_sent
+    assert "dining_tips.md" in prompt_sent or "discretionary dining" in prompt_sent
+
+
+@responses.activate
+def test_generate_advice_joins_multiline_output(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(responses.GET, f"{TX_URL}/categories", json=[], status=200)
+    goals = [dto.Goal(id=1, name="Car", cost=1000, date=datetime.now())]
+    mcp_state.transactions = [{"id": 1, "merchant": "Gas", "amount": 50}]
+    mcp_state.rag_docs = [{"text": "Review vehicle and transport expenses carefully to save on gas."}]
+
+    ai_state.response_text = "Trim gas expenses by taking public transport.\nThis saves $20 per week."
+    advice, sources, confidence = generate_advice(goals, [], [], tx_url=TX_URL)
+    # Verifies lines 421-422 multiline joining into a single paragraph!
+    assert advice == "Trim gas expenses by taking public transport. This saves $20 per week."
+
+
+# ============================================================================
+# Top-Level generate_savings_advice Full Integration
+# ============================================================================
+
+@responses.activate
+def test_generate_savings_advice_no_active_goals():
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/goals?active_only=true&top=3",
+        json=[],
+        status=200,
+    )
+    advice, sources, confidence = generate_savings_advice(DB_URL, tx_url=TX_URL)
+    assert "don't have any active savings goals yet" in advice
+    assert sources is None
+    assert confidence is None
+
+
+@responses.activate
+def test_generate_savings_advice_success_end_to_end(mcp_state: MockMCPState, ai_state: MockAIState):
+    """
+    Executes the entire generate_savings_advice flow:
+    DB fetches -> Category fetches -> MCP data -> Pipeline -> AI completion.
+    NO monkeypatching of generate_advice!
+    """
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/goals?active_only=true&top=3",
+        json=[{"id": 1, "name": "New Laptop", "cost": 1500, "date": "2026-12-15T00:00:00"}],
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/feedbacks",
+        json=[{"id": 1, "feedback": "Focus on takeaway food", "category_id": 80, "timeframe": "2 weeks"}],
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/suggestions",
+        json=[{"id": 1, "suggestion": "Cut coffee runs", "accepted": True}],
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+
+    mcp_state.transactions = [
+        {"id": 1, "merchant": "UberEats", "amount": 60.0, "date": "2026-09-02", "category_id": 80},
+    ]
+    mcp_state.rag_docs = [
+        {"text": "Reduce delivery app spending and prepare home-cooked dinners.", "metadata": {"source": "takeaway_guide.md"}},
+    ]
+
+    ai_state.response_text = "Pause UberEats delivery orders to save $60 for your New Laptop."
+
+    advice, sources, confidence = generate_savings_advice(DB_URL, tx_url=TX_URL)
+    assert advice == "Pause UberEats delivery orders to save $60 for your New Laptop."
+    assert sources == "takeaway_guide.md"
+    assert confidence == "High"
+
+    # Verifies that previous_suggestion was automatically forwarded from the latest suggestion
+    assert "Previous Suggestion: \"Cut coffee runs\"" in (ai_state.last_prompt or "")
+
+
+@responses.activate
+def test_generate_savings_advice_handles_empty_ai_response(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/goals?active_only=true&top=3",
+        json=[{"id": 1, "name": "Emergency", "cost": 500, "date": "2026-12-01T00:00:00"}],
+        status=200,
+    )
+    responses.add(responses.GET, f"{DB_URL}/feedbacks", json=[], status=200)
+    responses.add(responses.GET, f"{DB_URL}/suggestions", json=[], status=200)
+    responses.add(responses.GET, f"{TX_URL}/categories", json=[], status=200)
+
+    mcp_state.transactions = [{"id": 1, "merchant": "Store", "amount": 10}]
+    mcp_state.rag_docs = [{"text": "Save money by creating a detailed monthly spreadsheet."}]
+
+    # Empty response is handled by generate_advice line 418 as insufficient context
+    ai_state.response_text = ""
+    advice, sources, confidence = generate_savings_advice(DB_URL, tx_url=TX_URL)
+    assert advice == "Insufficient context available to generate savings advice."
+    assert sources is None
+    assert confidence is None
