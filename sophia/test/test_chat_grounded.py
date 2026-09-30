@@ -270,3 +270,29 @@ def test_a_request_phrased_as_a_can_you_question_without_a_question_mark_is_stil
     fake_evidence(monkeypatch, INSUFFICIENT)
     body = _text(live_client.post("/ui/chat", data={"message": "Can you edit Netflix to $22.99"}))
     assert "Proposed" in body or "Approve" in body or "Apply" in body
+
+
+def test_a_barely_using_question_is_answered_in_code_whatever_the_model_tags(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, dict(PLAIN_QUESTION, question="upcoming"))
+    questions = fake_evidence(monkeypatch, INSUFFICIENT)
+    body = _text(live_client.post("/ui/chat", data={"message": "Which subscriptions am I barely using?"}))
+    assert ("has billed" in body or "Everything looks actively used" in body) and "Coming up" not in body and questions == []
+
+
+def test_an_add_request_missing_the_amount_asks_for_it_instead_of_erroring(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "create", "entity": "bill", "id": None, "fields": {"name": "Gym membership", "merchant": None, "amount": None, "cadence": None, "next_billing_date": None, "type": "subscription"},
+                             "question": "none", "say": "Adding a gym membership."})
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "Add a gym membership"}))
+    assert "I just need" in body and "the amount" in body and "must be an amount" not in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == pending_before
+
+
+def test_a_dispute_update_with_a_reason_and_no_status_is_a_new_dispute(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "dispute", "id": 6, "fields": {"bill_id": 6, "reason": "Never signed up for GymCo"},
+                             "question": "none", "say": "I've suggested opening a dispute for GymCo — approve it to save."})
+    body = _text(live_client.post("/ui/chat", data={"message": "I want to dispute the GymCo charge, I never signed up for it"}))
+    latest = bills_db_module.list_suggestions(status="pending")[-1]
+    assert (latest["op"], latest["entity"], latest["entity_id"]) == ("create", "dispute", None)
+    assert json.loads(latest["payload_json"]) == {"bill_id": 6, "reason": "Never signed up for GymCo"}
+    assert "Update dispute" not in body and "GymCo" in body

@@ -184,14 +184,16 @@ def _resolve_question(question, message=""):
 
 
 def _build_preview(data):
+    """The proposal in a classifier reply, or None for no op or a read; a dispute update that carries a reason and no status is a new dispute, whatever id the model put on it."""
     op, entity = data.get("op"), data.get("entity")
-    if not op or not entity:
+    if not op or not entity or op == "read":
         return None
-    if op == "read":
-        # A read is a question, not a change; there is nothing to apply and a
-        # Confirm button for it could only end in "unsupported op 'read'".
-        return None
-    return {"op": op, "entity": entity, "id": data.get("id"), "fields": data.get("fields")}
+    fields = {key: value for key, value in (data.get("fields") or {}).items() if value is not None}
+    entity_id = data.get("id")
+    if entity == "dispute" and op == "update" and "reason" in fields and "status" not in fields:
+        op, entity_id = "create", None
+        fields.setdefault("bill_id", data.get("id"))
+    return {"op": op, "entity": entity, "id": entity_id, "fields": fields}
 
 
 # What a bill create must carry before it is worth proposing. merchant is
@@ -256,6 +258,7 @@ DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|" 
 
 QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
 TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum)\b", re.I)
+BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
 
 
 def _is_plain_question(message):
@@ -511,6 +514,8 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
     if facts:
         reply = facts["sentence"]
+    elif asks and not about_a_bill and BARELY_WORDS.search(model_message):
+        reply = _answer_barely_using()
     elif asks and not about_a_bill and DUE_WORDS.search(model_message):
         reply = _answer_upcoming(_horizon_days(model_message))
     elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
