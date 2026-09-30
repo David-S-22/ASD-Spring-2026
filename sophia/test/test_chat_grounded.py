@@ -342,3 +342,19 @@ def test_a_model_upcoming_tag_is_ignored_when_the_question_never_asks_what_is_du
     body = _text(live_client.post("/ui/chat", data={"message": "Which bill is overdue?"}))
     assert questions == ["Which bill is overdue?"] and "Home internet (FibreLink, $79.00) is overdue." in body
     assert "Coming up" not in body
+
+
+def test_a_cost_question_about_something_that_is_not_a_bill_is_insufficient_not_a_due_list(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    questions = fake_evidence(monkeypatch, INSUFFICIENT)
+    body = _text(live_client.post("/ui/chat", data={"message": "What is my car insurance bill cost for this month?"}))
+    assert questions == ["What is my car insurance bill cost for this month?"]
+    assert "couldn't find a bill" in body and "Coming up" not in body
+
+
+def test_a_dispute_built_from_the_users_words_gets_a_matching_sentence(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 3, "fields": {"end_date": "2026-09-16"}, "question": "none",
+                             "say": "I've suggested ending Spotify after 16 Sep — approve it to save."})
+    body = _text(live_client.post("/ui/chat", data={"message": "Dispute my Spotify charge, the price went up without notice (the $17.99 row)."}))
+    assert "Open dispute for Spotify" in body
+    assert "I've suggested opening a dispute for Spotify" in body and "ending Spotify" not in body

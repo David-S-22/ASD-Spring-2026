@@ -253,7 +253,7 @@ CHANGE_VERB = re.compile(
 )
 
 
-DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|" + COUNT + r" (days?|weeks?|months?))|this (week|fortnight|month))\b", re.I)
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|scheduled)\b", re.I)
 
 
 QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
@@ -527,11 +527,14 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
-    if data.get("question") == "upcoming" and not DUE_WORDS.search(model_message):
+    if data.get("question") == "upcoming" and not (DUE_WORDS.search(model_message) or DAYS_AHEAD.search(model_message) or NAMED_HORIZON.search(model_message)):
         data["question"] = "none"
     reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
-    preview = None if asks else (_dispute_from_words(model_message, bills) or _build_preview(data))
+    from_words = None if asks else _dispute_from_words(model_message, bills)
+    preview = None if asks else (from_words or _build_preview(data))
+    if from_words:
+        reply = f"I've suggested opening a dispute for {_bill_name(from_words['fields']['bill_id'])} — approve it to draft the letter."
     if preview:
         preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
