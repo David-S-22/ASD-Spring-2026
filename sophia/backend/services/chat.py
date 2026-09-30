@@ -140,25 +140,46 @@ def _answer_barely_using():
     return " ".join(sentences)
 
 
-def _answer_upcoming():
+WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
+COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
+DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
+NAMED_HORIZON = re.compile(r"\b(fortnight|month)\b", re.I)
+NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
+UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
+MAX_HORIZON_DAYS = 180
+
+
+def _horizon_days(message):
+    """How many days ahead a what's-due question looks: a count of days, weeks or months, a fortnight or month, else a week."""
+    counted = DAYS_AHEAD.search(message or "")
+    named = NAMED_HORIZON.search(message or "")
+    if counted:
+        number = counted.group(1).lower()
+        days = (int(number) if number.isdigit() else WORD_NUMBERS[number]) * UNIT_DAYS[counted.group(2).lower()]
+    else:
+        days = NAMED_HORIZON_DAYS[named.group(1).lower()] if named else 7
+    return min(max(days, 1), MAX_HORIZON_DAYS)
+
+
+def _answer_upcoming(days=7):
+    """Every bill occurrence from today for the next days, soonest first, as one sentence."""
     today = config.DEMO_TODAY
     bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
-    window_end = today + timedelta(days=7)
-    names = []
-    for bill in bills:
-        names.extend(occ.name for occ in project(bill, today, window_end))
-    if not names:
-        return "Nothing is due in the next 7 days."
-    return f"Coming up this week: {', '.join(names)}."
+    occurrences = sorted((occ for bill in bills for occ in project(bill, today, today + timedelta(days=days))), key=lambda occ: occ.date)
+    span = f"the next {days} day{'s' if days != 1 else ''}"
+    if not occurrences:
+        return f"Nothing is due in {span}."
+    items = ", ".join(f"{occ.name} on {_day_month(occ.date)} ({money.format_actual(occ.amount_cents)})" for occ in occurrences)
+    return f"Coming up {'this week' if days == 7 else 'in ' + span}: {items}."
 
 
-def _resolve_question(question):
+def _resolve_question(question, message=""):
     if question == "total":
         return _answer_total()
     if question == "barely_using":
         return _answer_barely_using()
     if question == "upcoming":
-        return _answer_upcoming()
+        return _answer_upcoming(_horizon_days(message))
     return None
 
 
@@ -224,19 +245,24 @@ DATE_SPAN = re.compile(
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
 
 CHANGE_VERB = re.compile(
-    r"\b(add|adds|adding|added|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
+    r"\b(add(?:s|ing|ed)?(?! up)|create|pause|draft|log|edit|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
     r"|update|updates|set|rename|delete|dispute|record|mark|move|exclude|include|raise|lower|increase|decrease|switch)\b",
     re.I,
 )
 
 
-DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|\d+ days|two weeks)|this (week|fortnight|month))\b", re.I)
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|" + COUNT + r" (days?|weeks?|months?))|this (week|fortnight|month))\b", re.I)
+
+
+QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum)\b", re.I)
 
 
 def _is_plain_question(message):
-    """True for a message that asks rather than instructs: it ends with a question mark and names no change, so the model may not turn it into a proposal."""
+    """True for a message that asks rather than instructs, so the model may not turn it into a proposal."""
     text = (message or "").strip()
-    return text.endswith("?") and not CHANGE_VERB.search(text)
+    asking = text.endswith("?") or QUESTION_START.match(text) or TOTAL_WORDS.search(text)
+    return bool(asking) and not CHANGE_VERB.search(text)
 
 
 def _bills_named(text, bills):
@@ -476,7 +502,7 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
-    reply = _resolve_question(data.get("question")) or data.get("say", "")
+    reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     preview = None if asks else _build_preview(data)
     named = _bills_named(model_message, bills) if asks else []
@@ -486,7 +512,9 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     if facts:
         reply = facts["sentence"]
     elif asks and not about_a_bill and DUE_WORDS.search(model_message):
-        reply = _answer_upcoming()
+        reply = _answer_upcoming(_horizon_days(model_message))
+    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
+        reply = _answer_total()
     elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
         if card:
