@@ -296,3 +296,21 @@ def test_a_dispute_update_with_a_reason_and_no_status_is_a_new_dispute(live_clie
     assert (latest["op"], latest["entity"], latest["entity_id"]) == ("create", "dispute", None)
     assert json.loads(latest["payload_json"]) == {"bill_id": 6, "reason": "Never signed up for GymCo"}
     assert "Update dispute" not in body and "GymCo" in body
+
+
+def test_an_update_targets_the_one_bill_the_user_named_even_when_the_model_picks_another_id(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 5, "fields": {"amount": 15.99}, "question": "none",
+                             "say": "I've suggested changing Spotify to $15.99 a month — approve it to save."})
+    body = _text(live_client.post("/ui/chat", data={"message": "Update my Spotify to $15.99 a month"}))
+    latest = bills_db_module.list_suggestions(status="pending")[-1]
+    assert (latest["op"], latest["entity"], latest["entity_id"]) == ("update", "bill", 3)
+    assert json.loads(latest["payload_json"]) == {"amount_cents": 1599}
+    assert "Update Spotify" in body and "Which bill did you mean" not in body
+
+
+def test_an_update_naming_two_bills_still_asks_which(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 5, "fields": {"amount": 15.99}, "question": "none",
+                             "say": "I've suggested changing Spotify to $15.99 a month — approve it to save."})
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "Update my Spotify or Netflix to $15.99 a month"}))
+    assert "Which bill did you mean" in body and len(bills_db_module.list_suggestions(status="pending")) == pending_before

@@ -309,6 +309,14 @@ def _mentions(text, name):
     return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I) is not None
 
 
+def _retarget_to_named_bill(preview, message, bills):
+    """Point a bill update or delete at the one bill the user's own message names, since a small model sometimes says Spotify and emits Prime Video's id."""
+    named = _bills_named(message, bills)
+    if preview["entity"] == "bill" and preview["op"] in ("update", "delete") and len(named) == 1:
+        preview["id"] = named[0]["id"]
+    return preview
+
+
 def _names_a_different_bill(preview, say):
     """Return (target_name, other_name) when an update's reply names another bill but not its own target, else None."""
     if preview["op"] != "update" or preview["entity"] != "bill" or not say:
@@ -508,6 +516,8 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     preview = None if asks else _build_preview(data)
+    if preview:
+        preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
     about_a_bill = bool(named)
     card = None
