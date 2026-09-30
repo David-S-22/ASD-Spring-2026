@@ -83,6 +83,16 @@ def test_grounded_answer_cites_only_retrieved_sources_and_rates_the_cited_chunk(
     assert result["duration_ms"] == 12.5
 
 
+@pytest.mark.parametrize("cited", ["Source: bill-7-home-internet.md", "[Source: bill-7-home-internet.md]"])
+def test_citation_copied_with_the_prompt_source_label_still_matches_its_chunk(modes, monkeypatch, cited):
+    fake_retrieval(monkeypatch, [BILL7, BILL3])
+    fake_model(monkeypatch, {"answer": "Home internet (FibreLink, $79.00) is overdue.", "cited": [cited], "insufficient": False})
+    result = evidence.ask("Which bill is overdue?")
+    assert result["insufficient"] is False
+    assert [c["source"] for c in result["citations"]] == ["bill-7-home-internet.md"]
+    assert result["confidence"] == "medium"
+
+
 def test_retrieve_keeps_only_bill_files_from_the_shared_billing_collection(modes, monkeypatch):
     fake_retrieval(monkeypatch, [OVERVIEW, POLICY, dict(BILL7, distance=1.08)])
     chunks, _ = evidence.retrieve("Which bill is overdue?", 3)

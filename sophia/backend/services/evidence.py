@@ -14,6 +14,7 @@ FEATURE = "billing"
 INSUFFICIENT_ANSWER = "Tally couldn't find a bill that covers that."
 FALLBACK_ANSWER = "Tally found matching bills but couldn't put an answer together; try again."
 SOURCE_PATTERN = re.compile(r"^bill-(\d+)-.*\.md$")
+CITED_FILE = re.compile(r"bill-\d+-\S*?\.md")
 RETRIEVAL_MARGIN = 3
 TITLE_SUFFIX = re.compile(r"\s*\((bill|subscription)\)$")
 
@@ -54,6 +55,12 @@ def confidence_for(chunks):
     if best < config.RAG_MEDIUM:
         return "medium"
     return "low"
+
+
+def _cited_file(text):
+    """The bill file name inside one cited string; the model sometimes copies the prompt's "[Source: ...]" label around it."""
+    match = CITED_FILE.search(str(text))
+    return match.group(0) if match else text
 
 
 def _citation(chunk):
@@ -98,7 +105,7 @@ def ask(question):
                     FEATURE, k, len(chunks), best, duration_ms)
         return _card(answer=FALLBACK_ANSWER, citations=[], confidence="none", insufficient=True, retrieval=retrieval, fallback=True, duration_ms=duration_ms)
     by_source = {c["source"]: c for c in survivors}
-    cited = [by_source[s] for s in dict.fromkeys(data["cited"]) if s in by_source]
+    cited = [by_source[s] for s in dict.fromkeys(_cited_file(c) for c in data["cited"]) if s in by_source]
     insufficient = bool(data["insufficient"]) or not cited
     confidence = "none" if insufficient else confidence_for(cited)
     logger.info("RAG_TOOL feature=%s k=%s kept=%s best=%s confidence=%s insufficient=%s duration_ms=%s",
