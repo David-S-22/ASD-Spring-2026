@@ -81,7 +81,7 @@ def test_get_bill_payments_returns_the_bill_with_its_payments_and_refuses_unknow
     assert call(server, "get_bill_payments", {"bill_id": 6})["payments"] == []
     with pytest.raises(ToolError, match="bill not found"):
         call(server, "get_bill_payments", {"bill_id": 999})
-    with pytest.raises(ToolError, match="positive"):
+    with pytest.raises(ToolError, match="bill not found"):
         call(server, "get_bill_payments", {"bill_id": 0})
 
 

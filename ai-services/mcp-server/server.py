@@ -138,11 +138,10 @@ def get_transactions_with_rejected_anomalies() -> list[dict]:
 
 
 BILLS_DB_URL = os.getenv("BILLS_DB_URL", "http://localhost:6005")
-BILL_TYPES = ("bill", "subscription")
 
 
-def _get_bills_db(path: str):
-    """GET a bills-db path and return its JSON, raising ValueError when it is not found."""
+def _bills_db(path: str):
+    """GET one bills-db path as JSON; 404 becomes ValueError("bill not found")."""
     resp = requests.get(f"{BILLS_DB_URL.rstrip('/')}{path}", timeout=10)
     if resp.status_code == 404:
         raise ValueError("bill not found")
@@ -150,73 +149,61 @@ def _get_bills_db(path: str):
     return resp.json()
 
 
-def _bill_with_payments(bill_id: int) -> dict:
-    """Read one bill and its recorded payments from bills-db."""
-    if bill_id < 1:
-        raise ValueError("bill_id must be a positive integer")
-    return {"bill": _get_bills_db(f"/bills/{bill_id}"), "payments": _get_bills_db(f"/bills/{bill_id}/payments")}
+def _charge(row: dict, bill_amount_cents: int) -> dict:
+    """One transactions-db row as a bank charge in integer cents, with its difference from the bill."""
+    amount_cents = round(float(row["amount"]) * 100)
+    return {
+        "id": row["id"],
+        "date": parser.parse(row["date"]).date().isoformat(),
+        "amount_cents": amount_cents,
+        "description": row["description"],
+        "differs_from_bill_cents": amount_cents - bill_amount_cents,
+    }
 
 
 @mcp.tool()
 def list_bills(bill_type: str | None = None) -> list[dict]:
-    """List the user's bills and subscriptions from the Bills database, ordered by id.
-
-    Each row: id, name, merchant (as it appears on bank transactions), amount_cents (integer cents), cadence (weekly|fortnightly|monthly), next_billing_date and status as last saved (not recomputed for today), type, payment_method, end_date, source, confirmed_at, created_at, exclude_from_plan. Read-only. Pass a row's id to get_bill_payments or compare_bill_with_bank_charges.
+    """List the user's bills from the Bills database (read-only): id, name, merchant, amount_cents, cadence, next_billing_date, status, type, payment_method, end_date.
 
     Args:
-        bill_type: 'bill' or 'subscription' to return only that type. If omitted, returns every bill.
+        bill_type: 'bill' or 'subscription' to return only that type; omit for every bill.
     """
-    if bill_type is not None and bill_type not in BILL_TYPES:
+    if bill_type not in (None, "bill", "subscription"):
         raise ValueError("bill_type must be 'bill' or 'subscription'")
-    return [bill for bill in _get_bills_db("/bills") if bill_type in (None, bill["type"])]
+    return [bill for bill in _bills_db("/bills") if bill_type in (None, bill["type"])]
 
 
 @mcp.tool()
 def get_bill_payments(bill_id: int) -> dict:
-    """Return one bill and every payment the user recorded for it in the Bills database, oldest first.
-
-    Result: {"bill": <row as in list_bills>, "payments": [{id, bill_id, date YYYY-MM-DD, amount_cents}]}. Read-only.
+    """Return {"bill", "payments": [{id, bill_id, date, amount_cents}]} for one bill, payments oldest first (read-only).
 
     Args:
         bill_id: The bill's id from list_bills.
     """
-    return _bill_with_payments(bill_id)
+    return {"bill": _bills_db(f"/bills/{bill_id}"), "payments": _bills_db(f"/bills/{bill_id}/payments")}
 
 
 @mcp.tool()
 def compare_bill_with_bank_charges(bill_id: int, start_date: str, end_date: str) -> dict:
-    """Put one bill beside the bank charges from its merchant and the payments recorded for it, between two dates.
-
-    Result: {"bill", "payments" (recorded in Bills, within the dates), "charges": [{id, date YYYY-MM-DD, amount_cents, description, differs_from_bill_cents}]}. Charges are Transactions rows whose merchant exactly matches the bill's merchant; a non-zero differs_from_bill_cents means the bank charged a different amount from the bill, for example after a price rise. Nothing is matched, summed or written. The caller computes the date window in code; do not guess dates.
+    """Return {"bill", "payments", "charges"} for one bill between two dates: the payments recorded in Bills and the bank charges from the bill's merchant, each charge in cents with differs_from_bill_cents. Nothing is matched, summed or written; the caller supplies the dates.
 
     Args:
         bill_id: The bill's id from list_bills.
         start_date: First day to include, YYYY-MM-DD.
         end_date: Last day to include, YYYY-MM-DD, on or after start_date and at most 366 days later.
     """
-    start, end = parser.isoparse(start_date).date(), parser.isoparse(end_date).date()
-    if not 0 <= (end - start).days <= 366:
+    start, end = parser.isoparse(start_date).date().isoformat(), parser.isoparse(end_date).date().isoformat()
+    if not 0 <= (parser.isoparse(end) - parser.isoparse(start)).days <= 366:
         raise ValueError("end_date must be on or after start_date and at most 366 days later")
-    found = _bill_with_payments(bill_id)
+    found = get_bill_payments(bill_id)
     bill = found["bill"]
-    resp = requests.get(
-        f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions",
-        params={"merchant": bill["merchant"], "date_from": start.isoformat(), "date_to": end.isoformat()},
-        timeout=10,
-    )
+    resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions", params={"merchant": bill["merchant"], "date_from": start, "date_to": end}, timeout=10)
     resp.raise_for_status()
-    charges = []
-    for row in resp.json():
-        amount_cents = round(float(row["amount"]) * 100)
-        charges.append({
-            "id": row["id"],
-            "date": parser.parse(row["date"]).date().isoformat(),
-            "amount_cents": amount_cents,
-            "description": row["description"],
-            "differs_from_bill_cents": amount_cents - bill["amount_cents"],
-        })
-    payments = [p for p in found["payments"] if start.isoformat() <= p["date"] <= end.isoformat()]
-    return {"bill": bill, "payments": payments, "charges": charges}
+    return {
+        "bill": bill,
+        "payments": [p for p in found["payments"] if start <= p["date"] <= end],
+        "charges": [_charge(row, bill["amount_cents"]) for row in resp.json()],
+    }
 
 
 if __name__ == "__main__":
