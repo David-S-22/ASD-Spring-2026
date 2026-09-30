@@ -19,8 +19,9 @@ from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import disputes as disputes_service
+from sophia.backend.services import evidence as evidence_service
 from sophia.backend.services import payments as payments_service
-from sophia.backend.services.errors import NotFound, ServiceError
+from sophia.backend.services.errors import ModeError, NotFound, ServiceError
 
 # The model is asked for the real column names, but a small model drifts, and
 # it drifts predictably: it says "amount" in dollars where the column is
@@ -220,6 +221,26 @@ DATE_SPAN = re.compile(
 
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
 
+CHANGE_VERB = re.compile(
+    r"\b(add|adds|adding|added|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
+    r"|update|updates|set|rename|delete|dispute|record|mark|move|exclude|include|raise|lower|increase|decrease|switch)\b",
+    re.I,
+)
+
+
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|\d+ days|two weeks)|this (week|fortnight|month))\b", re.I)
+
+
+def _is_plain_question(message):
+    """True for a message that asks rather than instructs: it ends with a question mark and names no change, so the model may not turn it into a proposal."""
+    text = (message or "").strip()
+    return text.endswith("?") and not CHANGE_VERB.search(text)
+
+
+def _names_a_bill(text, bills):
+    """True when the text mentions any bill's name or merchant as a whole word."""
+    return any(_mentions(text, row["name"]) or _mentions(text, row["merchant"]) for row in bills)
+
 
 def _contradicts_an_update(preview, say):
     """True when the sentence promises a NEW bill but the op edits an existing one.
@@ -388,10 +409,21 @@ def adapt_after_rejection():
     in its history and either asks what to change or proposes a corrected
     suggestion (which lands as a fresh pending row via the same vetting)."""
     history = _recent_history()
-    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history))
+    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history), grounded=False)
 
 
-def _model_turn(model_message, history, fallback=None, stated=None):
+def _grounded_answer(message):
+    """The bills-corpus answer card for a plain question, or None when a mode is off or the MCP call fails, so the chat never breaks on retrieval."""
+    if not (config.MCP_ENABLED and config.RAG_ENABLED):
+        return None
+    try:
+        return evidence_service.ask(message)
+    except (ModeError, ServiceError):
+        return None
+
+
+def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
+    """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
@@ -401,7 +433,16 @@ def _model_turn(model_message, history, fallback=None, stated=None):
     )
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")
-    preview = _build_preview(data)
+    asks = grounded and _is_plain_question(model_message)
+    preview = None if asks else _build_preview(data)
+    about_a_bill = asks and _names_a_bill(model_message, bills)
+    card = None
+    if asks and not about_a_bill and DUE_WORDS.search(model_message):
+        reply = _answer_upcoming()
+    elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
+        card = _grounded_answer(model_message)
+        if card:
+            reply = card["answer"]
     canonical_fields = None
     if preview:
         canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
@@ -427,7 +468,13 @@ def _model_turn(model_message, history, fallback=None, stated=None):
             }
         )
         preview["suggestion_id"] = suggestion["id"]
-    return {"reply": reply, "op": preview["op"] if preview else None, "preview": preview, "fallback": data.get("fallback", False)}
+    return {
+        "reply": reply,
+        "op": preview["op"] if preview else None,
+        "preview": preview,
+        "fallback": bool(data.get("fallback", False)) and card is None,
+        "grounded": card,
+    }
 
 
 def _normalise_chat_fields(entity, op, fields):

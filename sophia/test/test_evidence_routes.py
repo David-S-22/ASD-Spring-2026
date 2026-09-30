@@ -22,12 +22,9 @@ def client(monkeypatch):
     return app.test_client()
 
 
-def test_panel_has_form_and_result_target(client):
-    body = _text(client.get("/ui/evidence"))
-    assert 'id="evidence-panel"' in body
-    assert 'hx-post="/bills-backend/ui/evidence"' in body and 'hx-target="#evidence-result"' in body
-    assert "data-evidence-chip" not in body
-    assert "RAG enabled" in body
+def test_the_separate_evidence_card_is_gone_but_the_fragment_route_stays(client):
+    assert client.get("/ui/evidence").status_code == 405
+    assert client.post("/ui/evidence", data={"question": ""}).status_code == 422
 
 
 def test_grounded_answer_shows_citation_chips_and_badge(client, monkeypatch):

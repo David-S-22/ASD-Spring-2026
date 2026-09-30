@@ -691,7 +691,7 @@ def _render_chat_panel():
     .history) and stay visible until the panel is re-fetched, at which point it
     returns to the welcome state.
     """
-    return render_template("chat_panel.html", messages=[])
+    return render_template("chat_panel.html", messages=[], rag_enabled=config.MCP_ENABLED and config.RAG_ENABLED)
 
 
 @bp.post("/chat")
@@ -708,7 +708,8 @@ def chat_send():
         if row:
             suggestion_title = _suggestion_view(row)["title"]
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"],
+        grounded=result.get("grounded"),
     )
     if suggestion_title:
         # The panel is the one surface for the proposal; refresh it so the

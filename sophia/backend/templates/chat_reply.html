@@ -5,6 +5,15 @@
    sync and two places for state to disagree). The reply just points at it;
    the panel itself arrives refreshed, out of band, in this same response. #}
 <div class="message message-assistant">{{ reply }}</div>
+{% if grounded %}
+{# A plain question was answered from the bills corpus: the same chips and badge the report's grounded-answer examples show. #}
+{% if grounded.insufficient %}
+<p class="evidence-meta"><span class="confidence-badge confidence-none">Insufficient context</span> No citation, no answer generated.</p>
+{% else %}
+<p class="evidence-citations">{% for c in grounded.citations %}<span class="citation-chip">bill #{{ c.bill_id }} · {{ c.title }} · {{ '%.2f'|format(c.distance) }}</span>{% endfor %}</p>
+<p class="evidence-meta"><span class="confidence-badge confidence-{{ grounded.confidence }}">Confidence: {{ grounded.confidence }}</span></p>
+{% endif %}
+{% endif %}
 {% if suggestion_title %}
 {# The title comes from the suggestion row, not the model's prose — when the
    two disagree ("ending Netflix" vs "Update Prime Video"), this line is the

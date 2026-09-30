@@ -263,8 +263,7 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
     (evt.detail.elt.closest(".chat-panel form") ||
       evt.detail.elt.closest(".preview-card") ||
       evt.detail.elt.closest(".suggestion-card") ||
-      evt.detail.elt.closest(".tools-panel form") ||
-      evt.detail.elt.closest(".evidence-panel form"))
+      evt.detail.elt.closest(".tools-panel form"))
   ) {
     return;
   }

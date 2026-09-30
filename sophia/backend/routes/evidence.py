@@ -1,7 +1,6 @@
-"""JSON API and HTMX fragment routes for grounded answers about the user's bills."""
+"""JSON API and HTMX fragment routes for grounded answers about the user's bills; Ask Tally is the card's home now, this stays as the curl and CI surface."""
 from flask import Blueprint, jsonify, render_template, request
 
-from sophia.backend import config
 from sophia.backend.fragment_errors import register_fragment_error_handlers
 from sophia.backend.json_body import json_body
 from sophia.backend.services import evidence as evidence_service
@@ -21,11 +20,6 @@ def ask():
 
 ui = Blueprint("evidence_ui", __name__, url_prefix="/ui/evidence")
 register_fragment_error_handlers(ui)
-
-
-@ui.get("")
-def evidence_panel():
-    return render_template("evidence_panel.html", enabled=config.MCP_ENABLED and config.RAG_ENABLED)
 
 
 @ui.post("")
