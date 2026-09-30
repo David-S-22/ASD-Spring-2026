@@ -13,6 +13,22 @@ def _url(value: str) -> str:
     return value.rstrip("/")
 
 
+def _bool(value: str) -> bool:
+    normalised = value.strip().casefold()
+    if normalised in {"1", "true", "yes", "on"}:
+        return True
+    if normalised in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"expected a boolean but got {value!r}")
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise ValueError(f"expected a positive integer but got {value!r}")
+    return parsed
+
+
 def _resolve(name: str, parser: Callable[[str], Any]) -> Any:
     try:
         raw = os.environ[name]
@@ -67,25 +83,23 @@ class _Config:
 
     @property
     def RAG_ENABLED(self) -> bool:
-        return os.environ.get("RAG_ENABLED", "true").strip().casefold() in {
-            "1", "true", "yes", "on",
-        }
+        return _resolve("RAG_ENABLED", _bool)
 
     @property
     def RAG_SERVER_URL(self) -> str:
-        return _url(os.environ.get("RAG_SERVER_URL", "http://host.docker.internal:5003"))
+        return _resolve("RAG_SERVER_URL", _url)
 
     @property
     def RAG_FEATURE(self) -> str:
-        return os.environ.get("RAG_FEATURE", "anomalies")
+        return _resolve("RAG_FEATURE", str)
 
     @property
     def RAG_TOP_K(self) -> int:
-        return max(1, int(os.environ.get("RAG_TOP_K", "3")))
+        return _resolve("RAG_TOP_K", _positive_int)
 
     @property
     def RAG_TIMEOUT_SECONDS(self) -> float:
-        return float(os.environ.get("RAG_TIMEOUT_SECONDS", "15"))
+        return _resolve("RAG_TIMEOUT_SECONDS", float)
 
     def check_all(self) -> None:
         """Resolve every configured variable, raising if any is missing or invalid.
@@ -100,6 +114,11 @@ class _Config:
             "OLLAMA_URL",
             "OLLAMA_MODEL",
             "MCP_SERVER_URL",
+            "RAG_ENABLED",
+            "RAG_SERVER_URL",
+            "RAG_FEATURE",
+            "RAG_TOP_K",
+            "RAG_TIMEOUT_SECONDS",
         ):
             try:
                 getattr(self, name)

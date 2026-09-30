@@ -160,6 +160,8 @@ services:
       RAG_ENABLED: ${RAG_ENABLED:-true}
       RAG_SERVER_URL: http://host.docker.internal:5003
       RAG_FEATURE: anomalies
+      RAG_TOP_K: 3
+      RAG_TIMEOUT_SECONDS: 15
     depends_on:
       anomalies-db:
         condition: service_started

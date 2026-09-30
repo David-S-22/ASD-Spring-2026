@@ -811,6 +811,11 @@ def integrate_services(monkeypatch: MonkeyPatch):
     monkeypatch.setenv("OLLAMA_MODEL", "billy")
     monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
     monkeypatch.setenv("MCP_SERVER_URL", "http://mock-mcp-server/mcp")
+    monkeypatch.setenv("RAG_ENABLED", "true")
+    monkeypatch.setenv("RAG_SERVER_URL", "http://mock-rag-server:5003")
+    monkeypatch.setenv("RAG_FEATURE", "anomalies")
+    monkeypatch.setenv("RAG_TOP_K", "3")
+    monkeypatch.setenv("RAG_TIMEOUT_SECONDS", "5")
 
     # fastmcp bypasses the requests-based RequestsMock, so stub the MCP client by
     # default; tests that need reviewed examples override this via intercept_mcp.
