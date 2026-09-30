@@ -708,7 +708,8 @@ def chat_send():
         if row:
             suggestion_title = _suggestion_view(row)["title"]
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"],
+        grounded=result.get("grounded"),
     )
     if suggestion_title:
         # The panel is the one surface for the proposal; refresh it so the

@@ -19,8 +19,9 @@ from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import disputes as disputes_service
+from sophia.backend.services import evidence as evidence_service
 from sophia.backend.services import payments as payments_service
-from sophia.backend.services.errors import NotFound, ServiceError
+from sophia.backend.services.errors import ModeError, NotFound, ServiceError
 
 # The model is asked for the real column names, but a small model drifts, and
 # it drifts predictably: it says "amount" in dollars where the column is
@@ -388,10 +389,21 @@ def adapt_after_rejection():
     in its history and either asks what to change or proposes a corrected
     suggestion (which lands as a fresh pending row via the same vetting)."""
     history = _recent_history()
-    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history))
+    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history), grounded=False)
 
 
-def _model_turn(model_message, history, fallback=None, stated=None):
+def _grounded_answer(message):
+    """The bills-corpus answer card for a plain question, or None when a mode is off or the MCP call fails, so the chat never breaks on retrieval."""
+    if not (config.MCP_ENABLED and config.RAG_ENABLED):
+        return None
+    try:
+        return evidence_service.ask(message)
+    except (ModeError, ServiceError):
+        return None
+
+
+def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
+    """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
@@ -402,6 +414,11 @@ def _model_turn(model_message, history, fallback=None, stated=None):
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")
     preview = _build_preview(data)
+    card = None
+    if grounded and not preview and data.get("question") in (None, "none"):
+        card = _grounded_answer(model_message)
+        if card:
+            reply = card["answer"]
     canonical_fields = None
     if preview:
         canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
@@ -427,7 +444,13 @@ def _model_turn(model_message, history, fallback=None, stated=None):
             }
         )
         preview["suggestion_id"] = suggestion["id"]
-    return {"reply": reply, "op": preview["op"] if preview else None, "preview": preview, "fallback": data.get("fallback", False)}
+    return {
+        "reply": reply,
+        "op": preview["op"] if preview else None,
+        "preview": preview,
+        "fallback": bool(data.get("fallback", False)) and card is None,
+        "grounded": card,
+    }
 
 
 def _normalise_chat_fields(entity, op, fields):

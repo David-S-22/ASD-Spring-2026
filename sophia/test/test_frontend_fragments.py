@@ -351,10 +351,10 @@ def test_index_mounts_the_r1_cards_and_app_js_exempts_their_forms():
     with open(os.path.join(frontend, "index.html"), encoding="utf-8") as handle:
         index = handle.read()
     assert '<div id="tools-panel" hx-get="/bills-backend/ui/tools" hx-trigger="load" hx-swap="outerHTML"></div>' in index
-    assert '<div id="evidence-panel" hx-get="/bills-backend/ui/evidence" hx-trigger="load" hx-swap="outerHTML"></div>' in index
+    assert "evidence-panel" not in index and "/ui/evidence" not in index
     with open(os.path.join(frontend, "js", "app.js"), encoding="utf-8") as handle:
         script = handle.read()
-    assert 'closest(".tools-panel form")' in script and 'closest(".evidence-panel form")' in script
+    assert 'closest(".tools-panel form")' in script and "evidence-panel" not in script
     assert "data-evidence-chip" not in script
     with open(os.path.join(frontend, "css", "bills.css"), encoding="utf-8") as handle:
         css = handle.read()
