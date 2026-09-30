@@ -1,36 +1,37 @@
 {% for anomaly in anomalies %}
 {% set txn = transactions.get(anomaly.transaction_id) %}
 {% set category_name = categories.get(txn.category_id) if txn else none %}
+{% set confidence_level = none if anomaly.confidence is none else ('high' if anomaly.confidence >= 0.8 else ('medium' if anomaly.confidence >= 0.5 else 'low')) %}
 <tr data-sort-row
-    data-sort-id="{{ anomaly.id }}"
     data-sort-date="{{ txn.date.isoformat() if txn else '' }}"
     data-sort-merchant="{{ (txn.merchant if txn else '')|e }}"
+    data-sort-confidence="{{ anomaly.confidence if anomaly.confidence is not none else '' }}"
     data-sort-status="{{ 'unreviewed' if anomaly.is_confirmed_by_user is none else ('confirmed' if anomaly.is_confirmed_by_user else 'dismissed') }}">
-  <td>{{ anomaly.id }}</td>
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
-  <td>{% if anomaly.is_confirmed_by_user is none %}<span class="status-badge status-unreviewed">Unreviewed</span>{% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>{% else %}<span class="status-badge status-rejected">Dismissed</span>{% endif %}</td>
-  <td>
+  <td class="anomaly-confidence">{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="confidence-indicator confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
+  <td class="anomaly-status">
     {% if anomaly.is_confirmed_by_user is none %}
     <button type="button"
-            class="review-btn"
+            class="status-badge status-unreviewed review-btn"
+            title="Click to review this anomaly"
+            aria-label="Unreviewed – click to review"
             data-anomaly-id="{{ anomaly.id }}"
-            data-transaction-id="{{ (txn.id if txn else anomaly.transaction_id)|e }}"
             data-date="{{ (txn.date.isoformat() if txn else '—')|e }}"
             data-merchant="{{ (txn.merchant if txn else '—')|e }}"
             data-amount="{{ ('%.2f'|format(txn.amount) if txn else '—')|e }}"
             data-description="{{ (txn.description if txn else '—')|e }}"
             data-category="{{ (category_name if category_name else ('Unknown category (' ~ txn.category_id ~ ')' if txn else '—'))|e }}"
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
-            onclick="openReviewModal(this)">
-      Review
-    </button>
-    {% else %}
-    <span class="no-actions" aria-label="No actions available" title="No actions available">—</span>
+            data-confidence="{{ '%.1f'|format(anomaly.confidence * 100) if anomaly.confidence is not none else '' }}"
+            data-confidence-level="{{ confidence_level or '' }}"
+            onclick="openReviewModal(this)">Unreviewed<svg class="review-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M11 2.5 13.5 5 6 12.5H3.5V10L11 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+    {% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>
+    {% else %}<span class="status-badge status-rejected">Dismissed</span>
     {% endif %}
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="5" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}

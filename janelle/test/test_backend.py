@@ -170,7 +170,7 @@ def test_rag_refresh_refuses_when_disabled(
     post.assert_not_called()
 
 
-def test_rag_refresh_pushes_empty_records_collection_when_enabled(
+def test_rag_refresh_pushes_corpus_documents_and_reports_kinds(
     client: FlaskClient,
     monkeypatch: MonkeyPatch,
 ):
@@ -180,9 +180,19 @@ def test_rag_refresh_pushes_empty_records_collection_when_enabled(
         "RAG_RECORDS_COLLECTION",
         "transactions-records",
     )
+    monkeypatch.setattr(
+        backend_app.rag_corpus,
+        "fetch_and_build",
+        Mock(return_value=(
+            ["tx-7", "corr-3"],
+            ["Transaction 7 ...", "Transaction 26 ... recategorised ..."],
+            [{"kind": "transaction"}, {"kind": "correction"}],
+            {"transaction": 1, "correction": 1},
+        )),
+    )
     refresh = Mock(return_value={
         "feature": "transactions-records",
-        "total": 0,
+        "total": 2,
     })
     monkeypatch.setattr(backend_app.rag_client, "refresh", refresh)
 
@@ -191,10 +201,15 @@ def test_rag_refresh_pushes_empty_records_collection_when_enabled(
     assert response.status_code == 200
     body = response.get_json()
     assert body["feature"] == "transactions-records"
-    assert body["total"] == 0
-    assert body["kinds"] == {}
+    assert body["total"] == 2
+    assert body["kinds"] == {"transaction": 1, "correction": 1}
     assert isinstance(body["duration_ms"], float)
-    refresh.assert_called_once_with("transactions-records", [], [], None)
+    refresh.assert_called_once_with(
+        "transactions-records",
+        ["tx-7", "corr-3"],
+        ["Transaction 7 ...", "Transaction 26 ... recategorised ..."],
+        [{"kind": "transaction"}, {"kind": "correction"}],
+    )
 
 
 @mark.parametrize("code", [
@@ -208,6 +223,12 @@ def test_rag_refresh_reports_unavailable_server(
     monkeypatch: MonkeyPatch,
     code,
 ):
+    monkeypatch.setattr(backend_app.config, "RAG_ENABLED", True)
+    monkeypatch.setattr(
+        backend_app.rag_corpus,
+        "fetch_and_build",
+        Mock(return_value=([], [], [], {"transaction": 0, "correction": 0})),
+    )
     monkeypatch.setattr(
         backend_app.rag_client,
         "refresh",

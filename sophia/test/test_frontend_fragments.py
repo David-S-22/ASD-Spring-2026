@@ -347,3 +347,22 @@ def test_total_answer_names_both_figures_and_quotes_the_header_number(live_clien
 
     rate = answer.split("ongoing monthly total across all bills is ")[1].rstrip(".")
     assert f"{rate} per month" in header
+
+
+def test_index_mounts_the_r1_cards_and_app_js_exempts_their_forms():
+    import os
+    frontend = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+    with open(os.path.join(frontend, "index.html"), encoding="utf-8") as handle:
+        index = handle.read()
+    assert '<div id="tools-panel" hx-get="/bills-backend/ui/tools" hx-trigger="load" hx-swap="outerHTML"></div>' in index
+    assert '<div id="evidence-panel" hx-get="/bills-backend/ui/evidence" hx-trigger="load" hx-swap="outerHTML"></div>' in index
+    with open(os.path.join(frontend, "js", "app.js"), encoding="utf-8") as handle:
+        script = handle.read()
+    assert 'closest(".tools-panel form")' in script and 'closest(".evidence-panel form")' in script
+    assert "data-evidence-chip" in script
+    with open(os.path.join(frontend, "css", "bills.css"), encoding="utf-8") as handle:
+        css = handle.read()
+    assert ".tools-panel .working" not in css and ".evidence-panel .working" not in css
+    with open(os.path.join(frontend, "nginx.conf"), encoding="utf-8") as handle:
+        nginx = handle.read()
+    assert nginx.count("proxy_read_timeout 300s;") == 3

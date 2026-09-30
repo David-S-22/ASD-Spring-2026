@@ -113,6 +113,9 @@ services:
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
       OLLAMA_URL: http://ollama:11434
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_SERVER_URL: http://host.docker.internal:8000/mcp
+      RAG_ENABLED: ${RAG_ENABLED:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -152,6 +155,7 @@ services:
       TRANSACTIONS_DB_URL: http://transactions-db:6001
       OLLAMA_URL: http://ollama:11434/v1
       OLLAMA_MODEL: qwen3:4b
+      OLLAMA_LOG_LEVEL: DEBUG
       MCP_SERVER_URL: http://host.docker.internal:8000/mcp
     depends_on:
       anomalies-db:

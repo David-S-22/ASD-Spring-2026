@@ -332,6 +332,82 @@
         margin: 0;
     }
 
+    .transaction-chat-category h3 {
+        flex-basis: auto;
+        flex-grow: 1;
+    }
+
+    .transaction-chat-confidence {
+        display: inline-flex;
+        align-self: center;
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        background: var(--color-surface-alt, #e2e8f0);
+        color: var(--color-text, #0f172a);
+    }
+
+    .transaction-chat-confidence.high {
+        background: color-mix(in srgb, #16a34a 16%, var(--color-surface, #ffffff));
+        color: #166534;
+    }
+
+    .transaction-chat-confidence.medium {
+        background: color-mix(in srgb, #ca8a04 18%, var(--color-surface, #ffffff));
+        color: #854d0e;
+    }
+
+    .transaction-chat-confidence.low {
+        background: color-mix(in srgb, #ea580c 16%, var(--color-surface, #ffffff));
+        color: #9a3412;
+    }
+
+    .transaction-chat-confidence.insufficient {
+        background: color-mix(in srgb, #64748b 16%, var(--color-surface, #ffffff));
+        color: #334155;
+    }
+
+    .transaction-chat-insufficient {
+        color: var(--color-text-muted, #475569);
+    }
+
+    .transaction-chat-citations-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: -0.35rem !important;
+    }
+
+    .transaction-chat-citations {
+        flex-basis: 100%;
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+        font-size: 0.85rem;
+    }
+
+    .transaction-chat-citations li {
+        padding: 0.2rem 0;
+        border-top: 1px solid var(--color-border, #e2e8f0);
+    }
+
+    .transaction-chat-citations li:first-child {
+        border-top: 0;
+    }
+
+    .transaction-chat-citations li.guide {
+        font-style: italic;
+    }
+
+    .transaction-chat-citation-marker {
+        display: inline-block;
+        min-width: 1.8rem;
+        font-weight: 700;
+        font-style: normal;
+        color: var(--color-primary, #0f766e);
+    }
+
     .transaction-chat-category-form {
         display: flex;
         flex-wrap: wrap;
@@ -347,7 +423,12 @@
     }
 
     .transaction-chat-category-form select {
+        flex: 1 1 100%;
         min-width: 11rem;
+    }
+
+    .transaction-chat-category-form .transaction-chat-cancel {
+        margin: 0;
     }
 
     .transaction-chat-clarification-form {

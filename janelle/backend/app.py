@@ -4,6 +4,7 @@ import time
 
 import requests
 from flask import Flask, jsonify, make_response, render_template, request
+from flask.logging import default_handler
 
 from . import config
 from .Helpers import (
@@ -18,7 +19,7 @@ from .Helpers import (
     render_transaction_page,
     render_transaction_table,
 )
-from .services import mcp_client, rag_client
+from .services import mcp_client, rag_client, rag_corpus
 from .services.chat_service import ChatError
 from .services.transaction_orchestrator import (
     get_preview_request_context,
@@ -53,6 +54,12 @@ def setup_app(db_url: str) -> Flask:
     application = Flask(__name__)
     if config.AGENT_LOG_ENABLED:
         application.logger.setLevel(logging.INFO)
+        # Background refresh threads log outside any request context, so the
+        # module-level workflow logger needs the same level and handler.
+        workflow_logger = logging.getLogger("janelle.ai.workflow")
+        workflow_logger.setLevel(logging.INFO)
+        if not workflow_logger.handlers:
+            workflow_logger.addHandler(default_handler)
     db_url = db_url.rstrip("/")
     anomalies_backend_url = config.ANOMALIES_BACKEND_URL.rstrip("/")
 
@@ -148,22 +155,17 @@ def setup_app(db_url: str) -> Flask:
 
     @application.post("/rag/refresh")
     def refresh_rag_records():
-        started = time.perf_counter()
+        if not config.RAG_ENABLED:
+            return mode_error_response(rag_client.RAGError("rag_disabled"))
         try:
-            # PR 5 replaces the empty lists with the corpus builder output.
-            result = rag_client.refresh(
-                config.RAG_RECORDS_COLLECTION,
-                [],
-                [],
-                None,
-            )
+            result = rag_corpus.refresh_records(db_url, "manual")
         except rag_client.RAGError as error:
             return mode_error_response(error)
         return jsonify(
             feature=result["feature"],
             total=result["total"],
-            kinds={},
-            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+            kinds=result["kinds"],
+            duration_ms=result["duration_ms"],
         )
 
     @application.route("/transactions")
@@ -636,5 +638,23 @@ def setup_app(db_url: str) -> Flask:
     def clear_ui_chat():
         return ""
 
+    application.config["TRANSACTIONS_DB_URL"] = db_url
     return application
+
+
+def start_startup_refresh(application, attempts=10, delay_seconds=3):
+    if (
+        application.testing
+        or not config.RAG_ENABLED
+        or not config.RAG_REFRESH_ON_START
+    ):
+        return None
+    return rag_corpus.start_background_refresh(
+        application.config["TRANSACTIONS_DB_URL"],
+        "startup",
+        attempts=attempts,
+        delay_seconds=delay_seconds,
+    )
+
+
 app = setup_app(config.TRANSACTIONS_DB_URL)

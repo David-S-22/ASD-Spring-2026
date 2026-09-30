@@ -28,7 +28,7 @@ def get_fact():
         user_prompt="tell me a random fact",
         model=config.OLLAMA_MODEL,
         temperature=0.5,
-        output_tokens=500)
+        output_tokens=500).text
 
 @app.get("/anomalies")
 def get_anomaly_rows():

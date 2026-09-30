@@ -55,10 +55,11 @@ agent judges the next transaction.
   accumulated human feedback without embedding that history in the prompt.
 - **Act** — The agent sends the system and user prompts to the model through
   `ollama_api.prompt`, requesting a JSON finding with `is_suspicious` and
-  `justification`. A valid, suspicious finding is converted to an anomaly DTO
-  and persisted so it can be shown to the user. (Malformed responses are simply
-  retried with a higher temperature, up to four attempts — a robustness detail,
-  not part of the adaptation loop.)
+  `justification`. A valid, suspicious finding is converted to an anomaly DTO —
+  along with the model's mean confidence score derived from token log
+  probabilities — and persisted so it can be shown to the user. (Malformed
+  responses are simply retried with a higher temperature, up to four attempts —
+  a robustness detail, not part of the adaptation loop.)
 - **Observe** — The persisted finding is surfaced to the user, who reviews it
   and records the ground truth by **confirming** it as genuinely suspicious
   (true positive) or **dismissing** it as a false positive. This human review
@@ -107,7 +108,8 @@ flowchart TD
 
 Implements the anomaly-detection agent. It creates prompts that instruct the
 model to use the MCP reviewed-example tools, parses model JSON, validates the
-expected response fields, and converts suspicious findings into anomaly DTOs.
+expected response fields, captures the model's mean confidence (from token log
+probabilities), and converts suspicious findings into anomaly DTOs.
 
 ### `ai-services/mcp-server/server.py`
 
@@ -137,13 +139,20 @@ used for anomaly listings and agent context.
 ### `services/ollama_api.py`
 
 OpenAI-compatible client wrapper for the model server. It caches one client
-instance and sends system and user prompts with the configured model,
-temperature, token limit, timeout, and Ollama's `think` option enabled. When a
-thinking-capable model returns a `thinking` trace, it is extracted and emitted
-at DEBUG level for backend diagnostics. The trace is not persisted or returned
-to users; the anomaly's concise `agent_reason_suspected` field remains the
-user-facing explanation. Set `ANOMALY_LOG_LEVEL=DEBUG` to view the trace in
-the backend logs, for example with `docker compose logs -f anomalies-backend`.
+instance and sends system and user prompts through the Responses API with the
+configured model, temperature, token limit, timeout, MCP reviewed-example
+tools, and Ollama's `think` option enabled. When a thinking-capable model
+returns a `thinking` trace, it is extracted and emitted at DEBUG level for
+backend diagnostics; the trace is not persisted or returned to users, and the
+anomaly's concise `agent_reason_suspected` field remains the user-facing
+explanation. It also requests token log probabilities and returns a
+`PromptResult` with the response `text` and the `mean_confidence` (the
+arithmetic mean of each chosen token's probability, `exp(logprob)`), or `None`
+when the server does not return log probabilities. Set `OLLAMA_LOG_LEVEL=DEBUG`
+to view the thinking trace and to log the response's log-probability field
+locations, their shape, and the number of token scores extracted when
+investigating missing confidence values, for example with
+`docker compose logs -f anomalies-backend`.
 
 ### `helpers.py`
 
