@@ -49,12 +49,28 @@ def test_seed_date_offset_moves_every_dated_column_but_not_prose(tmp_path, monke
     netflix = api.get("/bills/4").get_json()
     assert (netflix["next_billing_date"], netflix["created_at"]) == ("2026-10-14", "2026-09-30")
     assert api.get("/bills/1").get_json()["confirmed_at"] == "2026-09-12"
-    assert [p["date"] for p in api.get("/bills/3/payments").get_json()] == ["2026-07-28", "2026-08-27", "2026-09-27"]
+    assert [p["date"] for p in api.get("/bills/3/payments").get_json()] == ["2026-07-27", "2026-08-27", "2026-09-27"]
+    assert [p["date"] for p in api.get("/bills/1/payments").get_json()] == ["2026-07-13", "2026-08-13", "2026-09-13"]
+    assert [p["date"] for p in api.get("/bills/8/payments").get_json()] == ["2026-07-12", "2026-08-12", "2026-09-12"]
     dispute = api.get("/disputes/1").get_json()
     assert dispute["opened_at"] == "2026-09-26"
     draft = api.get("/disputes/1/drafts").get_json()[0]
     assert draft["created_at"] == "2026-09-26" and "15 Jul" in draft["letter_text"]
     assert api.get("/chat_messages").get_json()[0]["created_at"] == "2026-09-28T09:00:00"
+
+
+def test_seed_date_offset_keeps_every_cached_status_true_for_the_shifted_clock(tmp_path, monkeypatch):
+    from datetime import date
+
+    from sophia.backend.clients.bills_db import row_to_bill, row_to_payment
+    from sophia.backend.engine.status import derive_status
+
+    monkeypatch.setenv("SEED_DATE_OFFSET_DAYS", "42")
+    api = _seeded_client(tmp_path)
+    payments = [row_to_payment(p) for p in api.get("/payments").get_json()]
+    today = date(2026, 10, 1)
+    for row in api.get("/bills").get_json():
+        assert derive_status(row_to_bill(row), payments, today)[0] == row["status"], row["name"]
 
 
 def test_seed_without_offset_is_unchanged(tmp_path, monkeypatch):
