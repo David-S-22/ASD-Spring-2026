@@ -400,6 +400,7 @@ def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False
         dispute=dispute,
         draft=draft,
         context_line=context_line,
+        evidence_note=None if config.MCP_ENABLED else "Bank evidence unavailable: MCP mode is disabled.",
         versions=versions,
         selected_version=chosen["version"] if chosen else None,
         oob=oob,

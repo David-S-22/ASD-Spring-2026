@@ -1,16 +1,52 @@
-"""Dispute CRUD and AI-drafted letters, shared by /api/disputes and /ui/disputes."""
+"""Dispute CRUD and AI-drafted letters, shared by /api/disputes and /ui/disputes; letters cite bank facts read through MCP when it is on."""
+from datetime import date, timedelta
+
 from sophia.backend import config
 from sophia.backend.ai import dispute_prompt, guard
 from sophia.backend.ai.schemas import validate_dispute_draft
 from sophia.backend.clients import bills_db
+from sophia.backend.engine import money
+from sophia.backend.engine.status import _day_month
+from sophia.backend.services import tools as tools_service
 from sophia.backend.services.errors import NotFound, ServiceError
 
 DISPUTE_STATUSES = ("draft", "sent", "resolved")
+EVIDENCE_WINDOW_DAYS = 90
+EVIDENCE_ROWS = 3
+COMPARE_TOOL = "compare_bill_with_bank_charges"
+CONFIRMED_ANOMALIES_TOOL = "get_transactions_with_confirmed_anomalies"
+CONFIRMED_NOTE = ", flagged by Spending Alerts and confirmed by you"
 
 
-def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, feedback=None):
+def bank_evidence(bill, opened_on):
+    """Up to EVIDENCE_ROWS bank facts for a letter, read through MCP: the merchant's charges in the EVIDENCE_WINDOW_DAYS before opened_on, the ones the user confirmed as suspicious first; None when MCP is off or either tool fails."""
+    if not config.MCP_ENABLED:
+        return None
+    window = {"bill_id": bill.id, "start_date": (opened_on - timedelta(days=EVIDENCE_WINDOW_DAYS)).isoformat(), "end_date": opened_on.isoformat()}
+    try:
+        compared, _ms = tools_service.call_allowed_tool(COMPARE_TOOL, window)
+        flagged, _ms = tools_service.call_allowed_tool(CONFIRMED_ANOMALIES_TOOL, {})
+    except ServiceError:
+        return None
+    confirmed = {item["transaction"]["id"] for item in flagged}
+    charges = sorted(compared.get("charges") or [], key=lambda c: c["date"], reverse=True)
+    charges = sorted(charges, key=lambda c: c["id"] not in confirmed)
+    return [
+        f"{_day_month(date.fromisoformat(c['date']))} {bill.merchant} {money.format_actual(c['amount_cents'])}{CONFIRMED_NOTE if c['id'] in confirmed else ''}"
+        for c in charges[:EVIDENCE_ROWS]
+    ]
+
+
+def _opened_on(dispute):
+    """The day a dispute was opened, or the demo clock when the row carries none."""
+    opened = dispute.get("opened_at")
+    return date.fromisoformat(str(opened)[:10]) if opened else config.DEMO_TODAY
+
+
+def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, feedback=None, opened_on=None):
     bill = bills_db.row_to_bill(bill_row)
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill.id)]
+    evidence = bank_evidence(bill, opened_on or config.DEMO_TODAY)
     fallback = dispute_prompt.fallback_draft(bill, reason)
     data = guard.run(
         config.DRAFT_MODEL,
@@ -18,6 +54,7 @@ def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, f
             bill,
             reason,
             payments=payments,
+            evidence=evidence,
             previous_letter=previous_letter,
             edited_letter=edited_letter,
             feedback=feedback,
@@ -42,7 +79,7 @@ def create_dispute(bill_id, reason):
     if bill_row is None:
         raise NotFound("bill not found")
     dispute = bills_db.create_dispute({"bill_id": bill_id, "reason": reason})
-    draft = draft_for_bill(bill_row, reason)
+    draft = draft_for_bill(bill_row, reason, opened_on=_opened_on(dispute))
     bills_db.create_dispute_draft(
         dispute["id"],
         {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
@@ -98,7 +135,8 @@ def regenerate(dispute_id, edited_letter=None, feedback=None):
         existing_drafts = bills_db.list_dispute_drafts(dispute_id)
         previous_letter = existing_drafts[-1]["letter_text"] if existing_drafts else None
         draft = draft_for_bill(
-            bill_row, dispute["reason"], previous_letter=previous_letter, edited_letter=edited_letter, feedback=feedback
+            bill_row, dispute["reason"], previous_letter=previous_letter, edited_letter=edited_letter, feedback=feedback,
+            opened_on=_opened_on(dispute),
         )
     created = bills_db.create_dispute_draft(
         dispute_id,

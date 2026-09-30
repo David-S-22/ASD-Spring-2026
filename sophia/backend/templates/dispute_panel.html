@@ -16,6 +16,7 @@
   </select>
   {% endif %}
 
+  {% if evidence_note %}<p class="evidence-note">{{ evidence_note }}</p>{% endif %}
   <textarea class="letter">{{ draft.letter_text if draft else "" }}</textarea>
   <ol class="checklist">
     {% if draft %}{% for step in draft.steps %}<li>{{ step }}</li>{% endfor %}{% endif %}

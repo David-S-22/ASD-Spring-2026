@@ -45,7 +45,7 @@ MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://host.docker.internal:8
 MCP_TIMEOUT_SECONDS = float(os.environ.get("MCP_TIMEOUT_SECONDS", "15"))
 MCP_ALLOWED_TOOLS = frozenset(
     name.strip()
-    for name in os.environ.get("MCP_ALLOWED_TOOLS", "retrieve_context,search_transactions,list_bills,get_bill_payments,compare_bill_with_bank_charges").split(",")
+    for name in os.environ.get("MCP_ALLOWED_TOOLS", "retrieve_context,search_transactions,list_bills,get_bill_payments,compare_bill_with_bank_charges,get_transactions_with_confirmed_anomalies").split(",")
     if name.strip()
 )
 RAG_ENABLED = _flag("RAG_ENABLED", False)
