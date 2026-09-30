@@ -645,7 +645,7 @@ def _execute(op, entity, entity_id, clean_fields):
         draft = disputes_service.draft_for_bill(bill_row, reason)
         bills_db.create_dispute_draft(
             result["id"],
-            {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
+            {"letter_text": draft["letter_text"], "steps_json": disputes_service.steps_json(draft)},
         )
         result["draft"] = draft
         return result

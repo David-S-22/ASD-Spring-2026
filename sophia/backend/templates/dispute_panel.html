@@ -18,6 +18,12 @@
 
   {% if evidence_note %}<p class="evidence-note">{{ evidence_note }}</p>{% endif %}
   <textarea class="letter">{{ draft.letter_text if draft else "" }}</textarea>
+  {% if draft and draft.evidence and (draft.evidence.bank or draft.evidence.policy) %}
+  <div class="evidence-used">
+    <p class="evidence-citations">{% for row in draft.evidence.bank %}<span class="citation-chip">{{ row }}</span>{% endfor %}{% for row in draft.evidence.policy %}<span class="citation-chip">{{ row }}</span>{% endfor %}</p>
+    <p class="evidence-meta">Evidence read through MCP: {% for tool in draft.evidence.tools %}<code>{{ tool }}</code>{{ ", " if not loop.last }}{% endfor %}</p>
+  </div>
+  {% endif %}
   <ol class="checklist">
     {% if draft %}{% for step in draft.steps %}<li>{{ step }}</li>{% endfor %}{% endif %}
   </ol>

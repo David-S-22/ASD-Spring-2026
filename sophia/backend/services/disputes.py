@@ -62,6 +62,11 @@ def policy_evidence(reason):
     return sentences[:POLICY_ROWS]
 
 
+def steps_json(draft):
+    """The JSON blob stored with a draft: its steps, escalation path and the evidence the letter was drawn from."""
+    return {"steps": draft["steps"], "escalation": draft["escalation"], "evidence": draft.get("evidence")}
+
+
 def _opened_on(dispute):
     """The day a dispute was opened, or the demo clock when the row carries none."""
     opened = dispute.get("opened_at")
@@ -90,7 +95,13 @@ def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, f
         validate_dispute_draft,
         fallback,
     )
-    return dispute_prompt.enforce_payment_method_step(data, bill)
+    data = dispute_prompt.enforce_payment_method_step(data, bill)
+    data["evidence"] = {
+        "bank": evidence or [],
+        "policy": policy or [],
+        "tools": ([COMPARE_TOOL, CONFIRMED_ANOMALIES_TOOL] if evidence is not None else []) + ([tools_service.RETRIEVAL_TOOL] if policy is not None else []),
+    }
+    return data
 
 
 def list_disputes():
@@ -109,7 +120,7 @@ def create_dispute(bill_id, reason):
     draft = draft_for_bill(bill_row, reason, opened_on=_opened_on(dispute))
     bills_db.create_dispute_draft(
         dispute["id"],
-        {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
+        {"letter_text": draft["letter_text"], "steps_json": steps_json(draft)},
     )
     dispute["draft"] = draft
     return dispute
@@ -167,7 +178,7 @@ def regenerate(dispute_id, edited_letter=None, feedback=None):
         )
     created = bills_db.create_dispute_draft(
         dispute_id,
-        {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
+        {"letter_text": draft["letter_text"], "steps_json": steps_json(draft)},
     )
     created["draft"] = draft
     return created
