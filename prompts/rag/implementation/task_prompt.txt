@@ -1,0 +1,6 @@
+Given the evidence, state PASS or FAIL for each of these, one line each, quoting the evidence value you used:
+1. Collections present: both transactions and transactions-records are listed by /health.
+2. Seeded question grounded: on transactions-records the seeded question has under_threshold True, a non-null category_id, and the best chunk merchant matches the seed.
+3. Unrelated question insufficient: on transactions-records the unrelated question has under_threshold False.
+4. Guide collection: on transactions the best chunk has doc_type markdown.
+Then one sentence overall. If a retrieve line says "retrieve failed", name the collection and HTTP code. If the evidence says the seeded question was skipped, write FAIL for line 2 and say the records collection is empty. If the evidence starts with OBSERVE FAILED or names an unreachable server, write FAIL for all four and say the server was unreachable.

@@ -1,119 +1,81 @@
 # Shared terminal agentic loop (Plan → Act → Observe → Adapt)
 
-A terminal-driven review workflow for the group application. Each run picks a
-review target, collects evidence from the repository, sends it through a
-local LLM, and ends with a **human review-and-adapt step** whose decision is
-recorded. Every run writes a machine- and human-readable record to
-`reports/` — the Agentic Loop Workflow Record the Release 0 report requires.
+A terminal review workflow for the group application. Each run picks a
+review target, collects evidence, sends it through two local LLMs, and ends
+with a human accept / reject / edit step. Every run writes the run record
+(`reports/report.json`, `report.md`, `run-view.md`) the reports require.
 
-By team decision (31 Aug) the shared loop is **file-based and deliberately
-barebones**: two Python files, evidence read from the repository, no probing
-of running services. Each student adds their own review modes through the
-extension point below. Live-probing collectors (database row counts over
-HTTP, endpoint latency sweeps, CI run conclusions) exist as a worked example
-of the extension point and are kept as individual work, not on `main`.
+Two Python files: `main.py` (the loop and the collectors) and `record.py`
+(the run record). One `collect` function and three prompt files per mode.
 
-## What it reviews
+## Modes
 
-| Mode | Evidence collected (OBSERVE) | Models |
+| Mode | OBSERVE evidence | Asserts (one PASS/FAIL line each) |
 |---|---|---|
-| Architecture | Compose service inventory and dependency edges, student directory layout, required directories (`.github/workflows/`, `docs/`, `shared/`, `ai-services/`, `scripts/`), shared `index.html` entry point | qwen2.5:0.5b + llama3.1:8b review |
+| Architecture | `docker-compose.yml` services, ports and dependency edges; student directories; required directories; shared `index.html` | Read from files, nothing running |
+| MCP validation | Live, read-only. Lists tools and the `search_transactions` schema; calls it unfiltered, then filtered by the first row's merchant and month, then with a merchant that cannot exist | Tool registered with `start_date`, `end_date`, `merchant`; result is a list of rows with `id`, `date`, `merchant`, `amount`; every row matches the filters and the impossible merchant returns 0 rows; under 3000 ms |
+| RAG validation | Live, read-only. `GET /health`; builds a question from one real `transactions-records` chunk; `POST /retrieve` (`k=3`) on `transactions-records` and `transactions` for that question and a fixed unanswerable one | Both collections present; seeded question under `RAG_INSUFFICIENT_ABOVE` with a `category_id` and the seed's merchant as best chunk; unanswerable question above the threshold; guide best chunk `doc_type` markdown |
 
-Ports and services are read from `docker-compose.yml` at run time — nothing
-is hardcoded, so the review follows whatever the team settles on. Student
-directories are derived (any root directory containing `backend/`), not
-listed in code.
+The validation probes seed themselves from live data, so they keep working
+when the seed data changes. Neither calls `/refresh` or writes anything. An
+unreachable server makes the collector return `(False, reason)`; the run
+records the OBSERVE failure and continues. A single failed `/retrieve` is
+recorded on its own line (`retrieve failed: HTTP <code>`) and the mode
+continues.
 
-## The loop stages
+## Stages
 
-- **PLAN** — the review target is chosen and the externalised prompt files
-  for that mode are loaded from `prompts/<family>/`.
-- **OBSERVE** — evidence is collected from the repository.
-- **ACT** — the implementation model produces a finding; a second, stronger
-  review model then reviews it.
-- **ADAPT** — the human accepts, rejects, or edits the finding at the
-  terminal; the decision (and any edit) goes into the run record.
+- **PLAN** — target chosen, prompts loaded from `prompts/<family>/`.
+- **OBSERVE** — the mode's collector gathers evidence.
+- **ACT** — implementation model writes a finding; review model critiques it.
+- **ADAPT** — the human accepts, rejects, or edits; the decision is recorded.
 
-## How to run
-
-The architecture mode needs nothing running — it reads the repository. For
-real model output ollama must be up (`docker compose up -d ollama`; the
-models are the two `ai-services` already pulls, ~5 GB on first start). If the
-model is unreachable the run still completes and records the failure as part
-of the run record.
+## Run
 
 ```
 pip install -r agentic_loop/requirements.txt
 python -m agentic_loop.main
 ```
 
-Run it from the repository root. Each run writes `reports/report.json`,
-`reports/report.md` and `reports/run-view.md` (gitignored; a committed
-sample lives at `docs/release-0/agentic-loop/sample-run/`).
+Run from the repository root. Needs `ollama` up for real model output
+(`docker compose up -d ollama`). The validation modes also need the shared
+servers on the host: `python ai-services/mcp-server/server.py` (8000) and
+`python ai-services/rag-server/server.py` (5003), with `transactions-db`
+running and the Transactions backend started once so `transactions-records`
+is populated. Anything missing is recorded as a failure, not a crash.
 
-## Engine walkthrough
-
-The whole engine is two files, ~265 lines, readable top to bottom:
-
-**`main.py` (~205 lines)** — everything except the record. In order:
-`read_prompt` and `call_model` (one OpenAI-compatible call to ollama;
-failures are returned as strings, never raised); `collect_architecture`
-(the OBSERVE evidence: compose services/ports/dependency edges via PyYAML,
-derived student directories, required-directory check); the `MODES` dict
-(one entry per review mode); `run_review` (the four stages in sequence,
-each printed as a `[mode][STAGE]` banner and recorded); `adapt` (the
-accept / reject / edit prompt — closes cleanly if input ends); and `main`
-(a numbered menu built from `MODES`).
-
-**`record.py` (~55 lines)** — accumulates each reviewed mode and rewrites
-the three `reports/` files after every completed mode, so a crash cannot
-lose the record.
-
-## Extending the loop (per-student review modes)
-
-Adding a mode does not require touching the engine flow:
-
-1. Add prompt files under `prompts/<your-family>/` — these are your own
-   criterion-5 prompt assets (`implementation/system_prompt.txt`,
-   `implementation/task_prompt.txt`, `review/review_prompt.txt`).
-2. Write a collect function in `main.py` returning `(ok, evidence_text)`
-   for whatever your mode reviews.
-3. Add one entry to the `MODES` dict. The menu numbers itself.
-
-The parked live-probing modes (database, endpoints, devops) are a complete
-worked example of this pattern.
-
-## Lab traceability
-
-The loop is an interpretation of the Labs 04–05 reference implementation
-([asd-labs](https://github.com/Georges034302/asd-labs)): the same
-Plan → Act → Observe → Adapt workflow, stage banners, externalised prompts,
-two-model review, and the three `reports/` files Lab 05 defines.
-
-Known deviations from the labs, all deliberate:
-
-- **Engine size.** The labs' engine spans a 16-file package (config,
-  registry, collectors, pipelines, reporter). The team judged that
-  over-engineered for our purpose (31 Aug); this version condenses it to
-  two files with the same observable behaviour and stages.
-- **Evidence scope.** The labs' db and endpoints collectors gather live
-  evidence (real HTTP requests, database row checks). By the same team
-  decision the shared loop is file-based; the live-probing collectors are
-  parked as individual work and can return as an R1 proposal.
-- **Database access.** The lab db collector opens the SQLite file
-  directly. The parked port reads each student's database API over HTTP
-  instead, respecting service data ownership.
+`reports/` is gitignored. Committed samples: `docs/release-0/agentic-loop/`
+(architecture) and `docs/release-1/agentic-loop/` (MCP and RAG).
 
 ## Environment variables
 
-There is no `.env` in the repo; a root-level `.env` is loaded if you create
-one. Defaults suit a host-side terminal talking to the compose-published
-ollama port:
+Loaded from an optional root `.env`. Defaults suit a host terminal.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint of the ollama service |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | ollama OpenAI-compatible endpoint |
 | `OLLAMA_MODEL` | `qwen2.5:0.5b` | Implementation model |
 | `OLLAMA_REVIEW_MODEL` | `llama3.1:8b` | Review model |
+| `MCP_SERVER_URL` | `http://localhost:8000/mcp` | Shared MCP server |
+| `RAG_SERVER_URL` | `http://localhost:5003` | Shared RAG server |
+| `RAG_INSUFFICIENT_ABOVE` | `1.2` | Best distance above this is insufficient (same as the Transactions backend) |
+| `LOOP_HTTP_TIMEOUT` | `30` | Seconds per MCP or RAG call |
 
-Both defaults are models `ai-services` already pulls — no extra downloads.
+## Adding a mode
+
+1. Add `prompts/<family>/implementation/system_prompt.txt`,
+   `implementation/task_prompt.txt`, `review/review_prompt.txt`.
+2. Write a collect function in `main.py` returning `(ok, evidence_text)`.
+3. Add one entry to `MODES`. The menu numbers itself.
+
+The MCP and RAG modes are the worked example; the engine did not change.
+
+## Lab traceability
+
+Same Plan → Act → Observe → Adapt workflow, stage banners, externalised
+prompts, two-model review and three report files as the Labs 04–05
+reference ([asd-labs](https://github.com/Georges034302/asd-labs)).
+Deliberate deviations: two files instead of a 16-file package (team
+decision, 31 Aug); live evidence only for the two shared AI servers, with
+student database and endpoint collectors kept as individual work; no direct
+SQLite access, data is reached through each service's API.
