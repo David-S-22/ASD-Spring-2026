@@ -294,7 +294,7 @@ def test_a_dispute_update_with_a_reason_and_no_status_is_a_new_dispute(live_clie
     body = _text(live_client.post("/ui/chat", data={"message": "I want to dispute the GymCo charge, I never signed up for it"}))
     latest = bills_db_module.list_suggestions(status="pending")[-1]
     assert (latest["op"], latest["entity"], latest["entity_id"]) == ("create", "dispute", None)
-    assert json.loads(latest["payload_json"]) == {"bill_id": 6, "reason": "Never signed up for GymCo"}
+    assert json.loads(latest["payload_json"]) == {"bill_id": 6, "reason": "I never signed up for it"}
     assert "Update dispute" not in body and "GymCo" in body
 
 
@@ -314,3 +314,23 @@ def test_an_update_naming_two_bills_still_asks_which(live_client, modes_on, monk
     pending_before = len(bills_db_module.list_suggestions(status="pending"))
     body = _text(live_client.post("/ui/chat", data={"message": "Update my Spotify or Netflix to $15.99 a month"}))
     assert "Which bill did you mean" in body and len(bills_db_module.list_suggestions(status="pending")) == pending_before
+
+
+@pytest.mark.parametrize("model_reply", [
+    {"op": "update", "entity": "bill", "id": 6, "fields": {"disputed": True}, "question": "none", "say": "Marked GymCo as disputed."},
+    {"op": None, "entity": None, "id": None, "fields": None, "question": "none", "say": "I can help with that."},
+])
+def test_a_dispute_request_naming_one_bill_is_built_in_code_whatever_the_model_emits(live_client, modes_on, monkeypatch, model_reply):
+    fake_model(monkeypatch, model_reply)
+    body = _text(live_client.post("/ui/chat", data={"message": "I want to dispute the GymCo charge, I never signed up for it"}))
+    latest = bills_db_module.list_suggestions(status="pending")[-1]
+    assert (latest["op"], latest["entity"]) == ("create", "dispute")
+    assert json.loads(latest["payload_json"]) == {"bill_id": 6, "reason": "I never signed up for it"}
+    assert "Open dispute for GymCo" in body and "cannot be set via chat" not in body
+
+
+def test_a_dispute_request_without_a_reason_clause_uses_the_whole_message(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    live_client.post("/ui/chat", data={"message": "Dispute my Netflix charge"})
+    latest = bills_db_module.list_suggestions(status="pending")[-1]
+    assert json.loads(latest["payload_json"]) == {"bill_id": 4, "reason": "Dispute my Netflix charge"}

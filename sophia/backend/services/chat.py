@@ -309,6 +309,20 @@ def _mentions(text, name):
     return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I) is not None
 
 
+DISPUTE_VERB = re.compile(r"\bdisput(e|es|ed|ing)\b", re.I)
+REASON_SPLIT = re.compile(r",\s+|\s+because\s+|\s+-\s+|:\s+|\s+as\s+", re.I)
+
+
+def _dispute_from_words(message, bills):
+    """A create-dispute proposal built from the user's own words when they say dispute and name exactly one bill; the reason is the clause after the first comma, because or dash, else the whole message."""
+    named = _bills_named(message, bills)
+    if not DISPUTE_VERB.search(message or "") or len(named) != 1:
+        return None
+    parts = REASON_SPLIT.split(message.strip(), maxsplit=1)
+    reason = parts[1].strip() if len(parts) == 2 and parts[1].strip() else message.strip()
+    return {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": named[0]["id"], "reason": reason}}
+
+
 def _retarget_to_named_bill(preview, message, bills):
     """Point a bill update or delete at the one bill the user's own message names, since a small model sometimes says Spotify and emits Prime Video's id."""
     named = _bills_named(message, bills)
@@ -515,7 +529,7 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
 
     reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
-    preview = None if asks else _build_preview(data)
+    preview = None if asks else (_dispute_from_words(model_message, bills) or _build_preview(data))
     if preview:
         preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
