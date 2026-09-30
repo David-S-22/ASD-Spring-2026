@@ -17,13 +17,11 @@ validated and persisted as anomaly records. Previously confirmed or dismissed
 findings are included as feedback context for later reviews.
 
 The anomalies database exposes a Flask REST API backed by SQLAlchemy and
-SQLite. Each anomaly stores the related transaction ID, the agent's reason,
-optional confidence from `0` to `1`, and the user's confirmation status.
-Seeded confidence estimates are higher for stronger and confirmed findings,
-and lower for findings dismissed as false positives. Transactions and
-anomalies are stored in separate databases, so the relationship is represented
-by ID and is not an enforced cross-database foreign key. Each transaction can
-have at most one anomaly.
+SQLite. Each anomaly stores the related transaction ID, the agent's reason, and
+the user's confirmation status. Transactions and anomalies are stored in
+separate databases, so the relationship is represented by ID and is not an
+enforced cross-database foreign key. Each transaction can have at most one
+anomaly.
 
 ## Architecture
 
