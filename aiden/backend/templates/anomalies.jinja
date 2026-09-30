@@ -10,6 +10,7 @@
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
+  <td class="anomaly-sources">{% if anomaly.sources %}<ul class="source-list">{% for source in anomaly.sources %}<li class="source-chip" title="{{ source|e }}">{{ source|e }}</li>{% endfor %}</ul>{% else %}<span class="no-actions" aria-label="No sources" title="No sources">—</span>{% endif %}</td>
   <td class="anomaly-confidence">{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="confidence-indicator confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
   <td class="anomaly-status">
     {% if anomaly.is_confirmed_by_user is none %}
@@ -24,6 +25,7 @@
             data-description="{{ (txn.description if txn else '—')|e }}"
             data-category="{{ (category_name if category_name else ('Unknown category (' ~ txn.category_id ~ ')' if txn else '—'))|e }}"
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
+            data-sources="{{ anomaly.sources|join('\n')|e }}"
             data-confidence="{{ '%.1f'|format(anomaly.confidence * 100) if anomaly.confidence is not none else '' }}"
             data-confidence-level="{{ confidence_level or '' }}"
             onclick="openReviewModal(this)">Unreviewed<svg class="review-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M11 2.5 13.5 5 6 12.5H3.5V10L11 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
@@ -33,5 +35,5 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="5" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="6" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}

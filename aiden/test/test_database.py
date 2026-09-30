@@ -67,6 +67,67 @@ def test_create_anomaly_persists_confidence(client: FlaskClient):
     assert resp.json["confidence"] == 0.87
 
 
+def test_create_anomaly_defaults_sources_to_empty_list(client: FlaskClient):
+    json = dict(transaction_id=120, agent_reason_suspected="beans", is_confirmed_by_user=None)
+
+    resp = client.post("/anomalies/", json=json)
+
+    assert resp.status_code == 201, resp.text
+    assert isinstance(create_json := resp.json, dict)
+    assert create_json["sources"] == []
+
+
+def test_create_anomaly_persists_sources(client: FlaskClient):
+    json = dict(
+        transaction_id=121,
+        agent_reason_suspected="beans",
+        is_confirmed_by_user=None,
+        sources=["fraud-red-flags.md", "fraud-patterns.md"],
+    )
+
+    resp = client.post("/anomalies/", json=json)
+
+    assert resp.status_code == 201, resp.text
+    assert isinstance(create_json := resp.json, dict)
+    assert create_json["sources"] == ["fraud-red-flags.md", "fraud-patterns.md"]
+
+    resp = client.get("/anomalies/" + str(create_json["id"]))
+
+    assert resp.status_code == 200
+    assert isinstance(resp.json, dict)
+    assert resp.json["sources"] == ["fraud-red-flags.md", "fraud-patterns.md"]
+
+
+def test_create_anomaly_deduplicates_sources(client: FlaskClient):
+    json = dict(
+        transaction_id=122,
+        agent_reason_suspected="beans",
+        is_confirmed_by_user=None,
+        sources=["a.md", "a.md", "b.md"],
+    )
+
+    resp = client.post("/anomalies/", json=json)
+
+    assert resp.status_code == 201, resp.text
+    assert isinstance(create_json := resp.json, dict)
+    assert create_json["sources"] == ["a.md", "b.md"]
+
+
+def test_create_anomaly_rejects_invalid_sources(client: FlaskClient):
+    resp = client.post(
+        "/anomalies/",
+        json={
+            "transaction_id": 123,
+            "agent_reason_suspected": "beans",
+            "sources": [1, 2, 3],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert isinstance(resp.json, dict)
+    assert "Field sources expected try_parse_string_list" in resp.json["description"]
+
+
 def test_confidence_out_of_range_is_rejected(client: FlaskClient):
     import pytest
     from sqlalchemy.exc import IntegrityError

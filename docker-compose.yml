@@ -157,6 +157,9 @@ services:
       OLLAMA_MODEL: qwen2.5:3b
       OLLAMA_LOG_LEVEL: DEBUG
       MCP_SERVER_URL: http://host.docker.internal:8000/mcp
+      RAG_ENABLED: ${RAG_ENABLED:-true}
+      RAG_SERVER_URL: http://host.docker.internal:5003
+      RAG_FEATURE: anomalies
     depends_on:
       anomalies-db:
         condition: service_started

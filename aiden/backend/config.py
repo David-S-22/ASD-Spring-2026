@@ -65,6 +65,28 @@ class _Config:
     def MCP_TIMEOUT_SECONDS(self) -> float:
         return float(os.environ.get("MCP_TIMEOUT_SECONDS", "15"))
 
+    @property
+    def RAG_ENABLED(self) -> bool:
+        return os.environ.get("RAG_ENABLED", "true").strip().casefold() in {
+            "1", "true", "yes", "on",
+        }
+
+    @property
+    def RAG_SERVER_URL(self) -> str:
+        return _url(os.environ.get("RAG_SERVER_URL", "http://host.docker.internal:5003"))
+
+    @property
+    def RAG_FEATURE(self) -> str:
+        return os.environ.get("RAG_FEATURE", "anomalies")
+
+    @property
+    def RAG_TOP_K(self) -> int:
+        return max(1, int(os.environ.get("RAG_TOP_K", "3")))
+
+    @property
+    def RAG_TIMEOUT_SECONDS(self) -> float:
+        return float(os.environ.get("RAG_TIMEOUT_SECONDS", "15"))
+
     def check_all(self) -> None:
         """Resolve every configured variable, raising if any is missing or invalid.
 

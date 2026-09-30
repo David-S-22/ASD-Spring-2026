@@ -8,7 +8,9 @@ Each anomaly references a transaction by ID, and the unique constraint on
 `anomalies.transaction_id` allows each transaction to have at most one anomaly.
 An optional confidence score is stored from `0` to `1`; seeded scores are higher
 for findings supported by stronger evidence and confirmed as accurate, and
-lower for findings dismissed as false positives.
+lower for findings dismissed as false positives. Each anomaly also stores
+`sources`: a JSON list of the RAG reference-document filenames the agent used to
+ground its finding (an empty list when none were retrieved).
 
 The `transactions` table and `anomalies` table are stored in separate databases. Therefore, the relationship between `anomalies.transaction_id` and `transactions.id` is a logical cross-database reference rather than an enforced database foreign key. The `UNIQUE` constraint on `anomalies.transaction_id` ensures that each transaction can have zero or one anomaly.
 
@@ -79,6 +81,7 @@ erDiagram
         string agent_reason_suspected
         boolean is_confirmed_by_user
         float confidence "0 to 1, nullable"
+        json sources "RAG source filenames"
     }
 ```
 
@@ -105,6 +108,7 @@ erDiagram
         string agent_reason_suspected
         boolean is_confirmed_by_user
         float confidence "0 to 1, nullable"
+        json sources "RAG source filenames"
     }
 ```
 
@@ -131,5 +135,6 @@ erDiagram
         VARCHAR agent_reason_suspected "NOT NULL"
         BOOLEAN is_confirmed_by_user "NULLABLE"
         FLOAT confidence "NULLABLE, 0 <= confidence <= 1"
+        JSON sources "NOT NULL, defaults to []"
     }
 ```

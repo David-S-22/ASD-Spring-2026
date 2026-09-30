@@ -17,12 +17,13 @@
                 <th aria-sort="ascending"><button type="button" class="sort-btn" data-sort-key="date">Transaction Date<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
                 <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="merchant">Merchant<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
                 <th>Reason suspected</th>
+                <th>Sources</th>
                 <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="confidence">Confidence<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
                 <th aria-sort="none"><button type="button" class="sort-btn" data-sort-key="status">Status<svg class="sort-icon sort-icon-neutral" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M5 2v12m0 0-3-3m3 3 3-3M11 14V2m0 0L8 5m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="sort-icon sort-icon-active" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th>
             </tr>
         </thead>
         <tbody id="anomalies" hx-get="/anomalies-backend/anomalies" hx-trigger="load, every 5s" hx-swap="innerHTML">
-            <tr><td colspan="5" style="text-align: center;">Loading…</td></tr>
+            <tr><td colspan="6" style="text-align: center;">Loading…</td></tr>
         </tbody>
     </table>
     </div>
@@ -59,6 +60,10 @@
                 <div class="review-detail review-detail-reason">
                     <dt>Reason suspected</dt>
                     <dd id="review-anomaly-reason"></dd>
+                </div>
+                <div class="review-detail review-detail-sources">
+                    <dt>Sources</dt>
+                    <dd><ul id="review-anomaly-sources" class="source-list"></ul><span id="review-anomaly-sources-missing">—</span></dd>
                 </div>
             </dl>
             <label for="review-decision">Decision</label>

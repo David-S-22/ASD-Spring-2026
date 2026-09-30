@@ -93,6 +93,19 @@ def test_startup_ingestion_transactions_guide(http):
     assert res["results"][0]["metadata"]["doc_type"] == "markdown"
 
 
+def test_startup_ingestion_anomalies_guide(http):
+    """Sources/anomalies is ingested on startup into its own 'anomalies' collection."""
+    body = http.get("/health").get_json()
+    assert "anomalies" in body["collections"]
+
+    res = http.post("/retrieve", json={"feature": "anomalies", "question": "large cash withdrawal at an ATM", "k": 2}).get_json()
+    assert len(res["results"]) >= 1
+    sources = {r["metadata"]["source"] for r in res["results"]}
+    assert sources <= {"fraud-red-flags.md", "fraud-patterns.md", "legitimate-transactions.md"}
+    assert res["results"][0]["metadata"]["feature"] == "anomalies"
+    assert res["results"][0]["metadata"]["doc_type"] == "markdown"
+
+
 def test_sources_refresh_route(http):
     """The /sources/refresh endpoint re-ingests sources and returns counts."""
     res = http.post("/sources/refresh").get_json()

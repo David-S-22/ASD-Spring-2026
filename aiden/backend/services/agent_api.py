@@ -9,6 +9,7 @@ from shared.backend import dto
 from ..config import config
 from .ollama_api import prompt
 from . import mcp_client
+from . import rag_client
 from ..helpers import serialise
 
 _CONFIRMED_ANOMALIES_TOOL = "get_transactions_with_confirmed_anomalies"
@@ -52,6 +53,11 @@ Use the confirmed examples as positive examples and the rejected examples as
 negative examples. Use this feedback to align your judgement with the user's,
 but still evaluate the current transaction on its own merits.
 
+The user message may also include a "Reference guidance" section containing
+excerpts from fraud/anomaly reference documents retrieved for this transaction.
+Ground your reasoning in that guidance where it applies, but never fabricate
+details it does not support.
+
 Return ONLY valid JSON matching this schema:
 
 {{
@@ -65,7 +71,7 @@ Do not return Markdown, code fences, commentary, or any additional fields.
 """
 
 _detect_user_prompt = """
-{1}
+{1}{2}
 Review the following transaction. Determine whether this transaction is suspicious according to your instructions.
 
 {0}
@@ -87,14 +93,15 @@ def review_new_transaction(
     serialised = serialise(transaction)
     detect_system_prompt = _detect_system_prompt.format(datetime.now().strftime("%Y-%m-%d"))
     examples_context = _build_reviewed_examples_context()
-    detect_user_prompt = _detect_user_prompt.format(serialised, examples_context)
+    reference_context, reference_sources = _build_reference_context(transaction)
+    detect_user_prompt = _detect_user_prompt.format(serialised, examples_context, reference_context)
     review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
     current_app.logger.info(
         "Full anomaly prompt for transaction %s:\n"
         "----- SYSTEM PROMPT -----\n%s\n"
-        "----- USER PROMPT (includes MCP-retrieved examples) -----\n%s",
+        "----- USER PROMPT (includes MCP-retrieved examples and RAG reference guidance) -----\n%s",
         transaction.id,
         detect_system_prompt,
         detect_user_prompt,
@@ -135,7 +142,56 @@ def review_new_transaction(
         agent_reason_suspected=review_finding.justification,
         is_confirmed_by_user=None,
         confidence=review_finding.confidence,
+        sources=reference_sources,
     )
+
+
+def _build_reference_context(transaction: dto.Transaction) -> tuple[str, list[str]]:
+    """Retrieve RAG reference guidance for a transaction.
+
+    Returns a formatted prompt section and the de-duplicated list of source
+    filenames the guidance came from (closest first). If RAG is disabled or the
+    server is unavailable the review still proceeds without guidance, so a
+    transient RAG failure never blocks anomaly detection.
+    """
+
+    question = _reference_question(transaction)
+
+    try:
+        results = rag_client.retrieve(config.RAG_FEATURE, question, config.RAG_TOP_K)
+    except rag_client.RAGError as error:
+        current_app.logger.warning(
+            "RAG reference retrieval unavailable, continuing without guidance: %s",
+            error.code,
+        )
+        return "", []
+
+    if not results:
+        return "", []
+
+    sources: list[str] = []
+    lines = ["Reference guidance (excerpts from fraud/anomaly reference documents):"]
+    for index, item in enumerate(results, start=1):
+        source = item["metadata"].get("source")
+        if isinstance(source, str) and source and source not in sources:
+            sources.append(source)
+        lines.append(f"[{index}] ({source or 'unknown source'}) {_excerpt(item['text'])}")
+
+    return "\n".join(lines) + "\n", sources
+
+
+def _reference_question(transaction: dto.Transaction) -> str:
+    return (
+        f"{transaction.merchant} {transaction.description} "
+        f"amount {transaction.amount}"
+    ).strip()
+
+
+def _excerpt(text: str, limit: int = 300) -> str:
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
 
 def _build_reviewed_examples_context() -> str:
     """Fetch reviewed examples from the MCP server and format them for the prompt.

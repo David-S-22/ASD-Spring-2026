@@ -15,7 +15,9 @@ The page describes its table as a list of flagged transactions, their suspected
 reasons, and review status, with actions to confirm or dismiss unreviewed
 findings. Rows load from the backend and refresh periodically using HTMX. The Transaction Date, Merchant, Confidence, and Status column headers are sortable;
 the current sort is shown with SVG indicators and kept when refreshed rows
-arrive. The Confidence column shows the model's certainty as a colored dot and
+arrive. The Sources column lists, as small pill-shaped chips, the RAG
+reference-document filenames the agent used to ground the finding (or a dash
+when none were used). The Confidence column shows the model's certainty as a colored dot and
 Low/Medium/High label (or a dash when no score is available). Blue, indigo, and
 purple dot-labels distinguish confidence from the green Confirmed and red
 Dismissed status badges. Unreviewed status badges are buttons styled as blue
@@ -26,8 +28,9 @@ with horizontal scrolling on narrow screens.
 The review dialog shows the transaction details (a
 locale-formatted date with weekday, merchant, amount, description, category
 name, and confidence level with percentage) in two columns, followed by a
-full-width suspected-reason row before collecting the user's Confirm or Dismiss
-decision. Labels are styled as small uppercase
+full-width suspected-reason row and a full-width sources row (the RAG
+reference-document chips, or a dash when none) before collecting the user's
+Confirm or Dismiss decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.
 

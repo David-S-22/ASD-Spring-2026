@@ -75,6 +75,24 @@ function openReviewModal(button) {
     document.getElementById('review-transaction-description').textContent = button.dataset.description;
     document.getElementById('review-transaction-category').textContent = button.dataset.category;
     document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
+    const sourcesList = document.getElementById('review-anomaly-sources');
+    const sourcesMissing = document.getElementById('review-anomaly-sources-missing');
+    const sources = (button.dataset.sources || '').split('\n').filter(source => source.trim() !== '');
+    sourcesList.replaceChildren();
+    if (sources.length) {
+        sources.forEach(source => {
+            const item = document.createElement('li');
+            item.className = 'source-chip';
+            item.textContent = source;
+            item.title = source;
+            sourcesList.appendChild(item);
+        });
+        sourcesList.hidden = false;
+        sourcesMissing.hidden = true;
+    } else {
+        sourcesList.hidden = true;
+        sourcesMissing.hidden = false;
+    }
     const confidence = document.getElementById('review-confidence');
     const confidenceMissing = document.getElementById('review-confidence-missing');
     const confidenceLevel = button.dataset.confidenceLevel;
