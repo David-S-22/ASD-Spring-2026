@@ -164,22 +164,18 @@ def test_disputes_fragment_empty_state(live_client):
     assert 'No open disputes. If a charge looks wrong, open the bill and choose "Dispute".' in text
 
 
-def test_chat_fragment_chips_placeholder_and_clean_open(live_client):
+def test_chat_fragment_placeholder_and_clean_open(live_client):
     """The panel opens on a welcome state, not on somebody else's transcript.
 
-    The four suggestion chips share their wording with seeded user messages, so
-    the check that history is not replayed uses assistant replies instead --
-    those appear only if stored messages are being rendered.
+    The check that history is not replayed uses assistant replies -- those
+    appear only if stored messages are being rendered.
     """
     response = live_client.get("/ui/chat")
     assert response.status_code == 200
     text = _text(response)
-    assert "What do my bills add up to?" in text
-    assert "Which subscriptions am I barely using?" in text
-    assert "I cancelled Spotify from September — remove the future payments" in text
-    assert "Draft a note to dispute my GymCo charge" in text
     assert 'placeholder="Ask"' in text
-    assert "Ask about your bills, or pick one of the suggestions above." in text
+    assert "Ask about your bills." in text
+    assert "data-chip" not in text
     assert "Earlier — Mon 17 Aug" not in text
     assert "September needs up to $697" not in text
     assert "Cloud storage has billed four times" not in text
@@ -359,7 +355,7 @@ def test_index_mounts_the_r1_cards_and_app_js_exempts_their_forms():
     with open(os.path.join(frontend, "js", "app.js"), encoding="utf-8") as handle:
         script = handle.read()
     assert 'closest(".tools-panel form")' in script and 'closest(".evidence-panel form")' in script
-    assert "data-evidence-chip" in script
+    assert "data-evidence-chip" not in script
     with open(os.path.join(frontend, "css", "bills.css"), encoding="utf-8") as handle:
         css = handle.read()
     assert ".tools-panel .working" not in css and ".evidence-panel .working" not in css

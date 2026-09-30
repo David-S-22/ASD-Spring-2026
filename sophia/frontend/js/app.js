@@ -400,30 +400,6 @@ billsRoot.addEventListener("click", function (evt) {
     closeRowMenus();
   }
 
-  var chip = evt.target.closest("[data-chip]");
-  if (chip) {
-    var input = document.querySelector('.chat-panel input[name="message"]');
-    if (input) {
-      input.value = chip.getAttribute("data-chip");
-      if (input.form && input.form.requestSubmit) {
-        input.form.requestSubmit();
-      }
-    }
-    return;
-  }
-
-  var evidenceChip = evt.target.closest("[data-evidence-chip]");
-  if (evidenceChip) {
-    var question = document.querySelector('.evidence-panel input[name="question"]');
-    if (question) {
-      question.value = evidenceChip.getAttribute("data-evidence-chip");
-      if (question.form && question.form.requestSubmit) {
-        question.form.requestSubmit();
-      }
-    }
-    return;
-  }
-
   var rewrite = evt.target.closest('[data-action="rewrite"]');
   if (rewrite) {
     var panel = rewrite.closest(".dispute-panel");

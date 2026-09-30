@@ -22,13 +22,11 @@ def client(monkeypatch):
     return app.test_client()
 
 
-def test_panel_has_form_chips_and_result_target(client):
+def test_panel_has_form_and_result_target(client):
     body = _text(client.get("/ui/evidence"))
     assert 'id="evidence-panel"' in body
     assert 'hx-post="/bills-backend/ui/evidence"' in body and 'hx-target="#evidence-result"' in body
-    assert 'data-evidence-chip="How much is my music subscription?"' in body
-    assert 'data-evidence-chip="Which bill is overdue?"' in body
-    assert 'data-evidence-chip="What is the capital of France?"' in body
+    assert "data-evidence-chip" not in body
     assert "RAG enabled" in body
 
 
