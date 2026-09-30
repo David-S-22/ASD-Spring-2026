@@ -334,3 +334,11 @@ def test_a_dispute_request_without_a_reason_clause_uses_the_whole_message(live_c
     live_client.post("/ui/chat", data={"message": "Dispute my Netflix charge"})
     latest = bills_db_module.list_suggestions(status="pending")[-1]
     assert json.loads(latest["payload_json"]) == {"bill_id": 4, "reason": "Dispute my Netflix charge"}
+
+
+def test_a_model_upcoming_tag_is_ignored_when_the_question_never_asks_what_is_due(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, dict(PLAIN_QUESTION, question="upcoming"))
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    body = _text(live_client.post("/ui/chat", data={"message": "Which bill is overdue?"}))
+    assert questions == ["Which bill is overdue?"] and "Home internet (FibreLink, $79.00) is overdue." in body
+    assert "Coming up" not in body
