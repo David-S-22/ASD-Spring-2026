@@ -161,9 +161,9 @@ def _charge(row: dict, bill_amount_cents: int) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(tags={"bills"})
 def list_bills(bill_type: str | None = None) -> list[dict]:
-    """List the user's bills from the Bills database (read-only): id, name, merchant, amount_cents, cadence, next_billing_date, status, type, payment_method, end_date.
+    """For the Bills feature only. List the user's bills from the Bills database (read-only): id, name, merchant, amount_cents, cadence, next_billing_date, status, type, payment_method, end_date.
 
     Args:
         bill_type: 'bill' or 'subscription' to return only that type; omit for every bill.
@@ -173,9 +173,9 @@ def list_bills(bill_type: str | None = None) -> list[dict]:
     return [bill for bill in _bills_db("/bills") if bill_type in (None, bill["type"])]
 
 
-@mcp.tool()
+@mcp.tool(tags={"bills"})
 def get_bill_payments(bill_id: int) -> dict:
-    """Return {"bill", "payments": [{id, bill_id, date, amount_cents}]} for one bill, payments oldest first (read-only).
+    """For the Bills feature only. Return {"bill", "payments": [{id, bill_id, date, amount_cents}]} for one bill, payments oldest first (read-only).
 
     Args:
         bill_id: The bill's id from list_bills.
@@ -183,9 +183,9 @@ def get_bill_payments(bill_id: int) -> dict:
     return {"bill": _bills_db(f"/bills/{bill_id}"), "payments": _bills_db(f"/bills/{bill_id}/payments")}
 
 
-@mcp.tool()
+@mcp.tool(tags={"bills"})
 def compare_bill_with_bank_charges(bill_id: int, start_date: str, end_date: str) -> dict:
-    """Return {"bill", "payments", "charges"} for one bill between two dates: the payments recorded in Bills and the bank charges from the bill's merchant, each charge in cents with differs_from_bill_cents. Nothing is matched, summed or written; the caller supplies the dates.
+    """For the Bills feature only. Return {"bill", "payments", "charges"} for one bill between two dates: the payments recorded in Bills and the bank charges from the bill's merchant, each charge in cents with differs_from_bill_cents. Nothing is matched, summed or written; the caller supplies the dates.
 
     Args:
         bill_id: The bill's id from list_bills.

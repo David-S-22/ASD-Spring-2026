@@ -107,7 +107,10 @@ def test_compare_needs_a_sane_window_and_an_existing_bill(server):
 def test_the_three_tools_are_registered_read_only_beside_the_existing_four(server):
     async def names():
         async with Client(server.mcp) as client:
-            return sorted(t.name for t in await client.list_tools())
+            tools = await client.list_tools()
+            bills = [t for t in tools if t.name in ("list_bills", "get_bill_payments", "compare_bill_with_bank_charges")]
+            assert all(t.meta["fastmcp"]["tags"] == ["bills"] and t.description.startswith("For the Bills feature only.") for t in bills)
+            return sorted(t.name for t in tools)
 
     assert asyncio.run(names()) == sorted(["search_transactions", "retrieve_context", "get_transactions_with_confirmed_anomalies",
                                            "get_transactions_with_rejected_anomalies", "list_bills", "get_bill_payments", "compare_bill_with_bank_charges"])
