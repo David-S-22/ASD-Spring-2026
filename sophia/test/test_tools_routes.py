@@ -55,10 +55,58 @@ def test_match_transactions_calls_search_transactions_with_the_bill_merchant(cli
     assert "HX-Trigger" not in response.headers
 
 
+def test_tools_panel_offers_the_bills_db_tools_on_the_same_bill_picker(client):
+    body = _text(client.get("/ui/tools"))
+    assert 'hx-post="/bills-backend/ui/tools/get_bill_payments"' in body and 'hx-post="/bills-backend/ui/tools/compare_bill_with_bank_charges"' in body
+    assert body.count('hx-include="closest form"') == 2 and body.count("<select") == 1
+
+
+def test_payment_history_calls_get_bill_payments_and_renders_the_payments_in_dollars(client, monkeypatch):
+    seen = {}
+
+    def call_tool(name, arguments):
+        seen.update(name=name, arguments=arguments)
+        return {"bill": {"id": 3, "merchant": "Spotify AU", "amount_cents": 1399},
+                "payments": [{"id": 11, "bill_id": 3, "date": "2026-07-27", "amount_cents": 1399}, {"id": 13, "bill_id": 3, "date": "2026-09-27", "amount_cents": 1399}]}, 21.0
+
+    monkeypatch.setattr(mcp_server, "call_tool", call_tool)
+    body = _text(client.post("/ui/tools/get_bill_payments", data={"bill_id": "3"}))
+    assert seen == {"name": "get_bill_payments", "arguments": {"bill_id": 3}}
+    assert "2 rows in 21.0 ms" in body and "2026-07-27" in body and "$13.99" in body and "vs bill" not in body
+
+
+def test_compare_sends_a_90_day_window_ending_today_and_notes_the_difference(client, monkeypatch):
+    from datetime import timedelta
+
+    seen = {}
+
+    def call_tool(name, arguments):
+        seen.update(name=name, arguments=arguments)
+        return {"bill": {"id": 3, "merchant": "Spotify AU", "amount_cents": 1399}, "payments": [],
+                "charges": [{"id": 26, "date": "2026-08-20", "amount_cents": 1799, "description": "Monthly subscription", "differs_from_bill_cents": 400},
+                            {"id": 22, "date": "2026-07-15", "amount_cents": 1399, "description": "Spotify Premium subscription", "differs_from_bill_cents": 0}]}, 33.0
+
+    monkeypatch.setattr(mcp_server, "call_tool", call_tool)
+    body = _text(client.post("/ui/tools/compare_bill_with_bank_charges", data={"bill_id": "3"}))
+    start = (config.DEMO_TODAY - timedelta(days=90)).isoformat()
+    assert seen == {"name": "compare_bill_with_bank_charges", "arguments": {"bill_id": 3, "start_date": start, "end_date": config.DEMO_TODAY.isoformat()}}
+    assert "2 rows in 33.0 ms" in body and "$17.99" in body and "+$4.00 vs bill" in body and "Monthly subscription" in body
+    assert "2026-07-15" in body and "-$" not in body
+
+
+def test_bills_db_tools_with_an_empty_result_and_an_unknown_bill(client, monkeypatch):
+    monkeypatch.setattr(mcp_server, "call_tool", lambda name, arguments: ({"bill": {"id": 7}, "payments": []}, 9.0))
+    assert "No matching rows." in _text(client.post("/ui/tools/get_bill_payments", data={"bill_id": "7"}))
+    response = client.post("/ui/tools/compare_bill_with_bank_charges", data={"bill_id": "99"})
+    assert response.status_code == 422 and "bill not found" in _text(response)
+
+
 def test_display_row_normalises_both_date_shapes():
-    assert tools._display_row({"date": "2026-06-10T00:00:00", "description": "x", "amount": 79}) == {"date": "2026-06-10", "description": "x", "amount": "$79.00"}
-    assert tools._display_row({"date": "Wed, 10 Jun 2026 00:00:00 GMT", "amount": "13.99"}) == {"date": "2026-06-10", "description": "", "amount": "$13.99"}
-    assert tools._display_row({"date": "later", "amount": None}) == {"date": "later", "description": "", "amount": ""}
+    assert tools._display_row({"date": "2026-06-10T00:00:00", "description": "x", "amount": 79}) == {"date": "2026-06-10", "description": "x", "amount": "$79.00", "note": ""}
+    assert tools._display_row({"date": "Wed, 10 Jun 2026 00:00:00 GMT", "amount": "13.99"}) == {"date": "2026-06-10", "description": "", "amount": "$13.99", "note": ""}
+    assert tools._display_row({"date": "later", "amount": None}) == {"date": "later", "description": "", "amount": "", "note": ""}
+    assert tools._display_row({"date": "2026-08-20", "amount_cents": 1799, "differs_from_bill_cents": 400})["note"] == "+$4.00 vs bill"
+    assert tools._display_row({"date": "2026-08-20", "amount_cents": 1299, "differs_from_bill_cents": -100})["note"] == "-$1.00 vs bill"
 
 
 def test_unknown_bill_and_unknown_tool_render_error_fragments(client):

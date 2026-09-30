@@ -150,3 +150,67 @@ def test_api_chat_carries_the_grounded_card(live_client, modes_on, monkeypatch):
     assert payload["reply"] == GROUNDED["answer"]
     assert payload["grounded"]["confidence"] == "medium"
     assert [c["source"] for c in payload["grounded"]["citations"]] == ["bill-7-home-internet.md"]
+
+
+COMPARE = {"bill": {"id": 3, "merchant": "Spotify AU", "amount_cents": 1399}, "payments": [],
+           "charges": [{"id": 26, "date": "2026-08-20", "amount_cents": 1799, "description": "Monthly subscription", "differs_from_bill_cents": 400},
+                       {"id": 22, "date": "2026-07-15", "amount_cents": 1399, "description": "Spotify Premium subscription", "differs_from_bill_cents": 0}]}
+
+
+def fake_tool(monkeypatch, data=None, error=None):
+    from sophia.backend.clients import mcp_server
+
+    calls = []
+
+    def call_tool(name, arguments):
+        calls.append((name, arguments))
+        if error:
+            raise error
+        return data, 41.0
+
+    monkeypatch.setattr(mcp_server, "call_tool", call_tool)
+    return calls
+
+
+def test_a_question_about_what_a_bill_charged_is_answered_by_the_compare_tool(live_client, modes_on, monkeypatch):
+    from datetime import timedelta
+
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    calls = fake_tool(monkeypatch, COMPARE)
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "What has Spotify actually charged me?"}))
+    start = (config.DEMO_TODAY - timedelta(days=90)).isoformat()
+    assert calls == [("compare_bill_with_bank_charges", {"bill_id": 3, "start_date": start, "end_date": config.DEMO_TODAY.isoformat()})]
+    assert questions == [] and "Proposed:" not in body
+    assert "Spotify AU charged you two times in the last 90 days" in body and "20 Aug" in body and "$4.00 above" in body
+    assert "20 Aug · $17.99 · +$4.00 vs bill" in body and "15 Jul · $13.99" in body
+    assert "compare_bill_with_bank_charges" in body and "41.0 ms" in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == pending_before
+
+
+def test_no_bank_charges_is_said_plainly(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    fake_tool(monkeypatch, dict(COMPARE, charges=[]))
+    body = _text(live_client.post("/ui/chat", data={"message": "Has Spotify charged me?"}))
+    assert "No bank charges from Spotify AU in the last 90 days." in body
+
+
+def test_next_charge_questions_stay_grounded_and_mcp_failure_falls_back_to_the_corpus(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    calls = fake_tool(monkeypatch, COMPARE)
+    live_client.post("/ui/chat", data={"message": "When is my Spotify subscription next charged?"})
+    assert calls == [] and questions == ["When is my Spotify subscription next charged?"]
+    calls = fake_tool(monkeypatch, error=ModeError("mcp_connection"))
+    body = _text(live_client.post("/ui/chat", data={"message": "What has Spotify actually charged me?"}))
+    assert len(calls) == 1 and "bill #7 · Home internet" in body
+
+
+def test_tool_answers_never_run_with_mcp_off(live_client, monkeypatch):
+    monkeypatch.setattr(config, "MCP_ENABLED", False)
+    monkeypatch.setattr(config, "RAG_ENABLED", False)
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    calls = fake_tool(monkeypatch, COMPARE)
+    body = _text(live_client.post("/ui/chat", data={"message": "What has Spotify actually charged me?"}))
+    assert calls == [] and "Let me check." in body

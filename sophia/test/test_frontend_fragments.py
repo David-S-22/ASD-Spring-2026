@@ -355,10 +355,12 @@ def test_index_mounts_the_r1_cards_and_app_js_exempts_their_forms():
     with open(os.path.join(frontend, "js", "app.js"), encoding="utf-8") as handle:
         script = handle.read()
     assert 'closest(".tools-panel form")' in script and "evidence-panel" not in script
+    assert "markActiveTool" in script and 'classList.toggle("active"' in script
     assert "data-evidence-chip" not in script
     with open(os.path.join(frontend, "css", "bills.css"), encoding="utf-8") as handle:
         css = handle.read()
     assert ".tools-panel .working" not in css and ".evidence-panel .working" not in css
+    assert ".tools-panel button.active" in css
     with open(os.path.join(frontend, "nginx.conf"), encoding="utf-8") as handle:
         nginx = handle.read()
     assert nginx.count("proxy_read_timeout 300s;") == 3

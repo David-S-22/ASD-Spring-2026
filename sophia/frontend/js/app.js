@@ -273,6 +273,21 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
   });
 });
 
+function markActiveTool(elt) {
+  var form = elt && elt.closest ? elt.closest(".tools-panel form") : null;
+  if (!form) {
+    return;
+  }
+  var button = elt.matches("button") ? elt : form.querySelector("button[type=submit]");
+  form.querySelectorAll("button").forEach(function (b) {
+    b.classList.toggle("active", b === button);
+  });
+}
+
+billsRoot.addEventListener("htmx:beforeRequest", function (evt) {
+  markActiveTool(evt.detail.elt);
+});
+
 billsRoot.addEventListener("htmx:afterRequest", function (evt) {
   // A modal form used to be wiped as a side effect of the confirm dialog
   // replacing it; now the dialog lives elsewhere, close the form once its
