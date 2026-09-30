@@ -86,7 +86,7 @@ def setup_app(db_url: str) -> Flask:
             )
             return
 
-        if response.status_code == 204 or response.ok:
+        if response.ok:
             return
 
         application.logger.warning(
@@ -94,6 +94,33 @@ def setup_app(db_url: str) -> Flask:
             response.status_code,
             response.text,
         )
+
+    def created_transaction(response):
+        """Return the created row from a 201 response, or None."""
+        if response.status_code != 201:
+            return None
+        try:
+            created = response.json()
+        except (ValueError, RecursionError):
+            return None
+        return created if isinstance(created, dict) else None
+
+    def proxy_database(method, path, **options):
+        """Forward a JSON request to the database API and relay its reply."""
+        response = getattr(requests, method)(
+            f"{db_url}{path}",
+            timeout=config.DATABASE_TIMEOUT_SECONDS,
+            **options,
+        )
+        return json_response(response)
+
+    def render_chat_error(message, status):
+        return render_template(
+            "chat_result.jinja",
+            result=None,
+            error=message,
+            success=None,
+        ), status
 
     application.jinja_env.filters["transaction_date"] = (
         format_transaction_date
@@ -172,12 +199,7 @@ def setup_app(db_url: str) -> Flask:
 
     @application.route("/transactions")
     def get_transactions():
-        response = requests.get(
-            f"{db_url}/transactions",
-            params=request.args,
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("get", "/transactions", params=request.args)
 
     @application.route("/ui/transactions")
     def get_transaction_rows():
@@ -340,20 +362,15 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
-        created = None
-        if response.status_code == 201:
-            try:
-                created = response.json()
-            except (ValueError, RecursionError):
-                created = None
-            if isinstance(created, dict):
-                check_transaction_for_anomalies(created)
+        created = created_transaction(response)
+        if created is not None:
+            check_transaction_for_anomalies(created)
 
         page = make_response(render_transaction_page(
             db_url,
             notice="Transaction saved.",
         ))
-        if isinstance(created, dict) and created.get("id") is not None:
+        if created is not None and created.get("id") is not None:
             page.headers["HX-Trigger"] = json.dumps(
                 {"transaction-created": created["id"]}
             )
@@ -374,95 +391,66 @@ def setup_app(db_url: str) -> Flask:
             json=payload,
             timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
-
-        if response.status_code == 201:
-            try:
-                created = response.json()
-            except (ValueError, RecursionError):
-                created = None
-            if isinstance(created, dict):
-                check_transaction_for_anomalies(created)
-
+        created = created_transaction(response)
+        if created is not None:
+            check_transaction_for_anomalies(created)
         return json_response(response)
 
     @application.route("/transactions/<int:transaction_id>")
     def get_transaction(transaction_id):
-        response = requests.get(
-            f"{db_url}/transactions/{transaction_id}",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("get", f"/transactions/{transaction_id}")
 
     @application.route(
         "/transactions/<int:transaction_id>",
         methods=["PATCH"],
     )
     def update_transaction(transaction_id):
-        response = requests.patch(
-            f"{db_url}/transactions/{transaction_id}",
+        return proxy_database(
+            "patch",
+            f"/transactions/{transaction_id}",
             json=request.get_json(silent=True),
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
-        return json_response(response)
 
     @application.route(
         "/transactions/<int:transaction_id>",
         methods=["DELETE"],
     )
     def delete_transaction(transaction_id):
-        response = requests.delete(
-            f"{db_url}/transactions/{transaction_id}",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("delete", f"/transactions/{transaction_id}")
 
     @application.route("/categories")
     def get_categories():
-        response = requests.get(
-            f"{db_url}/categories",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("get", "/categories")
 
     @application.route("/categories", methods=["POST"])
     def create_category():
-        response = requests.post(
-            f"{db_url}/categories",
+        return proxy_database(
+            "post",
+            "/categories",
             json=request.get_json(silent=True),
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
-        return json_response(response)
 
     @application.route("/categories/<int:category_id>")
     def get_category(category_id):
-        response = requests.get(
-            f"{db_url}/categories/{category_id}",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("get", f"/categories/{category_id}")
 
     @application.route(
         "/categories/<int:category_id>",
         methods=["PATCH"],
     )
     def update_category(category_id):
-        response = requests.patch(
-            f"{db_url}/categories/{category_id}",
+        return proxy_database(
+            "patch",
+            f"/categories/{category_id}",
             json=request.get_json(silent=True),
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
         )
-        return json_response(response)
 
     @application.route(
         "/categories/<int:category_id>",
         methods=["DELETE"],
     )
     def delete_category(category_id):
-        response = requests.delete(
-            f"{db_url}/categories/{category_id}",
-            timeout=config.DATABASE_TIMEOUT_SECONDS,
-        )
-        return json_response(response)
+        return proxy_database("delete", f"/categories/{category_id}")
 
     @application.post("/chat")
     def chat():
@@ -554,23 +542,16 @@ def setup_app(db_url: str) -> Flask:
                 response.headers["HX-Trigger"] = "transaction-completed"
             return response
         except ChatError as error:
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error=error.message,
-                success=None,
-            ), error.status
+            return render_chat_error(error.message, error.status)
         except requests.RequestException as error:
             application.logger.warning(
                 "Transactions database request failed: %s",
                 error,
             )
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error="The transactions service is unavailable.",
-                success=None,
-            ), 503
+            return render_chat_error(
+                "The transactions service is unavailable.",
+                503,
+            )
 
     @application.post("/ui/chat/category")
     def select_ui_chat_category():
@@ -592,24 +573,9 @@ def setup_app(db_url: str) -> Flask:
                 request_context=request.form.get("request_context"),
             )
         except (TypeError, ValueError):
-            error = ChatError(
-                "Choose a valid category.",
-                "invalid_category",
-                422,
-            )
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error=error.message,
-                success=None,
-            ), error.status
+            return render_chat_error("Choose a valid category.", 422)
         except ChatError as error:
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error=error.message,
-                success=None,
-            ), error.status
+            return render_chat_error(error.message, error.status)
 
     @application.post("/ui/chat/apply")
     def apply_ui_chat_preview():
@@ -621,35 +587,21 @@ def setup_app(db_url: str) -> Flask:
                 payload["request_id"] = request_id
             result = run_confirmed_transaction(payload, db_url)
         except (json.JSONDecodeError, TypeError):
-            error = ChatError(
+            return render_chat_error(
                 "The confirmation preview is invalid.",
-                "invalid_preview",
                 400,
             )
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error=error.message,
-                success=None,
-            ), error.status
         except ChatError as error:
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error=error.message,
-                success=None,
-            ), error.status
+            return render_chat_error(error.message, error.status)
         except requests.RequestException as error:
             application.logger.warning(
                 "Transactions database request failed: %s",
                 error,
             )
-            return render_template(
-                "chat_result.jinja",
-                result=None,
-                error="The transaction change could not be saved.",
-                success=None,
-            ), 503
+            return render_chat_error(
+                "The transaction change could not be saved.",
+                503,
+            )
 
         response = make_response(render_template(
             "chat_result.jinja",
