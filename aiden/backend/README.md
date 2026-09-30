@@ -15,6 +15,8 @@ Configuration such as service URLs, the model name, and polling timeouts is
 read from environment variables in `config.py`. Values are resolved lazily, so
 reading one raises a `RuntimeError` if the variable is unset or invalid;
 `config.check_all()` validates every variable up front (it runs on startup).
+The Compose deployment sets `MCP_SERVER_URL` to the host machine's MCP server
+at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
 
 ## Agentic workflow
 
@@ -22,10 +24,12 @@ reading one raises a `RuntimeError` if the variable is unset or invalid;
 2. The backend validates and deserialises the request into a transaction DTO.
 3. The transaction is placed on the in-process review queue, and the endpoint
    immediately returns `HTTP 202 (Accepted)` with the transaction ID.
-4. A background worker retrieves the transaction and loads existing anomalies
-   and transactions to provide reviewed context to the agent.
-5. The agent builds a constrained prompt for the language model, including the
-   transaction fields and confirmed or denied historical findings.
+4. A background worker passes the transaction to the agent.
+5. The agent calls the MCP server's
+   `get_transactions_with_confirmed_anomalies` and
+   `get_transactions_with_rejected_anomalies` tools through the `fastmcp` client
+   to retrieve reviewed examples, which are embedded into the prompt before
+   classifying the transaction.
 6. The model must return JSON containing `is_suspicious` and `justification`.
    Invalid responses are retried with increasing temperature, up to four
    attempts.
@@ -44,12 +48,15 @@ The anomaly review implements a **Plan → Act → Observe → Adapt** loop whos
 cycle spans *across* reviews: the user's decisions on one finding shape how the
 agent judges the next transaction.
 
-- **Plan** — Before calling the model, `agent_api.review_new_transaction`
-  gathers context and constructs a constrained prompt. It serialises the
-  transaction fields and calls `_build_anomaly_context` to fold in the user's
-  previously **confirmed** (true positive) and **denied** (false positive)
-  findings, joined back to their underlying transactions. The plan for judging
-  the current transaction is therefore shaped by the accumulated human feedback.
+- **Plan** — Before classifying the transaction, `agent_api` calls the shared
+  MCP server's `get_transactions_with_confirmed_anomalies` and
+  `get_transactions_with_rejected_anomalies` tools through the `fastmcp` client
+  (`services/mcp_client.py`), the same way the other services talk to the MCP
+  server. These return reviewed transactions and their anomaly records as
+  positive and negative examples, which are formatted and embedded into the
+  user prompt. The plan for judging the current transaction is therefore shaped
+  by the accumulated human feedback. If the MCP server is unavailable the review
+  still proceeds without examples.
 - **Act** — The agent sends the system and user prompts to the model through
   `ollama_api.prompt`, requesting a JSON finding with `is_suspicious` and
   `justification`. A valid, suspicious finding is converted to an anomaly DTO —
@@ -62,19 +69,19 @@ agent judges the next transaction.
   (true positive) or **dismissing** it as a false positive. This human review
   is the observation of how well the agent's judgement matched reality.
 - **Adapt** — Those confirmed/denied decisions are exactly the reviewed findings
-  that `_build_anomaly_context` pulls into the *next* review's prompt. The agent
-  treats transactions similar to confirmed findings as more likely suspicious,
-  and avoids re-flagging transactions similar to denied ones. The loop then
-  returns to Plan for the next transaction, with the agent's behaviour adapted
-  to the user's accumulated feedback.
+  returned by the MCP tools on the *next* review. The agent treats transactions
+  similar to confirmed findings as more likely suspicious, and avoids
+  re-flagging transactions similar to denied ones. The loop then returns to Plan
+  for the next transaction, with the agent's behaviour adapted to the user's
+  accumulated feedback.
 
 ```mermaid
 flowchart TD
     A[Transaction enqueued for review] --> B
 
     subgraph Plan
-        B[Load anomalies and transactions] --> C[Build context from<br/>confirmed/denied feedback]
-        C --> D[Construct constrained prompt<br/>transaction fields + prior findings]
+        B[Call MCP reviewed-example tools<br/>via fastmcp client] --> C[Retrieve confirmed/rejected examples]
+        C --> D[Construct constrained prompt<br/>transaction fields + examples]
     end
 
     subgraph Act
@@ -92,21 +99,37 @@ flowchart TD
     end
 
     subgraph Adapt
-        K --> M[Reviewed findings become<br/>context for future reviews]
+        K --> M[Reviewed findings available<br/>through MCP tools]
         L --> M
     end
 
-    M -. feedback context .-> C
+    M -. MCP results for next review .-> B
 ```
 
 ## Services
 
 ### `services/agent_api.py`
 
-Implements the anomaly-detection agent. It creates prompts, builds context from
-reviewed anomalies, parses model JSON, validates the expected response fields,
-captures the model's mean confidence (from token log probabilities), and
-converts suspicious findings into anomaly DTOs.
+Implements the anomaly-detection agent. It fetches reviewed examples from the
+MCP server through `services/mcp_client.py`, formats them into the prompt,
+parses model JSON, validates the expected response fields, captures the model's
+mean confidence (from token log probabilities), and converts suspicious findings
+into anomaly DTOs.
+
+### `services/mcp_client.py`
+
+Thin `fastmcp` client for the shared MCP server, mirroring the other services'
+clients. It exposes `list_tools` and `call_tool`, runs the async client from
+synchronous code, applies `MCP_TIMEOUT_SECONDS`, and maps every failure to a
+safe `MCPError` code so server details never leak.
+
+### `ai-services/mcp-server/server.py`
+
+Provides transaction search plus
+`get_transactions_with_confirmed_anomalies` and
+`get_transactions_with_rejected_anomalies`. The reviewed-example tools join
+anomaly records from the anomalies database to their corresponding
+transactions.
 
 ### `services/review_queue.py`
 
@@ -133,10 +156,10 @@ with the configured model, temperature, token limit, and timeout. It requests
 token log probabilities and returns a `PromptResult` with the response `text`
 and the `mean_confidence` (the arithmetic mean of each chosen token's
 probability, `exp(logprob)`), or `None` when the server does not return log
-probabilities. Set
-`OLLAMA_LOG_LEVEL=DEBUG` to log the response's log-probability field locations,
-their shape, and the number of token scores extracted when investigating
-missing confidence values.
+probabilities. Set `OLLAMA_LOG_LEVEL=DEBUG` to log the response's
+log-probability field locations, their shape, and the number of token scores
+extracted when investigating missing confidence values, for example with
+`docker compose logs -f anomalies-backend`.
 
 ### `helpers.py`
 

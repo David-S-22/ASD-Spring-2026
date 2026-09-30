@@ -1,6 +1,6 @@
 from datetime import datetime
-from json import JSONDecodeError, loads
-from typing import List, Optional, Tuple
+from json import JSONDecodeError
+from typing import Optional
 from dataclasses import dataclass
 
 from flask import current_app
@@ -8,7 +8,11 @@ from flask import current_app
 from shared.backend import dto
 from ..config import config
 from .ollama_api import prompt
+from . import mcp_client
 from ..helpers import serialise
+
+_CONFIRMED_ANOMALIES_TOOL = "get_transactions_with_confirmed_anomalies"
+_REJECTED_ANOMALIES_TOOL = "get_transactions_with_rejected_anomalies"
 
 _detect_system_prompt = """
 
@@ -40,10 +44,13 @@ Guidance:
 - Do not claim fraud as a fact and do not invent missing context; describe only what the supplied fields show.
 - Keep the explanation concise and factual.
 
-You may be given additional context describing prior findings the user has already reviewed:
-- CONFIRMED entries are transactions the user agreed were genuinely suspicious. Treat similar transactions as more likely to be suspicious.
-- DENIED entries are transactions the user decided were NOT suspicious (false positives). Treat similar transactions as more likely to be legitimate, and avoid flagging them for the same reasons.
-Use this feedback to align your judgement with the user's, but still evaluate the current transaction on its own merits.
+Before evaluating the transaction, review the reviewed-example transactions
+provided in the user message:
+- "Confirmed suspicious examples" are transactions the user agreed were suspicious.
+- "Rejected (not suspicious) examples" are transactions the user decided were not suspicious.
+Use the confirmed examples as positive examples and the rejected examples as
+negative examples. Use this feedback to align your judgement with the user's,
+but still evaluate the current transaction on its own merits.
 
 Return ONLY valid JSON matching this schema:
 
@@ -58,16 +65,9 @@ Do not return Markdown, code fences, commentary, or any additional fields.
 """
 
 _detect_user_prompt = """
-
+{1}
 Review the following transaction. Determine whether this transaction is suspicious according to your instructions.
 
-{0}
-{1}
-"""
-
-_anomaly_context_prompt = """
-
-Additional context — prior findings the user has already reviewed:
 {0}
 """
 
@@ -82,18 +82,23 @@ class ReviewFinding:
 
 def review_new_transaction(
     transaction: dto.Transaction,
-    all_anomalies: List[dto.Anomaly],
-    all_transactions: List[dto.Transaction],
 ) -> Optional[dto.Anomaly]:
     iteration = 1
     serialised = serialise(transaction)
-    anomaly_context = _build_anomaly_context(all_anomalies, all_transactions)
     detect_system_prompt = _detect_system_prompt.format(datetime.now().strftime("%Y-%m-%d"))
-    detect_user_prompt = _detect_user_prompt.format(serialised, anomaly_context)
+    examples_context = _build_reviewed_examples_context()
+    detect_user_prompt = _detect_user_prompt.format(serialised, examples_context)
     review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
-    current_app.logger.info("Anomaly context: %s", anomaly_context)
+    current_app.logger.info(
+        "Full anomaly prompt for transaction %s:\n"
+        "----- SYSTEM PROMPT -----\n%s\n"
+        "----- USER PROMPT (includes MCP-retrieved examples) -----\n%s",
+        transaction.id,
+        detect_system_prompt,
+        detect_user_prompt,
+    )
 
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
@@ -132,51 +137,67 @@ def review_new_transaction(
         confidence=review_finding.confidence,
     )
 
-def _build_anomaly_context(
-    all_anomalies: List[dto.Anomaly],
-    all_transactions: List[dto.Transaction],
-) -> str:
-    """Builds additional prompt context from anomalies the user has already reviewed.
+def _build_reviewed_examples_context() -> str:
+    """Fetch reviewed examples from the MCP server and format them for the prompt.
 
-    Only anomalies confirmed (True) or denied (False) by the user are included;
-    anomalies still awaiting review (None) are ignored. Each entry is joined to its
-    underlying transaction (by transaction_id) so the model sees the actual amount,
-    merchant, and date the user made their decision on — not just the agent's reason.
+    Mirrors the other services' approach of calling the shared MCP server through
+    ``fastmcp`` directly. If the server is unavailable the review still proceeds
+    without examples, so a transient MCP failure never blocks anomaly detection.
     """
 
-    confirmed = [a for a in all_anomalies if a.is_confirmed_by_user is True]
-    denied = [a for a in all_anomalies if a.is_confirmed_by_user is False]
+    confirmed = _fetch_examples(_CONFIRMED_ANOMALIES_TOOL)
+    rejected = _fetch_examples(_REJECTED_ANOMALIES_TOOL)
 
-    if not confirmed and not denied:
+    if not confirmed and not rejected:
         return ""
 
-    transactions_by_id = {t.id: t for t in all_transactions}
+    sections = [
+        _format_examples_section(
+            "Confirmed suspicious examples (the user agreed these were suspicious):",
+            confirmed,
+        ),
+        _format_examples_section(
+            "Rejected (not suspicious) examples (the user decided these were fine):",
+            rejected,
+        ),
+    ]
+    return "\n".join(section for section in sections if section) + "\n"
 
-    def format_entry(label: str, anomaly: dto.Anomaly) -> str:
-        transaction = transactions_by_id.get(anomaly.transaction_id)
 
-        if transaction is None:
-            current_app.logger.error("Transaction with ID %s not found in all_transactions", anomaly.transaction_id)
-            details = "transaction details unavailable"
-        else:
-            details = (
-                f"amount={transaction.amount}, "
-                f"merchant={transaction.merchant!r}, "
-                f"description={transaction.description!r}, "
-                f"date={transaction.date}"
+def _fetch_examples(tool_name: str) -> list[dict]:
+    try:
+        data, _duration_ms = mcp_client.call_tool(tool_name)
+    except mcp_client.MCPError as error:
+        current_app.logger.warning(
+            "MCP tool %s unavailable, continuing without examples: %s",
+            tool_name,
+            error.code,
+        )
+        return []
+
+    return data if isinstance(data, list) else []
+
+
+def _format_examples_section(heading: str, examples: list[dict]) -> str:
+    if not examples:
+        return ""
+
+    lines = [heading]
+    for example in examples:
+        transaction = example.get("transaction", {}) if isinstance(example, dict) else {}
+        anomaly = example.get("anomaly", {}) if isinstance(example, dict) else {}
+        lines.append(
+            "- amount={amount}, merchant={merchant!r}, description={description!r}, "
+            "date={date}; reason={reason!r}".format(
+                amount=transaction.get("amount"),
+                merchant=transaction.get("merchant"),
+                description=transaction.get("description"),
+                date=transaction.get("date"),
+                reason=anomaly.get("agent_reason_suspected"),
             )
+        )
+    return "\n".join(lines)
 
-        return f"- {label} ({details}): {anomaly.agent_reason_suspected}"
-
-    lines: List[str] = []
-
-    for anomaly in confirmed:
-        lines.append(format_entry("CONFIRMED (true positive)", anomaly))
-
-    for anomaly in denied:
-        lines.append(format_entry("DENIED (false positive)", anomaly))
-
-    return _anomaly_context_prompt.format("\n".join(lines))
 
 def parse_review_finding(model_response: str) -> Optional[ReviewFinding]:
     """Determines if the model response was a valid format"""

@@ -12,7 +12,7 @@ services:
     entrypoint: ["/bin/sh", "/ollama-server/entrypoint.sh"]
     environment:
       # Any models you want to use must be listed here, to ensure they are installed on the container
-      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b
+      OLLAMA_PULL_MODELS: qwen2.5:0.5b llama3.1:8b qwen2.5:3b qwen3:4b
     healthcheck:
       test: ["CMD", "/bin/sh", "/ollama-server/healthcheck.sh"]
       # Probe every 5s during the first minute, then every 30s for an hour
@@ -156,6 +156,7 @@ services:
       OLLAMA_URL: http://ollama:11434/v1
       OLLAMA_MODEL: qwen2.5:3b
       OLLAMA_LOG_LEVEL: DEBUG
+      MCP_SERVER_URL: http://host.docker.internal:8000/mcp
     depends_on:
       anomalies-db:
         condition: service_started
