@@ -1,5 +1,6 @@
 """Shared helpers for the Transactions Flask application."""
 
+import re
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
@@ -12,6 +13,27 @@ from .services.chat_service import ChatError
 
 
 TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
+
+# A clarification answer that is only a transaction reference, such as
+# "29", "#29", "id 29", "transaction 29", "number 29." or "the id: 29".
+TRANSACTION_ID_ANSWER = re.compile(
+    r"^\s*(?:(?:the\s+)?(?:transaction|txn|tx|id|number|no\.?)\s*)*"
+    r"[#:=-]?\s*(\d+)\s*\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def normalize_transaction_id_answer(clarification):
+    """Rewrite a bare ID answer into the explicit form the planner grounds.
+
+    Only used when the clarification asked the user to choose between
+    matching transactions, so a lone number cannot be mistaken for an
+    amount or a day of the month.
+    """
+    match = TRANSACTION_ID_ANSWER.match(clarification or "")
+    if match is None:
+        return clarification
+    return f"transaction ID {int(match.group(1))}"
 TRANSACTION_DATE_RANGES = {
     "all",
     "last_7_days",

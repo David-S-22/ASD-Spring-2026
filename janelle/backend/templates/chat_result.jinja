@@ -218,13 +218,18 @@
         <input type="hidden"
                name="original_message"
                value="{{ request_context }}">
+        {% if result.matches %}
+        <input type="hidden"
+               name="clarification_kind"
+               value="transaction_id">
+        {% endif %}
         <label for="transaction-chat-clarification">
             Your answer
         </label>
         <input id="transaction-chat-clarification"
                name="clarification"
                type="text"
-               placeholder="Enter the missing details"
+               placeholder="{{ 'Or type a transaction ID, for example 29' if result.matches else 'Enter the missing details' }}"
                autocomplete="off"
                required
                autofocus>

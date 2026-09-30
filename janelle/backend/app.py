@@ -13,6 +13,7 @@ from .Helpers import (
     format_transaction_date,
     json_object,
     json_response,
+    normalize_transaction_id_answer,
     render_categories_page,
     render_category_form,
     render_category_list,
@@ -507,6 +508,10 @@ def setup_app(db_url: str) -> Flask:
                         "Enter an answer before continuing.",
                         "invalid_message",
                         422,
+                    )
+                if request.form.get("clarification_kind") == "transaction_id":
+                    clarification = normalize_transaction_id_answer(
+                        clarification
                     )
                 separator = (
                     ""
