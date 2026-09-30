@@ -31,6 +31,11 @@ from .validation import (
 
 
 PROTECTED_CATEGORY_NAME = "Uncategorised"
+SAVINGS_DB_URL = os.environ.get(
+	"SAVINGS_DB_URL",
+	"http://savings-db:6002",
+).rstrip("/")
+SAVINGS_TIMEOUT_SECONDS = float(os.environ.get("SAVINGS_TIMEOUT_SECONDS", "10"))
 
 
 def database_uri(database_path):
@@ -78,6 +83,35 @@ def resolve_transaction(transaction_identifier):
 	if transaction is None:
 		raise ApiError("transaction not found", "transaction_not_found", 404)
 	return transaction
+
+
+def resolve_category(category_identifier):
+	category_id = validate_path_identifier(category_identifier, "category")
+	category = db.session.get(Category, category_id)
+	if category is None:
+		raise ApiError("category not found", "category_not_found", 404)
+	return category
+
+
+def require_unprotected_category(category):
+	if category.name.casefold() == PROTECTED_CATEGORY_NAME.casefold():
+		raise ApiError(
+			"Uncategorised is a protected system category",
+			"protected_category",
+			409,
+		)
+
+
+def delete_savings_feedback_by_category_id(category_id):
+	"""Best-effort removal of savings feedback tied to a deleted category."""
+	try:
+		requests.delete(
+			f"{SAVINGS_DB_URL}/feedbacks",
+			params={"category_id": category_id},
+			timeout=SAVINGS_TIMEOUT_SECONDS,
+		)
+	except requests.RequestException:
+		pass
 
 
 def apply_transaction_values(transaction, values):
@@ -332,24 +366,12 @@ def register_routes(application):
 
 	@application.get("/categories/<category_id>")
 	def get_category(category_id):
-		category_id = validate_path_identifier(category_id, "category")
-		category = db.session.get(Category, category_id)
-		if category is None:
-			raise ApiError("category not found", "category_not_found", 404)
-		return jsonify(category.to_dto())
+		return jsonify(resolve_category(category_id).to_dto())
 
 	@application.patch("/categories/<category_id>")
 	def patch_category(category_id):
-		category_id = validate_path_identifier(category_id, "category")
-		category = db.session.get(Category, category_id)
-		if category is None:
-			raise ApiError("category not found", "category_not_found", 404)
-		if category.name.casefold() == PROTECTED_CATEGORY_NAME.casefold():
-			raise ApiError(
-				"Uncategorised is a protected system category",
-				"protected_category",
-				409,
-			)
+		category = resolve_category(category_id)
+		require_unprotected_category(category)
 		values = validate_category_payload(json_body(), partial=True)
 		if "name" in values and category_name_exists(
 			values["name"],
@@ -368,31 +390,14 @@ def register_routes(application):
 
 	@application.delete("/categories/<category_id>")
 	def delete_category(category_id):
-		category_id = validate_path_identifier(category_id, "category")
-		category = db.session.get(Category, category_id)
-		if category is None:
-			raise ApiError("category not found", "category_not_found", 404)
-		if category.name.casefold() == PROTECTED_CATEGORY_NAME.casefold():
-			raise ApiError(
-				"Uncategorised is a protected system category",
-				"protected_category",
-				409,
-			)
-		if category_is_in_use(category.id):
+		category = resolve_category(category_id)
+		require_unprotected_category(category)
+		category_id = category.id
+		if category_is_in_use(category_id):
 			raise ApiError("category is in use", "category_in_use", 409)
 		db.session.delete(category)
 		db.session.commit()
-		try:
-			savings_db_url = os.environ.get(
-				"SAVINGS_DB_URL", "http://savings-db:6002"
-			).rstrip("/")
-			requests.delete(
-				f"{savings_db_url}/feedbacks",
-				params={"category_id": category_id},
-				timeout=float(os.environ.get("SAVINGS_TIMEOUT_SECONDS", "10")),
-			)
-		except requests.RequestException:
-			pass
+		delete_savings_feedback_by_category_id(category_id)
 		return "", 204
 
 	@application.get("/category-corrections")

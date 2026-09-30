@@ -134,9 +134,8 @@ def validate_transaction_payload(data, partial=False):
 		data,
 		TRANSACTION_FIELDS if partial else TRANSACTION_CREATE_FIELDS,
 	)
-	required = {"date", "merchant", "description", "amount", "category_id"}
 	if not partial:
-		missing = sorted(field for field in required if field not in data)
+		missing = sorted(TRANSACTION_FIELDS - set(data))
 		if missing:
 			raise ApiError(
 				f"missing required fields: {', '.join(missing)}",
