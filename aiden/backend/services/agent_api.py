@@ -91,6 +91,14 @@ def review_new_transaction(
     review_finding: Optional[ReviewFinding] = None
 
     current_app.logger.info("Scan new transaction %s", serialised)
+    current_app.logger.info(
+        "Full anomaly prompt for transaction %s:\n"
+        "----- SYSTEM PROMPT -----\n%s\n"
+        "----- USER PROMPT (includes MCP-retrieved examples) -----\n%s",
+        transaction.id,
+        detect_system_prompt,
+        detect_user_prompt,
+    )
 
     while iteration < 5:
         temperature = 0.2 * iteration # increase as it gets iterated
