@@ -17,10 +17,12 @@ from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
+from sophia.backend.engine.status import _day_month
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import disputes as disputes_service
 from sophia.backend.services import evidence as evidence_service
 from sophia.backend.services import payments as payments_service
+from sophia.backend.services import tools as tools_service
 from sophia.backend.services.errors import ModeError, NotFound, ServiceError
 
 # The model is asked for the real column names, but a small model drifts, and
@@ -237,9 +239,20 @@ def _is_plain_question(message):
     return text.endswith("?") and not CHANGE_VERB.search(text)
 
 
-def _names_a_bill(text, bills):
-    """True when the text mentions any bill's name or merchant as a whole word."""
-    return any(_mentions(text, row["name"]) or _mentions(text, row["merchant"]) for row in bills)
+def _bills_named(text, bills):
+    """The bill rows whose name or merchant the text mentions as a whole word."""
+    return [row for row in bills if _mentions(text, row["name"]) or _mentions(text, row["merchant"])]
+
+
+CHARGE_WORDS = re.compile(r"\b(charged?|charges|charging|debited|took|taken|actually (paid|pay)|bank)\b", re.I)
+FUTURE_WORDS = re.compile(r"\b(will|next)\b", re.I)
+CHARGE_WINDOW_DAYS = 90
+COMPARE_TOOL = "compare_bill_with_bank_charges"
+
+
+def _asks_what_was_charged(message, named):
+    """True for a plain question about what one named bill's merchant charged, as opposed to what is due or coming next."""
+    return len(named) == 1 and bool(CHARGE_WORDS.search(message)) and not FUTURE_WORDS.search(message) and not DUE_WORDS.search(message)
 
 
 def _contradicts_an_update(preview, say):
@@ -422,6 +435,37 @@ def _grounded_answer(message):
         return None
 
 
+def _bank_charges(bill):
+    """Answer what a bill's merchant charged over the last CHARGE_WINDOW_DAYS from the MCP compare tool: (sentence, facts for the chips), or None when MCP is off or fails."""
+    if not config.MCP_ENABLED:
+        return None
+    today = config.DEMO_TODAY
+    arguments = {"bill_id": bill["id"], "start_date": (today - timedelta(days=CHARGE_WINDOW_DAYS)).isoformat(), "end_date": today.isoformat()}
+    try:
+        data, duration_ms = tools_service.call_allowed_tool(COMPARE_TOOL, arguments)
+    except ServiceError:
+        return None
+    charges = data.get("charges") or []
+    rows = []
+    for charge in charges:
+        when = _day_month(date.fromisoformat(charge["date"]))
+        delta = charge.get("differs_from_bill_cents") or 0
+        note = f"{'+' if delta > 0 else '-'}{money.format_actual(abs(delta))} vs bill" if delta else ""
+        rows.append({"date": when, "amount": money.format_actual(charge["amount_cents"]), "note": note, "delta": delta})
+    merchant = bill["merchant"]
+    if not rows:
+        sentence = f"No bank charges from {merchant} in the last {CHARGE_WINDOW_DAYS} days."
+    else:
+        sentence = f"{merchant} charged you {_count_word(len(rows))} time{'' if len(rows) == 1 else 's'} in the last {CHARGE_WINDOW_DAYS} days"
+        odd = next((r for r in rows if r["delta"]), None)
+        if odd:
+            direction = "above" if odd["delta"] > 0 else "below"
+            sentence += f"; the {odd['date']} charge was {money.format_actual(abs(odd['delta']))} {direction} your {money.format_actual(bill['amount_cents'])} bill."
+        else:
+            sentence += f", each at your {money.format_actual(bill['amount_cents'])} bill amount."
+    return {"sentence": sentence, "tool": COMPARE_TOOL, "rows": rows, "duration_ms": duration_ms}
+
+
 def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
     """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
@@ -435,9 +479,13 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     reply = _resolve_question(data.get("question")) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     preview = None if asks else _build_preview(data)
-    about_a_bill = asks and _names_a_bill(model_message, bills)
+    named = _bills_named(model_message, bills) if asks else []
+    about_a_bill = bool(named)
     card = None
-    if asks and not about_a_bill and DUE_WORDS.search(model_message):
+    facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
+    if facts:
+        reply = facts["sentence"]
+    elif asks and not about_a_bill and DUE_WORDS.search(model_message):
         reply = _answer_upcoming()
     elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
@@ -472,8 +520,9 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         "reply": reply,
         "op": preview["op"] if preview else None,
         "preview": preview,
-        "fallback": bool(data.get("fallback", False)) and card is None,
+        "fallback": bool(data.get("fallback", False)) and card is None and facts is None,
         "grounded": card,
+        "tool": facts,
     }
 
 

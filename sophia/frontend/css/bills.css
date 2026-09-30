@@ -806,6 +806,12 @@
   margin-bottom: 0.6em;
 }
 
+.tools-panel button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
 .tools-panel select,
 .evidence-panel input {
   flex: 1 1 10em;

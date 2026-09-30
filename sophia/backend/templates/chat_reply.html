@@ -5,6 +5,11 @@
    sync and two places for state to disagree). The reply just points at it;
    the panel itself arrives refreshed, out of band, in this same response. #}
 <div class="message message-assistant">{{ reply }}</div>
+{% if tool %}
+{# A plain question about what a bill's merchant charged was answered from the bank rows an MCP tool returned; the rows are the chips, the tool is named so the reader knows where they came from. #}
+<p class="evidence-citations">{% for r in tool.rows %}<span class="citation-chip">{{ r.date }} · {{ r.amount }}{% if r.note %} · {{ r.note }}{% endif %}</span>{% endfor %}</p>
+<p class="evidence-meta"><code>{{ tool.tool }}</code> → {{ tool.rows|length }} charge{{ '' if tool.rows|length == 1 else 's' }} in {{ tool.duration_ms }} ms</p>
+{% endif %}
 {% if grounded %}
 {# A plain question was answered from the bills corpus: the same chips and badge the report's grounded-answer examples show. #}
 {% if grounded.insufficient %}
