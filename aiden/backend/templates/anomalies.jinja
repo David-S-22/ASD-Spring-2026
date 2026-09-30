@@ -3,12 +3,10 @@
 {% set category_name = categories.get(txn.category_id) if txn else none %}
 {% set confidence_level = none if anomaly.confidence is none else ('high' if anomaly.confidence >= 0.8 else ('medium' if anomaly.confidence >= 0.5 else 'low')) %}
 <tr data-sort-row
-    data-sort-id="{{ anomaly.id }}"
     data-sort-date="{{ txn.date.isoformat() if txn else '' }}"
     data-sort-merchant="{{ (txn.merchant if txn else '')|e }}"
     data-sort-confidence="{{ anomaly.confidence if anomaly.confidence is not none else '' }}"
     data-sort-status="{{ 'unreviewed' if anomaly.is_confirmed_by_user is none else ('confirmed' if anomaly.is_confirmed_by_user else 'dismissed') }}">
-  <td>{{ anomaly.id }}</td>
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
@@ -37,5 +35,5 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="7" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="6" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}

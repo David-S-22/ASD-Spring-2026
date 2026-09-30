@@ -1,10 +1,9 @@
 const anomaliesTable = document.getElementById('anomalies');
-let sortKey = 'id';
+let sortKey = 'date';
 let sortDirection = 1;
 
 function sortAnomalies() {
     const sortValues = {
-        id: row => Number(row.dataset.sortId),
         date: row => Date.parse(row.dataset.sortDate),
         merchant: row => row.dataset.sortMerchant,
         confidence: row => row.dataset.sortConfidence === '' ? NaN : Number(row.dataset.sortConfidence),

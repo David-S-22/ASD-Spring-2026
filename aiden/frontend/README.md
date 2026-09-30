@@ -13,8 +13,7 @@ The page structure, styling, and interactions are kept in `public/anomalies.html
 
 The page describes its table as a list of flagged transactions, their suspected
 reasons, and review status, with actions to confirm or dismiss unreviewed
-findings. Rows load from the backend and refresh periodically using HTMX. The
-ID, Date Flagged, Merchant, Confidence, and Status column headers are sortable;
+findings. Rows load from the backend and refresh periodically using HTMX. The Transaction Date, Merchant, Confidence, and Status column headers are sortable;
 the current sort is shown with SVG indicators and kept when refreshed rows
 arrive. The Confidence column shows the model's certainty as a colored dot and
 Low/Medium/High label (or a dash when no score is available). Blue, indigo, and
