@@ -21,7 +21,7 @@ purple dot-labels distinguish confidence from the green Confirmed and red
 Dismissed status badges. Confidence indicators and status badges are centered
 within their table cells. The anomaly table uses the available shell width,
 with horizontal scrolling on narrow screens.
-The review dialog shows the complete transaction details (ID, a
+The review dialog shows the transaction details (a
 locale-formatted date with weekday, merchant, amount, description, category
 name, and confidence level with percentage) in two columns, followed by a
 full-width suspected-reason row before collecting the user's Confirm or Dismiss

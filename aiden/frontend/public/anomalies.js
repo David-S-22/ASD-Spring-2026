@@ -69,7 +69,6 @@ function formatTransactionDate(value) {
 
 function openReviewModal(button) {
     reviewAnomalyId = Number(button.dataset.anomalyId);
-    document.getElementById('review-transaction-id').textContent = button.dataset.transactionId;
     document.getElementById('review-transaction-date').textContent = formatTransactionDate(button.dataset.date);
     document.getElementById('review-transaction-merchant').textContent = button.dataset.merchant;
     document.getElementById('review-transaction-amount').textContent = button.dataset.amount;

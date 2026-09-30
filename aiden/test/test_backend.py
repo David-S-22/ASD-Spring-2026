@@ -645,7 +645,7 @@ def test_review_button_includes_transaction_details_and_anomaly_reason(
 
     assert response.status_code == 200
     assert f'data-anomaly-id="{anomaly.id}"' in rows
-    assert 'data-transaction-id="4243"' in rows
+    assert 'data-transaction-id' not in rows
     assert 'data-date="2025-01-15T09:30:00"' in rows
     assert 'data-merchant="Corner &amp; Co."' in rows
     assert 'data-amount="125.50"' in rows

@@ -17,7 +17,6 @@
     <button type="button"
             class="review-btn"
             data-anomaly-id="{{ anomaly.id }}"
-            data-transaction-id="{{ (txn.id if txn else anomaly.transaction_id)|e }}"
             data-date="{{ (txn.date.isoformat() if txn else '—')|e }}"
             data-merchant="{{ (txn.merchant if txn else '—')|e }}"
             data-amount="{{ ('%.2f'|format(txn.amount) if txn else '—')|e }}"
