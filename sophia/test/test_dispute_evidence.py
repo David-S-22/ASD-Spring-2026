@@ -238,3 +238,46 @@ def test_draft_prompt_with_mcp_and_rag_off_is_the_pre_policy_prompt(monkeypatch)
     disputes.draft_for_bill(ROW, "Charged twice", opened_on=date(2026, 9, 26))
     assert prompts[0] == dispute_prompt.build(bills_db_module.row_to_bill(ROW), "Charged twice", payments=[])
     assert prompts[0][1]["content"] == "Bill: Spotify (Spotify AU), amount $13.99, cadence: monthly.\nPayment method: card.\nNo payment history on file.\nReason for dispute: Charged twice."
+
+
+def fake_all_tools(monkeypatch):
+    def call_tool(name, arguments):
+        if name == "retrieve_context":
+            return {"results": [{"id": "billing_billing_policy.pdf_0", "text": PDF_TEXT, "metadata": {"source": "billing_policy.pdf", "doc_type": "pdf", "page": 1}, "distance": 1.03}]}, 9.0
+        return ({"compare_bill_with_bank_charges": COMPARE, "get_transactions_with_confirmed_anomalies": FLAGGED}[name], 12.0)
+
+    monkeypatch.setattr(mcp_server, "call_tool", call_tool)
+    monkeypatch.setattr(config, "MCP_ENABLED", True)
+    monkeypatch.setattr(config, "RAG_ENABLED", True)
+
+
+def test_draft_carries_the_evidence_it_used(monkeypatch):
+    fake_all_tools(monkeypatch)
+    fake_draft(monkeypatch)
+    monkeypatch.setattr(bills_db_module, "list_bill_payments", lambda bill_id: [])
+    row = {"id": 3, "name": "Spotify", "merchant": "Spotify AU", "amount_cents": 1399, "cadence": "monthly", "next_billing_date": "2026-09-27", "type": "subscription", "payment_method": "card"}
+    draft = disputes.draft_for_bill(row, "Late fee added", opened_on=date(2026, 9, 26))
+    assert draft["evidence"]["bank"][0] == "15 Jul Spotify AU $13.99, flagged by Spending Alerts and confirmed by you"
+    assert draft["evidence"]["policy"] and all(p.startswith("billing_policy.pdf: ") for p in draft["evidence"]["policy"])
+    assert draft["evidence"]["tools"] == ["compare_bill_with_bank_charges", "get_transactions_with_confirmed_anomalies", "retrieve_context"]
+    monkeypatch.setattr(config, "MCP_ENABLED", False)
+    assert disputes.draft_for_bill(row, "Late fee added", opened_on=date(2026, 9, 26))["evidence"] == {"bank": [], "policy": [], "tools": []}
+
+
+def test_dispute_panel_shows_the_evidence_and_tools_under_the_letter(live_client, monkeypatch):
+    fake_all_tools(monkeypatch)
+    fake_draft(monkeypatch)
+    body = _text(live_client.post("/ui/disputes", data={"bill_id": "3", "reason": "Late fee added"}))
+    assert 'class="evidence-used"' in body
+    assert "15 Jul Spotify AU $13.99, flagged by Spending Alerts and confirmed by you" in body and "20 Aug Spotify AU $17.99" in body
+    assert "billing_policy.pdf" in body and "compare_bill_with_bank_charges" in body and "retrieve_context" in body
+    latest = bills_db_module.list_dispute_drafts(bills_db_module.list_disputes()[-1]["id"])[-1]
+    assert "evidence" in json.loads(latest["steps_json"])
+
+
+def test_seeded_drafts_and_mcp_off_drafts_show_no_evidence_block(live_client, monkeypatch):
+    assert 'class="evidence-used"' not in _text(live_client.get("/ui/disputes?dispute_id=1"))
+    monkeypatch.setattr(config, "MCP_ENABLED", False)
+    fake_draft(monkeypatch)
+    body = _text(live_client.post("/ui/disputes", data={"bill_id": "7", "reason": "Speed downgrade"}))
+    assert 'class="evidence-used"' not in body and "MCP mode is disabled" in body

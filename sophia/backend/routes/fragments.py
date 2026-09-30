@@ -387,7 +387,7 @@ def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False
     draft = None
     if chosen:
         steps_data = json.loads(chosen["steps_json"])
-        draft = {"letter_text": chosen["letter_text"], "steps": steps_data["steps"], "escalation": steps_data["escalation"]}
+        draft = {"letter_text": chosen["letter_text"], "steps": steps_data["steps"], "escalation": steps_data["escalation"], "evidence": steps_data.get("evidence")}
 
     bill_row = bills_db.get_bill(dispute["bill_id"])
     context_line = None
