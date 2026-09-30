@@ -13,15 +13,21 @@ The page structure, styling, and interactions are kept in `public/anomalies.html
 
 The page describes its table as a list of flagged transactions, their suspected
 reasons, and review status, with actions to confirm or dismiss unreviewed
-findings. Rows load from the backend and refresh periodically using HTMX. The
-ID, Date Flagged, Merchant, and Status column headers are sortable; the current
-sort is shown with SVG indicators and kept when refreshed rows arrive. The
-anomaly table uses the available shell width, with horizontal scrolling on
-narrow screens.
-The review dialog shows the complete transaction details (ID, a
-locale-formatted date with weekday, merchant, amount, description, and category
-name) in two columns, followed by a full-width suspected-reason row before
-collecting the user's decision. Labels are styled as small uppercase
+findings. Rows load from the backend and refresh periodically using HTMX. The Transaction Date, Merchant, Confidence, and Status column headers are sortable;
+the current sort is shown with SVG indicators and kept when refreshed rows
+arrive. The Confidence column shows the model's certainty as a colored dot and
+Low/Medium/High label (or a dash when no score is available). Blue, indigo, and
+purple dot-labels distinguish confidence from the green Confirmed and red
+Dismissed status badges. Unreviewed status badges are buttons styled as blue
+pills with a trailing pencil icon and hover highlight; clicking one opens the review
+dialog. Confidence indicators and status badges are centered
+within their table cells. The anomaly table uses the available shell width,
+with horizontal scrolling on narrow screens.
+The review dialog shows the transaction details (a
+locale-formatted date with weekday, merchant, amount, description, category
+name, and confidence level with percentage) in two columns, followed by a
+full-width suspected-reason row before collecting the user's Confirm or Dismiss
+decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.
 

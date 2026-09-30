@@ -1,12 +1,12 @@
 const anomaliesTable = document.getElementById('anomalies');
-let sortKey = 'id';
+let sortKey = 'date';
 let sortDirection = 1;
 
 function sortAnomalies() {
     const sortValues = {
-        id: row => Number(row.dataset.sortId),
         date: row => Date.parse(row.dataset.sortDate),
         merchant: row => row.dataset.sortMerchant,
+        confidence: row => row.dataset.sortConfidence === '' ? NaN : Number(row.dataset.sortConfidence),
         status: row => ({ unreviewed: 0, confirmed: 1, dismissed: 2 }[row.dataset.sortStatus])
     };
     const getValue = sortValues[sortKey];
@@ -69,13 +69,24 @@ function formatTransactionDate(value) {
 
 function openReviewModal(button) {
     reviewAnomalyId = Number(button.dataset.anomalyId);
-    document.getElementById('review-transaction-id').textContent = button.dataset.transactionId;
     document.getElementById('review-transaction-date').textContent = formatTransactionDate(button.dataset.date);
     document.getElementById('review-transaction-merchant').textContent = button.dataset.merchant;
     document.getElementById('review-transaction-amount').textContent = button.dataset.amount;
     document.getElementById('review-transaction-description').textContent = button.dataset.description;
     document.getElementById('review-transaction-category').textContent = button.dataset.category;
     document.getElementById('review-anomaly-reason').textContent = button.dataset.reason;
+    const confidence = document.getElementById('review-confidence');
+    const confidenceMissing = document.getElementById('review-confidence-missing');
+    const confidenceLevel = button.dataset.confidenceLevel;
+    if (confidenceLevel) {
+        confidence.className = `confidence-indicator confidence-${confidenceLevel}`;
+        confidence.textContent = `${confidenceLevel[0].toUpperCase()}${confidenceLevel.slice(1)} (${button.dataset.confidence}%)`;
+        confidence.hidden = false;
+        confidenceMissing.hidden = true;
+    } else {
+        confidence.hidden = true;
+        confidenceMissing.hidden = false;
+    }
     document.getElementById('review-decision').value = 'confirm';
     const modal = document.getElementById('review-modal');
     modal.classList.remove('closing');

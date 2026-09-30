@@ -52,7 +52,8 @@ Database tests use the database Flask application's `test_client()` directly.
 The `client` fixture calls `setup_database(":memory:")`, so each test operates
 against an isolated in-memory SQLite database. The tests cover the health
 route, anomaly creation, retrieval, updates, deletion, lookup by transaction,
-validation errors, duplicate transaction handling, and JSON error responses.
+validation errors, duplicate transaction handling, JSON error responses, and
+seeded confidence scores and their relationship to reviewed finding accuracy.
 
 These tests do not use `responses` because the database application is the
 service being tested. Calling its Flask test client directly verifies the

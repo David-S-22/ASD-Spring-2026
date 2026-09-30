@@ -42,6 +42,44 @@ def test_create_anomaly(client: FlaskClient):
     assert isinstance(resp.json["transaction_id"], int)
     assert resp.json["is_confirmed_by_user"] == False
     assert resp.json["agent_reason_suspected"] == "beans"
+    # confidence is optional and defaults to null when omitted.
+    assert resp.json["confidence"] is None
+
+
+def test_create_anomaly_persists_confidence(client: FlaskClient):
+    json = dict(
+        transaction_id=110,
+        agent_reason_suspected="beans",
+        is_confirmed_by_user=None,
+        confidence=0.87,
+    )
+
+    resp = client.post("/anomalies/", json=json)
+
+    assert resp.status_code == 201, resp.text
+    assert isinstance(create_json := resp.json, dict)
+    assert create_json["confidence"] == 0.87
+
+    resp = client.get("/anomalies/" + str(create_json["id"]))
+
+    assert resp.status_code == 200
+    assert isinstance(resp.json, dict)
+    assert resp.json["confidence"] == 0.87
+
+
+def test_confidence_out_of_range_is_rejected(client: FlaskClient):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        db.session.add(
+            Anomaly(transaction_id=115, agent_reason_suspected="beans", confidence=1.5)
+        )
+
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+
+        db.session.rollback()
 
 def test_delete_anomaly(client: FlaskClient):
     anomaly = create_anomaly(client, id=0, transaction_id=201, agent_reason_suspected="beans", is_confirmed_by_user=False)
@@ -291,7 +329,7 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
     seeded_transaction_ids = {transaction[0] for transaction in TRANSACTIONS}
     expected_transaction_ids = {
         transaction_id
-        for transaction_id, _, _ in SEED_ANOMALIES
+        for transaction_id, _, _, _ in SEED_ANOMALIES
         if transaction_id in seeded_transaction_ids
     }
 
@@ -322,6 +360,7 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
         assert existing["agent_reason_suspected"] == (
             "Existing anomaly must remain unchanged."
         )
+        assert existing["confidence"] is None
         assert len(anomalies) == 17
         statuses = [anomaly["is_confirmed_by_user"] for anomaly in anomalies]
         assert any(status is True for status in statuses)
@@ -331,12 +370,42 @@ def test_seed_anomalies_only_references_seeded_transactions(client: FlaskClient)
             anomaly["transaction_id"] in seeded_transaction_ids
             for anomaly in anomalies
         )
+        confidence_by_transaction = {
+            anomaly["transaction_id"]: anomaly["confidence"]
+            for anomaly in anomalies
+        }
+        for transaction_id, _, _, confidence in SEED_ANOMALIES:
+            if transaction_id in expected_transaction_ids and transaction_id != 26:
+                assert confidence_by_transaction[transaction_id] == confidence
         with app.app_context():
             assert seed_database_if_empty(seeded_transaction_ids) == 0
     finally:
         with app.app_context():
             db.session.query(Anomaly).delete()
             db.session.commit()
+
+
+def test_seed_confidence_scores_are_bounded_and_reflect_review_accuracy():
+    assert all(0 <= confidence <= 1 for _, _, _, confidence in SEED_ANOMALIES)
+
+    confirmed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is True
+    ]
+    dismissed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is False
+    ]
+    unreviewed_scores = [
+        confidence
+        for _, _, confirmed, confidence in SEED_ANOMALIES
+        if confirmed is None
+    ]
+
+    assert min(confirmed_scores) > max(unreviewed_scores)
+    assert min(unreviewed_scores) > max(dismissed_scores)
 
 
 # Pytest fixtures & helpers
