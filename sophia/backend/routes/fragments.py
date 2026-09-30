@@ -395,12 +395,19 @@ def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False
         next_date = _day_month_label(date.fromisoformat(bill_row["next_billing_date"]))
         context_line = f"Next billing is {next_date}. Cancel before then and you won't be charged."
 
+    if not config.MCP_ENABLED:
+        evidence_note = "Bank evidence and policy facts unavailable: MCP mode is disabled."
+    elif not config.RAG_ENABLED:
+        evidence_note = "Policy facts unavailable: RAG mode is disabled."
+    else:
+        evidence_note = None
+
     return render_template(
         "dispute_panel.html",
         dispute=dispute,
         draft=draft,
         context_line=context_line,
-        evidence_note=None if config.MCP_ENABLED else "Bank evidence unavailable: MCP mode is disabled.",
+        evidence_note=evidence_note,
         versions=versions,
         selected_version=chosen["version"] if chosen else None,
         oob=oob,

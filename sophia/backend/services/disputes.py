@@ -1,4 +1,5 @@
-"""Dispute CRUD and AI-drafted letters, shared by /api/disputes and /ui/disputes; letters cite bank facts read through MCP when it is on."""
+"""Dispute CRUD and AI-drafted letters, shared by /api/disputes and /ui/disputes; letters cite bank facts read through MCP and policy sentences read through RAG when they are on."""
+import re
 from datetime import date, timedelta
 
 from sophia.backend import config
@@ -7,12 +8,17 @@ from sophia.backend.ai.schemas import validate_dispute_draft
 from sophia.backend.clients import bills_db
 from sophia.backend.engine import money
 from sophia.backend.engine.status import _day_month
-from sophia.backend.services import tools as tools_service
+from sophia.backend.services import evidence, tools as tools_service
+from sophia.backend.services.evidence import SOURCE_PATTERN
 from sophia.backend.services.errors import NotFound, ServiceError
 
 DISPUTE_STATUSES = ("draft", "sent", "resolved")
 EVIDENCE_WINDOW_DAYS = 90
 EVIDENCE_ROWS = 3
+POLICY_ROWS = 3
+POLICY_K = 20
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+POLICY_WORDS = re.compile(r"\b(?:due within|late|penalty|fees?|refunds?|disputes?|accepted|business days|notice)\b", re.IGNORECASE)
 COMPARE_TOOL = "compare_bill_with_bank_charges"
 CONFIRMED_ANOMALIES_TOOL = "get_transactions_with_confirmed_anomalies"
 CONFIRMED_NOTE = ", flagged by Spending Alerts and confirmed by you"
@@ -37,6 +43,25 @@ def bank_evidence(bill, opened_on):
     ]
 
 
+def policy_evidence(reason):
+    """Up to POLICY_ROWS whole policy sentences as "<source>: <sentence>" from the non-bill files RAG returns within RAG_LOW, closest chunk first; [] when none qualify (most non-fee reasons sit beyond RAG_LOW), None when MCP or RAG is off or retrieval fails."""
+    if not (config.MCP_ENABLED and config.RAG_ENABLED):
+        return None
+    try:
+        found, _ms = evidence.chunks(reason, POLICY_K)
+    except ServiceError:
+        return None
+    sentences = []
+    for chunk in sorted(found, key=lambda c: c["distance"]):
+        if not chunk["source"] or SOURCE_PATTERN.match(chunk["source"]) or chunk["distance"] > config.RAG_LOW:
+            continue
+        for line in re.sub(r"[ \t]*\n(?=[a-z])", " ", chunk["text"]).splitlines():
+            line = line.strip().removeprefix("- ").lstrip("#").strip()
+            if line.endswith(".") and POLICY_WORDS.search(line) and "@" not in line and "$" not in line and "billed on" not in line.lower() and not ISO_DATE.search(line):
+                sentences.append(f"{chunk['source']}: {line}")
+    return sentences[:POLICY_ROWS]
+
+
 def _opened_on(dispute):
     """The day a dispute was opened, or the demo clock when the row carries none."""
     opened = dispute.get("opened_at")
@@ -47,6 +72,7 @@ def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, f
     bill = bills_db.row_to_bill(bill_row)
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_bill_payments(bill.id)]
     evidence = bank_evidence(bill, opened_on or config.DEMO_TODAY)
+    policy = policy_evidence(reason)
     fallback = dispute_prompt.fallback_draft(bill, reason)
     data = guard.run(
         config.DRAFT_MODEL,
@@ -55,6 +81,7 @@ def draft_for_bill(bill_row, reason, previous_letter=None, edited_letter=None, f
             reason,
             payments=payments,
             evidence=evidence,
+            policy=policy,
             previous_letter=previous_letter,
             edited_letter=edited_letter,
             feedback=feedback,
