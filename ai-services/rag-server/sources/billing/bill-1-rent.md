@@ -4,9 +4,9 @@
 - Type: bill
 - Cadence: monthly
 - Amount: $1,100.00
-- Next billing date: 2026-09-01
+- Next billing date: 2026-10-13
 - Status: paid
 - Payment method: direct_debit
-- Last payment: 2026-08-01 ($1,100.00)
+- Last payment: 2026-09-13 ($1,100.00)
 - Open disputes: 0
 - Excluded from the monthly plan: yes

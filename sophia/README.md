@@ -57,7 +57,7 @@ Architecture diagrams:
 | Service | Port | Key env vars |
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
-| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`), `OLLAMA_KEEP_ALIVE` (default `30m`), `AI_TEMPERATURE` (default `0.2`), `GROUNDED_TEMPERATURE` (default `0`) |
+| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-10-01`), `AI_TIMEOUT_SECONDS` (default `90`), `OLLAMA_KEEP_ALIVE` (default `30m`), `AI_TEMPERATURE` (default `0.2`), `GROUNDED_TEMPERATURE` (default `0`) |
 | `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
@@ -74,7 +74,12 @@ The `config.py` default (`http://host.docker.internal:11434`) remains the
 fallback for running bills-backend without the ollama service, and anyone
 running the backend bare on a machine without Docker Desktop should set
 `OLLAMA_URL=http://localhost:11434`; the demo clock stays
-`DEMO_TODAY=2026-08-20` by default and is overridable per environment.
+`DEMO_TODAY=2026-10-01` by default and is overridable per environment. The seed
+(`sophia/database/seed.py`) is written relative to 2026-08-20 and moved
+`DEMO_DATE_OFFSET_DAYS` (42) forward when it runs, payments staying on their
+billing cycle so every cached status holds at the demo clock; after pulling a
+seed change, drop and recreate the `bills_data` volume (`docker compose rm -sf
+bills-db && docker volume rm <project>_bills_data && docker compose up -d bills-db`).
 
 ## The two AI calls
 

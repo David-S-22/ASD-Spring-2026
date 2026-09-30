@@ -1,10 +1,10 @@
-"""Idempotent demo seed data for the bills database, dated relative to DEMO_TODAY=2026-08-20; SEED_DATE_OFFSET_DAYS moves every date with the demo clock."""
+"""Idempotent demo seed data for the bills database, written relative to 2026-08-20 and moved DEMO_DATE_OFFSET_DAYS forward on seeding, to the demo clock DEMO_TODAY=2026-10-01."""
 import json
-import os
 import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
+DEMO_DATE_OFFSET_DAYS = 42
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?$")
 CYCLES_BACK = 60
 
@@ -174,13 +174,13 @@ def _shifted_payments(shifted_bills, days):
     return rows
 
 
-def seed(connection):
-    """Insert the demo dataset if the bills table is empty, dates moved by SEED_DATE_OFFSET_DAYS (default 0); safe to call repeatedly."""
+def seed(connection, offset_days=DEMO_DATE_OFFSET_DAYS):
+    """Insert the demo dataset if the bills table is empty, every date moved offset_days forward; safe to call repeatedly."""
     cursor = connection.cursor()
     cursor.execute("SELECT COUNT(*) FROM bills")
     if cursor.fetchone()[0] > 0:
         return
-    days = int(os.environ.get("SEED_DATE_OFFSET_DAYS", "0"))
+    days = offset_days
     shifted_bills = _shifted(BILLS, days)
     cursor.executemany(
         """

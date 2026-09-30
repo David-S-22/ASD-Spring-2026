@@ -4,8 +4,8 @@
 - Type: bill
 - Cadence: weekly
 - Amount: $38.50
-- Next billing date: 2026-08-25
+- Next billing date: 2026-10-06
 - Status: paid
 - Payment method: card
-- Last payment: 2026-08-18 ($38.50)
+- Last payment: 2026-09-29 ($38.50)
 - Open disputes: 0
