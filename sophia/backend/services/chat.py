@@ -7,6 +7,7 @@ that writes those, always through the same CRUD calls a manual edit uses.
 import json
 import re
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sophia.backend import config
 from sophia.backend.ai import chat_prompt, guard
@@ -68,7 +69,18 @@ def _count_word(n):
 
 def _recent_history():
     rows = bills_db.list_chat_messages()
-    return [{"role": r["role"], "content": r["content"]} for r in rows[-10:]]
+    return [{"role": r["role"], "content": r["content"], "op_json": r.get("op_json")} for r in rows[-10:]]
+
+
+def _stated_text(message, history):
+    """The user's own words since the last proposal: the only text a new proposal may draw its values from."""
+    said = [message or ""]
+    for row in reversed(history):
+        if row["role"] == "assistant" and row.get("op_json"):
+            break
+        if row["role"] == "user":
+            said.append(row["content"])
+    return " ".join(said)
 
 
 def _answer_total():
@@ -178,7 +190,32 @@ MISSING_FIELD_QUESTIONS = {
     "cadence": "how often it bills (weekly, fortnightly or monthly)",
     "next_billing_date": "the next billing date",
     "type": "whether it's a bill or a subscription",
+    "end_date": "the end date",
 }
+
+CREATE_NEEDS_REPLY = "Happy to add that — I just need {wants}. I won't guess details you haven't given me."
+
+CADENCE_PHRASES = {
+    "monthly": ("monthly", "a month", "per month", "each month", "every month", "/month", "/mo"),
+    "weekly": ("weekly", "a week", "per week", "each week", "every week", "/week", "/wk"),
+    "fortnightly": (
+        "fortnightly", "a fortnight", "per fortnight", "each fortnight", "every fortnight",
+        "every two weeks", "every 2 weeks",
+    ),
+}
+
+MONTH_NAMES = (
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+)
+
+MONTH_WORDS = "|".join(MONTH_NAMES + ("sept",) + tuple(m[:3] for m in MONTH_NAMES))
+
+DATE_SPAN = re.compile(
+    rf"\d{{4}}-\d{{2}}-\d{{2}}|(?<!\d)\d{{1,2}}/\d{{1,2}}(?:/\d{{2,4}})?(?!\d)"
+    rf"|(?<![\d$.])\d{{1,2}}(?:st|nd|rd|th)?(?: of)? (?:{MONTH_WORDS})(?![a-z])"
+    rf"|(?<![a-z])(?:{MONTH_WORDS}) \d{{1,2}}(?!\d)"
+)
 
 
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
@@ -221,7 +258,52 @@ def _names_a_different_bill(preview, say):
     return (target, other) if other else None
 
 
-def _vet_proposal(preview, say=""):
+def _has_phrase(text, phrases):
+    """True when any phrase appears in text with no letters glued to either end."""
+    return any(re.search(rf"(?<![a-z]){re.escape(phrase)}(?![a-z])", text) for phrase in phrases)
+
+
+def _date_stated(text, days, value, need_day):
+    """True when the text gives the month of an ISO date, and its day when need_day."""
+    when = date.fromisoformat(str(value))
+    name = MONTH_NAMES[when.month - 1]
+    words = (name, name[:3]) + (("sept",) if when.month == 9 else ())
+    slashed = re.findall(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)", text)
+    month_given = (
+        _has_phrase(text, words)
+        or when.isoformat() in text
+        or any(int(d) == when.day and int(m) == when.month for d, m in slashed)
+    )
+    day_given = any(int(n) == when.day for n in days)
+    return month_given and (day_given or not need_day)
+
+
+def _ungrounded_fields(entity, op, fields, stated):
+    """Names of the proposed values the user's own words (stated) do not support.
+
+    Amounts are read from the text with its date spans removed, and days only
+    from those spans, so a stated date cannot ground a made-up amount or the
+    other way round.
+    """
+    if op not in ("create", "update") or entity != "bill":
+        return []
+    text = stated.lower().replace(",", "")
+    amounts = {Decimal(n) for n in re.findall(r"\d+(?:\.\d+)?", DATE_SPAN.sub(" ", text))}
+    days = re.findall(r"\d+", " ".join(DATE_SPAN.findall(text)))
+    ungrounded = []
+    if "amount_cents" in fields and Decimal(fields["amount_cents"]) / 100 not in amounts:
+        ungrounded.append("amount_cents")
+    cadence = fields.get("cadence")
+    if op == "create" and cadence and not _has_phrase(text, CADENCE_PHRASES.get(cadence, ())):
+        ungrounded.append("cadence")
+    for key in ("next_billing_date", "end_date"):
+        need_day = op == "create" and key == "next_billing_date"
+        if fields.get(key) and not _date_stated(text, days, fields[key], need_day):
+            ungrounded.append(key)
+    return ungrounded
+
+
+def _vet_proposal(preview, say="", stated=None):
     """Vet a proposal *before* it reaches the user.
 
     Returns (canonical_fields, None) when the proposal is appliable — fields
@@ -231,6 +313,10 @@ def _vet_proposal(preview, say=""):
     beneath the prompt's "ask, don't invent" instruction: even if the model
     ignores it and emits an under-specified create, no appliable proposal
     exists until the user has supplied the details.
+
+    With stated (the user's own words since the last proposal) the amount,
+    cadence and dates must also appear in what the user said; stated=None
+    skips that check.
     """
     if _contradicts_an_update(preview, say):
         return None, (
@@ -261,7 +347,14 @@ def _vet_proposal(preview, say=""):
         missing = [f for f in CREATE_REQUIRED if not fields.get(f)]
         if missing:
             wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
-            return None, f"Happy to add that — I just need {wants}. I won't guess details you haven't given me."
+            return None, CREATE_NEEDS_REPLY.format(wants=wants)
+    ungrounded = [] if stated is None else _ungrounded_fields(preview["entity"], preview["op"], fields, stated)
+    if ungrounded:
+        wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in ungrounded)
+        if preview["op"] == "create":
+            return None, CREATE_NEEDS_REPLY.format(wants=wants)
+        target = (_bill_name(preview.get("id")) if preview["entity"] == "bill" else None) or "that"
+        return None, f"I'd need you to state {wants} before I change {target}. I won't guess details you haven't given me."
     return fields, None
 
 
@@ -270,7 +363,7 @@ def send_message(message):
         raise ServiceError("message is required")
     history = _recent_history()
     bills_db.create_chat_message({"role": "user", "content": message})
-    return _model_turn(message, history)
+    return _model_turn(message, history, stated=_stated_text(message, history))
 
 
 # The Observe→Adapt half of the loop. Sent to the model as the current turn
@@ -294,10 +387,11 @@ def adapt_after_rejection():
     without waiting for the user to speak: the model sees the rejection note
     in its history and either asks what to change or proposes a corrected
     suggestion (which lands as a fresh pending row via the same vetting)."""
-    return _model_turn(ADAPT_NUDGE, _recent_history(), fallback=ADAPT_FALLBACK)
+    history = _recent_history()
+    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history))
 
 
-def _model_turn(model_message, history, fallback=None):
+def _model_turn(model_message, history, fallback=None, stated=None):
     bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
@@ -310,7 +404,7 @@ def _model_turn(model_message, history, fallback=None):
     preview = _build_preview(data)
     canonical_fields = None
     if preview:
-        canonical_fields, reply_override = _vet_proposal(preview, reply)
+        canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
         if reply_override:
             reply = reply_override
             preview = None
