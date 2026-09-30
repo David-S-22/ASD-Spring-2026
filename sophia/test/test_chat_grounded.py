@@ -90,6 +90,42 @@ def test_code_computed_questions_and_proposals_skip_the_corpus(live_client, mode
     assert questions == []
 
 
+NETFLIX_AS_UPDATE = {"op": "update", "entity": "bill", "id": 5, "fields": {"next_billing_date": "2026-10-14"}, "question": "none",
+                     "say": "I've suggested changing the next billing date — approve it to save."}
+
+
+def test_a_question_naming_a_bill_never_becomes_a_proposal(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, NETFLIX_AS_UPDATE)
+    fake_evidence(monkeypatch, dict(GROUNDED, answer="Netflix is next charged on 2026-10-14.", citations=[{"source": "bill-4-netflix.md", "bill_id": 4, "title": "Netflix", "distance": 0.46}], confidence="high"))
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "When is my Netflix subscription next charged?"}))
+    assert "Netflix is next charged on 2026-10-14." in body and "bill #4 · Netflix" in body
+    assert "Proposed:" not in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == pending_before
+
+
+def test_a_question_naming_a_bill_is_grounded_even_when_the_model_says_upcoming(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, dict(PLAIN_QUESTION, question="upcoming"))
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    body = _text(live_client.post("/ui/chat", data={"message": "When is Netflix due?"}))
+    assert questions == ["When is Netflix due?"] and "Coming up this week" not in body
+
+
+def test_a_general_question_the_model_tags_upcoming_stays_code_computed(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, dict(PLAIN_QUESTION, question="upcoming"))
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    body = _text(live_client.post("/ui/chat", data={"message": "What's due this week?"}))
+    assert questions == [] and ("Coming up this week" in body or "Nothing is due" in body)
+
+
+def test_a_question_with_a_change_verb_still_proposes(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 4, "fields": {"end_date": "2026-10-14"}, "question": "none",
+                             "say": "I've suggested ending Netflix after 14 Oct — approve it to save."})
+    questions = fake_evidence(monkeypatch, GROUNDED)
+    body = _text(live_client.post("/ui/chat", data={"message": "Can you cancel Netflix from 14 October?"}))
+    assert "Proposed:" in body and "Update Netflix" in body and questions == []
+
+
 def test_api_chat_carries_the_grounded_card(live_client, modes_on, monkeypatch):
     fake_model(monkeypatch, PLAIN_QUESTION)
     fake_evidence(monkeypatch, GROUNDED)

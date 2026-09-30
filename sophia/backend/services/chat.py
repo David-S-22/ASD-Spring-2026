@@ -221,6 +221,23 @@ DATE_SPAN = re.compile(
 
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
 
+CHANGE_VERB = re.compile(
+    r"\b(add|adds|adding|added|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
+    r"|update|updates|set|rename|delete|dispute|record|mark|move|exclude|include|raise|lower|increase|decrease|switch)\b",
+    re.I,
+)
+
+
+def _is_plain_question(message):
+    """True for a message that asks rather than instructs: it ends with a question mark and names no change, so the model may not turn it into a proposal."""
+    text = (message or "").strip()
+    return text.endswith("?") and not CHANGE_VERB.search(text)
+
+
+def _names_a_bill(text, bills):
+    """True when the text mentions any bill's name or merchant as a whole word."""
+    return any(_mentions(text, row["name"]) or _mentions(text, row["merchant"]) for row in bills)
+
 
 def _contradicts_an_update(preview, say):
     """True when the sentence promises a NEW bill but the op edits an existing one.
@@ -413,9 +430,10 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     )
 
     reply = _resolve_question(data.get("question")) or data.get("say", "")
-    preview = _build_preview(data)
+    asks = grounded and _is_plain_question(model_message)
+    preview = None if asks else _build_preview(data)
     card = None
-    if grounded and not preview and data.get("question") in (None, "none"):
+    if grounded and not preview and (data.get("question") in (None, "none") or (asks and _names_a_bill(model_message, bills))):
         card = _grounded_answer(model_message)
         if card:
             reply = card["answer"]
