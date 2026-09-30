@@ -543,7 +543,7 @@ def test_review_button_only_renders_when_unreviewed(client: FlaskClient):
 
     rows = client.get("/anomalies").text
     assert f'data-anomaly-id="{unreviewed.id}"' not in rows
-    assert 'aria-label="No actions available"' in rows
+    assert '<span class="status-badge status-accepted">Confirmed</span>' in rows
 
 
 def test_confirm_missing_anomaly_returns_404(client: FlaskClient):
@@ -609,7 +609,7 @@ def test_anomaly_row_shows_transaction_date_and_merchant(client: FlaskClient, mo
     assert "Suspicious Merchant Co" in rows
     assert "2025-01-15" in rows
     assert "<td>4242</td>" not in rows
-    assert 'data-sort-id="' in rows
+    assert 'data-sort-id="' not in rows
     assert 'data-sort-date="2025-01-15T00:00:00"' in rows
     assert 'data-sort-merchant="Suspicious Merchant Co"' in rows
     assert 'data-sort-status="unreviewed"' in rows

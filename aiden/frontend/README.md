@@ -18,7 +18,9 @@ the current sort is shown with SVG indicators and kept when refreshed rows
 arrive. The Confidence column shows the model's certainty as a colored dot and
 Low/Medium/High label (or a dash when no score is available). Blue, indigo, and
 purple dot-labels distinguish confidence from the green Confirmed and red
-Dismissed status badges. Confidence indicators and status badges are centered
+Dismissed status badges. Unreviewed status badges are buttons styled as blue
+pills with a trailing pencil icon and hover highlight; clicking one opens the review
+dialog. Confidence indicators and status badges are centered
 within their table cells. The anomaly table uses the available shell width,
 with horizontal scrolling on narrow screens.
 The review dialog shows the transaction details (a

@@ -11,11 +11,12 @@
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
   <td class="anomaly-confidence">{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="confidence-indicator confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
-  <td class="anomaly-status">{% if anomaly.is_confirmed_by_user is none %}<span class="status-badge status-unreviewed">Unreviewed</span>{% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>{% else %}<span class="status-badge status-rejected">Dismissed</span>{% endif %}</td>
-  <td>
+  <td class="anomaly-status">
     {% if anomaly.is_confirmed_by_user is none %}
     <button type="button"
-            class="review-btn"
+            class="status-badge status-unreviewed review-btn"
+            title="Click to review this anomaly"
+            aria-label="Unreviewed – click to review"
             data-anomaly-id="{{ anomaly.id }}"
             data-date="{{ (txn.date.isoformat() if txn else '—')|e }}"
             data-merchant="{{ (txn.merchant if txn else '—')|e }}"
@@ -25,14 +26,12 @@
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
             data-confidence="{{ '%.1f'|format(anomaly.confidence * 100) if anomaly.confidence is not none else '' }}"
             data-confidence-level="{{ confidence_level or '' }}"
-            onclick="openReviewModal(this)">
-      Review
-    </button>
-    {% else %}
-    <span class="no-actions" aria-label="No actions available" title="No actions available">—</span>
+            onclick="openReviewModal(this)">Unreviewed<svg class="review-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M11 2.5 13.5 5 6 12.5H3.5V10L11 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+    {% elif anomaly.is_confirmed_by_user %}<span class="status-badge status-accepted">Confirmed</span>
+    {% else %}<span class="status-badge status-rejected">Dismissed</span>
     {% endif %}
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="5" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}
