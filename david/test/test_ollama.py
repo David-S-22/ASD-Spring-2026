@@ -55,15 +55,19 @@ def test_load_prompt_with_and_without_extension():
     prompt_txt = load_prompt("classify_prompt.txt")
     prompt_no_ext = load_prompt("classify_prompt")
     assert prompt_txt == prompt_no_ext
-    assert len(prompt_txt) > 0
     assert "focus" in prompt_txt.lower()
 
 
 def test_load_prompt_savings_and_search():
     savings = load_prompt("savings_prompt")
     search = load_prompt("search_prompt")
-    assert len(savings) > 0
-    assert len(search) > 0
+    assert "{today}" in search
+    assert "{category_timeframe_feedback}" in search
+    assert "{background_preferences}" in search
+    assert "{valid_categories}" in search
+
+    assert "PLAN" in savings and "ACT" in savings
+    assert "Insufficient context to generate savings advice." in savings
 
 
 def test_load_prompt_nonexistent_raises_filenotfound():
@@ -440,23 +444,59 @@ def test_execute_mcp_tool_raises_when_server_unavailable():
         ollama_service.MCP_SERVER_URL = orig_url
 
 
-def test_mcp_tool_conversion_structure():
-    """Directly exercises the conversion logic in ollama_service.fetch_mcp_tools."""
+def test_fetch_mcp_tools_success():
+    """Verifies lines 194-210 conversion of FastMCP tools to OpenAI function format."""
     mock_mcp_tool = SimpleNamespace(
         name="search_transactions",
         description="Search user transactions",
         input_schema={"type": "object", "properties": {"limit": {"type": "integer"}}},
     )
-    # Replicate lines 200-209 conversion logic to ensure format contract
-    converted = {
-        "type": "function",
-        "function": {
-            "name": mock_mcp_tool.name,
-            "description": mock_mcp_tool.description or "",
-            "parameters": mock_mcp_tool.input_schema,
-        },
-    }
-    assert converted["type"] == "function"
-    assert converted["function"]["name"] == "search_transactions"
-    assert converted["function"]["description"] == "Search user transactions"
-    assert converted["function"]["parameters"] == mock_mcp_tool.input_schema
+
+    class FakeMCPClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def list_tools(self):
+            return [mock_mcp_tool]
+
+    orig_client = ollama_service.Client
+    ollama_service.Client = FakeMCPClient
+    try:
+        tools = fetch_mcp_tools()
+        assert len(tools) == 1
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "search_transactions"
+        assert tools[0]["function"]["description"] == "Search user transactions"
+        assert tools[0]["function"]["parameters"] == {"type": "object", "properties": {"limit": {"type": "integer"}}}
+    finally:
+        ollama_service.Client = orig_client
+
+
+def test_execute_mcp_tool_success():
+    """Verifies lines 182-192 tool execution through FastMCP Client."""
+    class FakeMCPClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def call_tool(self, tool_name, arguments=None):
+            return SimpleNamespace(data={"result": f"called {tool_name} with {arguments}"})
+
+    orig_client = ollama_service.Client
+    ollama_service.Client = FakeMCPClient
+    try:
+        data = execute_mcp_tool("my_tool", {"param": 123})
+        assert data == {"result": "called my_tool with {'param': 123}"}
+    finally:
+        ollama_service.Client = orig_client

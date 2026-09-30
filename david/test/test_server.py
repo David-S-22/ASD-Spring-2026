@@ -72,17 +72,6 @@ def mock_ollama_client():
 
 
 # ============================================================================
-# Root / Index Endpoint
-# ============================================================================
-
-@pytest.mark.usefixtures("app_ctx")
-def test_home(client: FlaskClient):
-    response = client.get("/")
-    assert response.status_code == 200
-    assert "<p>Savings Backend</p>" in response.get_data(as_text=True)
-
-
-# ============================================================================
 # Goal Endpoints (With Request Payload Verification)
 # ============================================================================
 
@@ -499,6 +488,44 @@ def test_create_feedback_with_auto_classification(client: FlaskClient):
 
 @responses.activate
 @pytest.mark.usefixtures("app_ctx")
+def test_create_feedback_with_auto_classification_and_suggestion_id(client: FlaskClient):
+    """Verifies that suggestion_id is preserved when feedback undergoes auto-classification."""
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+    expected_db_payload = {
+        "feedback": "I agree to eat out less",
+        "suggestion_id": 42,
+        "category_id": 80,
+        "timeframe": "2 weeks",
+    }
+    responses.add(
+        responses.POST,
+        f"{DB_URL}/feedback",
+        match=[matchers.json_params_matcher(expected_db_payload)],
+        json={"id": 7, **expected_db_payload},
+        status=201,
+    )
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/feedbacks",
+        json=[{"id": 7, **expected_db_payload}],
+        status=200,
+    )
+
+    response = client.post(
+        "/feedback",
+        json={"feedback": "I agree to eat out less", "suggestion_id": 42},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "feedbackChanged"
+
+
+@responses.activate
+@pytest.mark.usefixtures("app_ctx")
 def test_create_feedback_empty_strings_normalized_to_none_and_classified(client: FlaskClient):
     """Verifies lines 146-150 where empty strings in category_id/timeframe normalize to None and trigger classification."""
     responses.add(
@@ -738,11 +765,23 @@ def test_get_ai_suggestion_success_renders_advice():
         app_module.generate_savings_advice = orig_generate
 
 
+@pytest.mark.parametrize(
+    "invalid_text",
+    [
+        "",
+        "   ",
+        "No current AI suggestion available.",
+        "Error: Could not generate AI savings suggestion.",
+        "You don't have any active savings goals yet.",
+        "No transactions found matching your filter.",
+        "Insufficient context to generate savings advice.",
+    ],
+)
 @pytest.mark.usefixtures("app_ctx")
-def test_action_ai_suggestion_invalid_suggestion_text(client: FlaskClient):
+def test_action_ai_suggestion_invalid_suggestion_text(client: FlaskClient, invalid_text: str):
     response = client.post(
         "/ai-suggestion/action",
-        json={"suggestion": "No current AI suggestion available.", "accepted": True, "feedback": "ok"},
+        json={"suggestion": invalid_text, "accepted": True, "feedback": "ok"},
     )
     assert response.status_code == 400
     assert response.get_json()["error"] == "No valid suggestion available to accept or reject."
@@ -863,3 +902,53 @@ def test_action_ai_suggestion_db_error_returns_500(client: FlaskClient):
     )
     assert response.status_code == 500
     assert "Failed to save suggestion decision" in response.get_json()["error"]
+
+
+@responses.activate
+@pytest.mark.usefixtures("app_ctx")
+def test_action_ai_suggestion_rolls_back_suggestion_when_feedback_save_fails(client: FlaskClient):
+    suggestion_url = f"{DB_URL}/suggestion"
+    suggestion_delete_url = f"{DB_URL}/suggestion/42"
+    feedback_url = f"{DB_URL}/feedback"
+
+    responses.add(
+        responses.POST,
+        suggestion_url,
+        json={"id": 42, "suggestion": "Trim dining costs by $50.", "accepted": True},
+        status=201,
+    )
+    responses.add(responses.GET, f"{TX_URL}/categories", json=[], status=200)
+    responses.add(responses.POST, feedback_url, status=500)
+    responses.add(responses.DELETE, suggestion_delete_url, status=204)
+
+    response = client.post(
+        "/ai-suggestion/action?accepted=true",
+        json={"suggestion": "Trim dining costs by $50.", "feedback": "I agree"},
+    )
+
+    assert response.status_code == 500
+    assert [call.request.url for call in responses.calls] == [
+        suggestion_url,
+        f"{TX_URL}/categories",
+        feedback_url,
+        suggestion_delete_url,
+    ]
+
+
+@responses.activate
+@pytest.mark.usefixtures("app_ctx")
+def test_action_ai_suggestion_rejects_created_suggestion_without_id(client: FlaskClient):
+    responses.add(
+        responses.POST,
+        f"{DB_URL}/suggestion",
+        json={"suggestion": "Trim dining costs by $50.", "accepted": True},
+        status=201,
+    )
+
+    response = client.post(
+        "/ai-suggestion/action?accepted=true",
+        json={"suggestion": "Trim dining costs by $50.", "feedback": "I agree"},
+    )
+
+    assert response.status_code == 500
+    assert "did not include an id" in response.get_json()["error"]

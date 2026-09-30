@@ -281,22 +281,28 @@ def setup_app(db_url: str, transactions_db_url: str) -> Flask:
                 if hasattr(saved_suggestion, "id")
                 else resp.json().get("id")
             )
+            if suggestion_id is None:
+                raise ValueError("Suggestion response did not include an id")
 
-            if suggestion_id is not None:
-                categories = fetch_categories(tx_url)
-                category_id, timeframe = classify_feedback(feedback_text, categories)
-                feedback_payload = {
-                    "feedback": feedback_text,
-                    "suggestion_id": suggestion_id,
-                    "category_id": category_id,
-                    "timeframe": timeframe,
-                }
+            categories = fetch_categories(tx_url)
+            category_id, timeframe = classify_feedback(feedback_text, categories)
+            feedback_payload = {
+                "feedback": feedback_text,
+                "suggestion_id": suggestion_id,
+                "category_id": category_id,
+                "timeframe": timeframe,
+            }
 
+            try:
                 feedback_response = requests.post(
                     f"{db_url}/feedback",
                     json=feedback_payload,
                 )
                 feedback_response.raise_for_status()
+            except Exception:
+                cleanup_response = requests.delete(f"{db_url}/suggestion/{suggestion_id}")
+                cleanup_response.raise_for_status()
+                raise
         except Exception as e:
             app.logger.error(f"Error saving suggestion action: {e}")
             return jsonify({"error": f"Failed to save suggestion decision: {str(e)}"}), 500

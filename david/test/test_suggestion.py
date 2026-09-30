@@ -39,14 +39,50 @@ TX_URL = "http://transactions-db:6001"
 class MockAIState:
     def __init__(self):
         self.last_prompt: str | None = None
+        self.last_request_body: dict[str, Any] | None = None
         self.response_text: str = "Trim dining costs by $40 to reach your goal."
         self.confidence_logprob: float = math.log(0.95)
+        self.tool_call_name: str | None = None
+        self.tool_call_args: dict[str, Any] | None = None
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode("utf-8"))
+        self.last_request_body = body
         messages = body.get("messages", [])
         user_msg = next((m["content"] for m in messages if m["role"] == "user"), "")
         self.last_prompt = user_msg
+
+        if "tools" in body and self.tool_call_name is not None:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "tc-search-1",
+                        "type": "function",
+                        "function": {
+                            "name": self.tool_call_name,
+                            "arguments": json.dumps(self.tool_call_args or {})
+                            if isinstance(self.tool_call_args, dict)
+                            else str(self.tool_call_args),
+                        },
+                    }
+                ],
+            }
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl-mock",
+                    "object": "chat.completion",
+                    "created": 123456789,
+                    "model": "qwen2.5:3b",
+                    "choices": [{
+                        "index": 0,
+                        "message": message,
+                        "finish_reason": "tool_calls",
+                    }],
+                },
+            )
 
         return httpx.Response(
             200,
@@ -88,15 +124,20 @@ def ai_state():
 class MockMCPState:
     def __init__(self):
         self.transactions: list[dict[str, Any]] = []
+        self.unfiltered_transactions: list[dict[str, Any]] | None = None
         self.rag_docs: list[dict[str, Any]] = []
         self.tools: list[dict[str, Any]] = []
         self.raise_on_execute: bool = False
+        self.execute_calls: list[tuple[str, dict[str, Any]]] = []
 
     def execute(self, tool_name: str, arguments: dict[str, Any]):
+        self.execute_calls.append((tool_name, arguments))
         if self.raise_on_execute:
             raise RuntimeError("MCP server connection failure")
         if tool_name == "retrieve_context":
             return {"results": self.rag_docs}
+        if not arguments and self.unfiltered_transactions is not None:
+            return self.unfiltered_transactions
         return self.transactions
 
     def fetch(self):
@@ -207,6 +248,23 @@ def test_format_feedback_for_search():
     assert bg_empty == "None"
 
 
+def test_format_feedback_skips_empty_text():
+    """Verifies that empty or whitespace-only feedback text is skipped in planner and search formatting."""
+    category_map = {80: "Dining"}
+    feedbacks = [
+        dto.Feedback(id=1, feedback=""),
+        dto.Feedback(id=2, feedback="   "),
+        dto.Feedback(id=3, feedback=None),
+        dto.Feedback(id=4, feedback="Valid note", category_id=80),
+    ]
+    planner_formatted = _format_feedback_for_planner(feedbacks, category_map)
+    assert len(planner_formatted) == 1
+    assert planner_formatted[0]["preference"] == "Valid note"
+
+    cat_tf, bg = _format_feedback_for_search(feedbacks, category_map)
+    assert "Valid note" in cat_tf
+
+
 @responses.activate
 def test_format_planner_prompt():
     responses.add(
@@ -268,6 +326,23 @@ def test_aggregate_spending_by_merchant():
     assert aggregated[1]["transaction_count"] == 1
 
 
+def test_aggregate_spending_by_merchant_fallback_branches():
+    """Verifies non-numeric amount fallback to 0.0 and string category fallback."""
+    txs = [
+        {"merchant": "Cafe", "amount": "invalid-amount", "category": "Food"},
+        {"merchant": None, "amount": 15.0, "category_id": 999},
+    ]
+    aggregated = _aggregate_spending_by_merchant(txs, category_map={})
+    assert len(aggregated) == 2
+    cafe_item = next(item for item in aggregated if item["merchant"] == "Cafe")
+    assert cafe_item["total_spent"] == "$0.00"
+    assert cafe_item["category"] == "Food"
+
+    unknown_item = next(item for item in aggregated if item["merchant"] == "Unknown")
+    assert unknown_item["total_spent"] == "$15.00"
+    assert unknown_item["category"] == "Uncategorized"
+
+
 def test_extract_rag_sources():
     docs = [
         {"metadata": {"source": "savings_guide.md"}},
@@ -311,6 +386,98 @@ def test_generate_transaction_search_tool_call_defaults_when_no_tools(mcp_state:
     assert tool_args == {}
 
 
+@responses.activate
+def test_generate_transaction_search_tool_call_with_tools_and_category_enum(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}, {"id": 81, "name": "Groceries", "type": "need"}],
+        status=200,
+    )
+    mcp_state.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_transactions",
+                "description": "Search transactions",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"category_name": {"type": "string"}},
+                },
+            },
+        }
+    ]
+    ai_state.tool_call_name = "search_transactions"
+    ai_state.tool_call_args = {
+        "category_name": "dining",
+        "start_date": "2026-09-01",
+        "empty_field": "",
+        "none_field": None,
+    }
+    feedbacks = [dto.Feedback(id=1, feedback="Cut dining", category_id=80, timeframe="2 weeks")]
+
+    tool_name, tool_args = generate_transaction_search_tool_call(feedbacks, tx_url=TX_URL)
+    assert tool_name == "search_transactions"
+    # Verifies matched_cat normalized case-insensitively to "Dining", and empty/None fields cleaned
+    assert tool_args == {"category_name": "Dining", "start_date": "2026-09-01"}
+
+    # Verify category enum was injected into tool definition schema sent to AI
+    req = ai_state.last_request_body
+    assert req is not None
+    props = req["tools"][0]["function"]["parameters"]["properties"]
+    assert props["category_name"]["enum"] == ["Dining", "Groceries"]
+
+
+@responses.activate
+def test_generate_transaction_search_tool_call_unmatched_category(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+    mcp_state.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "query_tx",
+                "parameters": {"properties": {}},
+            },
+        }
+    ]
+    ai_state.tool_call_name = "query_tx"
+    ai_state.tool_call_args = {"category_name": "Entertainment"}
+
+    tool_name, tool_args = generate_transaction_search_tool_call([], tx_url=TX_URL)
+    assert tool_name == "query_tx"
+    assert tool_args == {"category_name": "Entertainment"}
+
+
+@responses.activate
+def test_generate_transaction_search_tool_call_no_categories(mcp_state: MockMCPState, ai_state: MockAIState):
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[],
+        status=200,
+    )
+    mcp_state.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_transactions",
+                "parameters": {"properties": {}},
+            },
+        }
+    ]
+    ai_state.tool_call_name = "search_transactions"
+    ai_state.tool_call_args = {"limit": 10}
+
+    tool_name, tool_args = generate_transaction_search_tool_call([], tx_url=TX_URL)
+    assert tool_name == "search_transactions"
+    assert tool_args == {"limit": 10}
+
+
 def test_fetch_rag_guidelines_insufficient_context_returns_none(mcp_state: MockMCPState):
     # Less than 30 characters of text returns None
     mcp_state.rag_docs = [{"text": "Too short", "metadata": {}}]
@@ -342,6 +509,65 @@ def test_fetch_filtered_transactions_empty_and_filter_messages(mcp_state: MockMC
     txs, error = _fetch_filtered_transactions([], tx_url=TX_URL)
     assert txs is None
     assert "don't have any transactions yet" in error
+
+
+@responses.activate
+def test_fetch_filtered_transactions_retry_category_and_dates(mcp_state: MockMCPState, ai_state: MockAIState):
+    """Verifies lines 296-304: filtered search returns empty, unfiltered retry returns transactions with category & dates message."""
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[{"id": 80, "name": "Dining", "type": "want"}],
+        status=200,
+    )
+    mcp_state.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_transactions",
+                "parameters": {"properties": {"category_name": {"type": "string"}}},
+            },
+        }
+    ]
+    ai_state.tool_call_name = "search_transactions"
+    ai_state.tool_call_args = {"category_name": "Dining", "start_date": "2026-09-01"}
+
+    # Filtered search returns empty, but unfiltered fallback returns transactions
+    mcp_state.transactions = []
+    mcp_state.unfiltered_transactions = [{"merchant": "Supermarket", "amount": 50}]
+
+    txs, error = _fetch_filtered_transactions([], tx_url=TX_URL)
+    assert txs is None
+    assert error == "No transactions found in category 'Dining' within the specified timeframe. Try broadening your feedback or checking other categories."
+
+
+@responses.activate
+def test_fetch_filtered_transactions_retry_generic_filter(mcp_state: MockMCPState, ai_state: MockAIState):
+    """Verifies lines 296-304: filter without category or dates generates 'matching your filter' message."""
+    responses.add(
+        responses.GET,
+        f"{TX_URL}/categories",
+        json=[],
+        status=200,
+    )
+    mcp_state.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_transactions",
+                "parameters": {"properties": {}},
+            },
+        }
+    ]
+    ai_state.tool_call_name = "search_transactions"
+    ai_state.tool_call_args = {"min_amount": 500}
+
+    mcp_state.transactions = []
+    mcp_state.unfiltered_transactions = [{"merchant": "Supermarket", "amount": 50}]
+
+    txs, error = _fetch_filtered_transactions([], tx_url=TX_URL)
+    assert txs is None
+    assert error == "No transactions found matching your filter. Try broadening your feedback or checking other categories."
 
 
 # ============================================================================
@@ -539,3 +765,53 @@ def test_generate_savings_advice_handles_empty_ai_response(mcp_state: MockMCPSta
     assert advice == "Insufficient context available to generate savings advice."
     assert sources is None
     assert confidence is None
+
+
+@responses.activate
+def test_generate_savings_advice_empty_advice_fallback():
+    """Verifies line 454 fallback when advice returned by generate_advice is empty."""
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/goals?active_only=true&top=3",
+        json=[{"id": 1, "name": "Emergency", "cost": 500, "date": "2026-12-01T00:00:00"}],
+        status=200,
+    )
+    responses.add(responses.GET, f"{DB_URL}/feedbacks", json=[], status=200)
+    responses.add(responses.GET, f"{DB_URL}/suggestions", json=[], status=200)
+    responses.add(responses.GET, f"{TX_URL}/categories", json=[], status=200)
+
+    orig_gen = suggestion_service.generate_advice
+    suggestion_service.generate_advice = lambda goals, suggestions, feedbacks, tx_url=None, previous_suggestion=None: ("", None, None)
+    try:
+        advice, sources, confidence = generate_savings_advice(DB_URL, tx_url=TX_URL)
+        assert advice == "Error: Could not generate AI savings suggestion (empty response received from AI model)."
+        assert sources is None
+        assert confidence is None
+    finally:
+        suggestion_service.generate_advice = orig_gen
+
+
+@responses.activate
+def test_generate_savings_advice_exception_fallback():
+    """Verifies lines 455-456 exception handler when pipeline encounters an unhandled error."""
+    responses.add(
+        responses.GET,
+        f"{DB_URL}/goals?active_only=true&top=3",
+        json=[{"id": 1, "name": "Emergency", "cost": 500, "date": "2026-12-01T00:00:00"}],
+        status=200,
+    )
+    responses.add(responses.GET, f"{DB_URL}/feedbacks", json=[], status=200)
+    responses.add(responses.GET, f"{DB_URL}/suggestions", json=[], status=200)
+    responses.add(responses.GET, f"{TX_URL}/categories", json=[], status=200)
+
+    orig_gen = suggestion_service.generate_advice
+    def boom(*args, **kwargs):
+        raise RuntimeError("Unexpected pipeline failure")
+    suggestion_service.generate_advice = boom
+    try:
+        advice, sources, confidence = generate_savings_advice(DB_URL, tx_url=TX_URL)
+        assert "Error: Could not generate AI savings suggestion (Unexpected pipeline failure)." in advice
+        assert sources is None
+        assert confidence is None
+    finally:
+        suggestion_service.generate_advice = orig_gen
