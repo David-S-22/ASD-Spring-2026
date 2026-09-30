@@ -4,7 +4,7 @@ import requests
 from pytest import MonkeyPatch, fixture, mark, raises
 
 from janelle.backend import config
-from janelle.backend.services import rag_answer, rag_client
+from janelle.backend.services import rag_answer
 from janelle.backend.services.rag_client import RAGError
 
 

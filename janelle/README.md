@@ -181,8 +181,11 @@ An empty database is seeded with demo data on first start only.
 
 Invalid threshold combinations log one warning and fall back to defaults.
 The database reads `PORT` and `DB_PATH` (Compose: `6001`,
-`/app/data/transactions.db`) plus `ANOMALIES_DB_URL` for best-effort anomaly
-cleanup on delete. The frontend reads `PORT` (Compose: `3001`).
+`/app/data/transactions.db`), plus `ANOMALIES_DB_URL` /
+`ANOMALIES_TIMEOUT_SECONDS` for best-effort anomaly cleanup when a
+transaction is deleted and `SAVINGS_DB_URL` / `SAVINGS_TIMEOUT_SECONDS` for
+best-effort savings-feedback cleanup when a category is deleted. The frontend
+reads `PORT` (Compose: `3001`).
 
 ## Tests and probes
 

@@ -452,33 +452,24 @@ def act_on_create(plan, context):
         return error_action(error)
 
     selection = context.get("category_selection")
+    if selection is None:
+        explicit_category = ollama_service.explicit_category_in_message(
+            context["message"],
+            context["categories"],
+        )
+        if explicit_category is not None:
+            selection = {
+                "source": "user",
+                "suggested_category_id": None,
+                "suggested_category_name": None,
+                "selected_category_id": context["category_ids"][
+                    explicit_category.casefold()
+                ],
+                "selected_category_name": explicit_category,
+                "requires_user_response": False,
+            }
     if selection is not None:
         clean["category_id"] = selection["selected_category_id"]
-        result = create_preview_response(plan, clean, context, selection)
-        return {
-            "type": "preview",
-            "status": "succeeded",
-            "result": result,
-            "preview": result["preview"],
-            "database_calls": [],
-        }
-
-    explicit_category = ollama_service.explicit_category_in_message(
-        context["message"],
-        context["categories"],
-    )
-    if explicit_category is not None:
-        clean["category_id"] = context["category_ids"][
-            explicit_category.casefold()
-        ]
-        selection = {
-            "source": "user",
-            "suggested_category_id": None,
-            "suggested_category_name": None,
-            "selected_category_id": clean["category_id"],
-            "selected_category_name": explicit_category,
-            "requires_user_response": False,
-        }
         result = create_preview_response(plan, clean, context, selection)
         return {
             "type": "preview",
@@ -829,13 +820,11 @@ def corrected_category_suggestion(merchant, context):
 
 
 def missing_fields_response(plan, missing):
-    labels = {
-        "date": "date",
-        "merchant": "merchant",
-        "description": "description",
-        "amount": "amount",
-    }
-    requested = [labels[item] for item in missing if item in labels]
+    requested = [
+        item
+        for item in missing
+        if item in ("date", "merchant", "description", "amount")
+    ]
     if len(requested) == 1:
         detail = requested[0]
     elif len(requested) == 2:
@@ -1138,9 +1127,9 @@ TRANSACTION_ID_MENTION_PATTERNS = (
 def grounded_transaction_ids(message):
     """Return every transaction ID the user named explicitly.
 
-    Only the same explicit forms accepted by ``transaction_id_is_grounded``
-    count ("transaction 29", "transaction ID: 29", "id 29", "#29"); bare
-    numbers are ignored because they are usually amounts or dates.
+    Only explicit forms count ("transaction 29", "transaction ID: 29",
+    "id 29", "#29"); bare numbers are ignored because they are usually
+    amounts or dates.
     """
     found = set()
     for pattern in TRANSACTION_ID_MENTION_PATTERNS:
@@ -1152,16 +1141,7 @@ def grounded_transaction_ids(message):
 
 
 def transaction_id_is_grounded(message, transaction_id):
-    escaped_id = re.escape(str(transaction_id))
-    patterns = (
-        rf"\btransaction(?:\s+id)?\s*(?:[:=#-]\s*)?{escaped_id}\b",
-        rf"\bid\s*(?:[:=#-]\s*)?{escaped_id}\b",
-        rf"(?<![a-z0-9])#{escaped_id}\b",
-    )
-    return any(
-        re.search(pattern, message, re.IGNORECASE)
-        for pattern in patterns
-    )
+    return transaction_id in grounded_transaction_ids(message)
 
 
 def raise_cycle_error(cycle_result):
