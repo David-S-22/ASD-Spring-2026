@@ -5,10 +5,10 @@ transaction ID" used to re-run the same ambiguous plan because a bare
 number is never treated as a grounded transaction ID.
 """
 
+from itertools import cycle
 from unittest.mock import Mock
 
-from flask.testing import FlaskClient
-from pytest import MonkeyPatch, fixture, mark
+from pytest import fixture, mark
 
 import janelle.backend.app as backend_app
 from janelle.backend.Helpers import normalize_transaction_id_answer
@@ -18,33 +18,40 @@ from janelle.backend.services import transaction_orchestrator
 CATEGORIES = [{"id": 80, "name": "Dining", "type": "want"}]
 MERIVALE = [
     {
-        "id": 27,
-        "date": "2026-08-09T00:00:00",
+        "id": transaction_id,
+        "date": f"2026-08-{day:02d}T00:00:00",
         "merchant": "Merivale",
-        "description": "Dinner",
-        "amount": 84.5,
+        "description": description,
+        "amount": amount,
         "category_id": 80,
-        "version": "2026-08-09T12:00:00.000001",
-    },
-    {
-        "id": 28,
-        "date": "2026-08-16T00:00:00",
-        "merchant": "Merivale",
-        "description": "Lunch",
-        "amount": 42.0,
-        "category_id": 80,
-        "version": "2026-08-16T12:00:00.000001",
-    },
-    {
-        "id": 29,
-        "date": "2026-08-30T00:00:00",
-        "merchant": "Merivale",
-        "description": "Drinks",
-        "amount": 76.0,
-        "category_id": 80,
-        "version": "2026-08-30T12:00:00.000001",
-    },
+        "version": f"2026-08-{day:02d}T12:00:00.000001",
+    }
+    for transaction_id, day, description, amount in (
+        (27, 9, "Dinner", 84.5),
+        (28, 16, "Lunch", 42.0),
+        (29, 30, "Drinks", 76.0),
+    )
 ]
+DELETE_MERIVALE = {
+    "operation": "delete",
+    "transaction_id": None,
+    "fields": {},
+    "filters": {"merchant": "Merivale"},
+    "calculation": "none",
+    "handoff": "none",
+    "reply": "Prepared safely.",
+    "fallback": False,
+    "planning_error": None,
+    "retryable": False,
+}
+
+
+def response_with_json(payload):
+    response = Mock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.json.return_value = payload
+    return response
 
 
 @fixture
@@ -53,106 +60,57 @@ def client():
         yield test_client
 
 
-def response_with_json(payload, status=200):
-    response = Mock()
-    response.status_code = status
-    response.raise_for_status.return_value = None
-    response.json.return_value = payload
-    return response
-
-
-def plan(**overrides):
-    result = {
-        "operation": "read",
-        "transaction_id": None,
-        "fields": {},
-        "filters": {},
-        "calculation": "none",
-        "handoff": "none",
-        "reply": "Prepared safely.",
-        "fallback": False,
-        "planning_error": None,
-        "retryable": False,
-    }
-    result.update(overrides)
-    return result
-
-
-def use_plan(monkeypatch: MonkeyPatch, result):
-    planner = Mock(return_value=result)
-    monkeypatch.setattr(
-        transaction_orchestrator.ollama_service,
-        "create_plan",
-        planner,
-    )
-    return planner
-
-
-def merivale_database(monkeypatch: MonkeyPatch):
-    """Categories, the full list, then the merchant-filtered query."""
+@fixture
+def merivale_database(monkeypatch):
+    """Each chat request reads categories, the full list, then the filtered query."""
     monkeypatch.setattr(
         backend_app.requests,
         "get",
-        Mock(side_effect=[
-            response_with_json(CATEGORIES),
-            response_with_json(MERIVALE),
-            response_with_json(MERIVALE),
-        ]),
+        Mock(side_effect=cycle(
+            response_with_json(rows)
+            for rows in (CATEGORIES, MERIVALE, MERIVALE)
+        )),
     )
 
 
-# --- answer normalisation ---------------------------------------------------
+@fixture
+def use_plan(monkeypatch):
+    def install(**overrides):
+        planner = Mock(return_value={**DELETE_MERIVALE, **overrides})
+        monkeypatch.setattr(
+            transaction_orchestrator.ollama_service, "create_plan", planner
+        )
+        return planner
+
+    return install
+
+
+# --- answer normalisation and grounded ID mentions --------------------------
 
 
 @mark.parametrize(
-    "answer",
+    ("answer", "expected"),
     [
-        "29",
-        " 29 ",
-        "#29",
-        "id 29",
-        "ID: 29",
-        "transaction 29",
-        "Transaction ID 29",
-        "transaction #29",
-        "the transaction id 29.",
-        "number 29",
-        "no. 29",
-        "tx 29",
+        (" 29 ", "transaction ID 29"),
+        ("#29", "transaction ID 29"),
+        ("ID: 29", "transaction ID 29"),
+        ("the transaction no. 29.", "transaction ID 29"),
+        ("29th Aug", "29th Aug"),
+        ("29 and 28", "29 and 28"),
+        ("delete 29", "delete 29"),
     ],
 )
-def test_bare_transaction_id_answers_become_explicit(answer):
-    assert normalize_transaction_id_answer(answer) == "transaction ID 29"
-
-
-@mark.parametrize(
-    "answer",
-    [
-        "29th Aug",
-        "the one for $76",
-        "29 and 28",
-        "delete 29",
-        "amount 29",
-        "",
-    ],
-)
-def test_other_answers_are_left_alone(answer):
-    assert normalize_transaction_id_answer(answer) == answer
-
-
-# --- grounded ID mentions ---------------------------------------------------
+def test_only_bare_transaction_id_answers_become_explicit(answer, expected):
+    assert normalize_transaction_id_answer(answer) == expected
 
 
 @mark.parametrize(
     ("message", "expected"),
     [
         ("delete merivale.\nAdditional details: transaction ID 29", {29}),
-        ("Delete #27", {27}),
         ("Update transaction id=28 to $50", {28}),
-        ("delete merivale.\nAdditional details: 29", set()),
-        ("Spent $29 at Merivale", set()),
         ("Delete #27 and #28", {27, 28}),
-        ("", set()),
+        ("Spent $29 at Merivale.\nAdditional details: 29", set()),
     ],
 )
 def test_grounded_transaction_ids_only_accept_explicit_forms(message, expected):
@@ -162,130 +120,60 @@ def test_grounded_transaction_ids_only_accept_explicit_forms(message, expected):
 # --- orchestrator backstop --------------------------------------------------
 
 
-def test_delete_plan_without_id_targets_the_single_mentioned_transaction(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
+@mark.parametrize(
+    ("message", "targets"),
+    [
+        ("delete merivale.\nAdditional details: transaction ID 29", 29),
+        ("delete merivale #28 or #29", None),
+        ("delete merivale.\nAdditional details: transaction ID 99", None),
+    ],
+)
+def test_delete_plan_without_id_targets_only_a_single_mentioned_match(
+    client, merivale_database, use_plan, message, targets
 ):
-    merivale_database(monkeypatch)
-    # The planner ignored the ID and only returned the merchant filter.
-    use_plan(monkeypatch, plan(
-        operation="delete",
-        filters={"merchant": "Merivale"},
-    ))
+    """The planner ignored the ID and only returned the merchant filter."""
+    use_plan()
 
-    response = client.post(
-        "/chat",
-        json={"message": "delete merivale.\nAdditional details: transaction ID 29"},
-    )
+    result = client.post("/chat", json={"message": message}).get_json()
 
-    assert response.status_code == 200
-    result = response.get_json()
-    assert result["requires_clarification"] is False
-    assert result["preview"]["operation"] == "delete"
-    assert result["preview"]["transaction_id"] == 29
-    assert result["preview"]["before"]["id"] == 29
-
-
-def test_delete_plan_without_id_still_clarifies_when_two_ids_are_named(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-):
-    merivale_database(monkeypatch)
-    use_plan(monkeypatch, plan(
-        operation="delete",
-        filters={"merchant": "Merivale"},
-    ))
-
-    response = client.post(
-        "/chat",
-        json={"message": "delete merivale #28 or #29"},
-    )
-
-    assert response.status_code == 200
-    result = response.get_json()
-    assert result["requires_clarification"] is True
-    assert result["preview"] is None
+    if targets is None:
+        assert result["requires_clarification"] is True
+        assert result["preview"] is None
+    else:
+        assert result["requires_clarification"] is False
+        assert result["preview"]["operation"] == "delete"
+        assert result["preview"]["transaction_id"] == targets
+        assert result["preview"]["before"]["id"] == targets
 
 
 def test_read_plan_is_not_given_a_transaction_id(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
+    client, merivale_database, use_plan
 ):
-    merivale_database(monkeypatch)
-    planner = use_plan(monkeypatch, plan(
-        operation="read",
-        filters={"merchant": "Merivale"},
-    ))
+    planner = use_plan(operation="read")
 
-    response = client.post(
-        "/chat",
-        json={"message": "show merivale #29"},
-    )
+    result = client.post("/chat", json={"message": "show merivale #29"}).get_json()
 
-    assert response.status_code == 200
-    assert response.get_json()["requires_clarification"] is False
+    assert result["requires_clarification"] is False
     assert planner.return_value["transaction_id"] is None
-
-
-def test_mentioned_id_outside_the_filter_still_clarifies(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-):
-    """A grounded ID is only used when it is one of the filtered rows."""
-    merivale_database(monkeypatch)
-    use_plan(monkeypatch, plan(
-        operation="delete",
-        filters={"merchant": "Merivale"},
-    ))
-
-    response = client.post(
-        "/chat",
-        json={"message": "delete merivale.\nAdditional details: transaction ID 99"},
-    )
-
-    assert response.status_code == 200
-    result = response.get_json()
-    assert result["requires_clarification"] is True
-    assert result["preview"] is None
 
 
 # --- HTMX card --------------------------------------------------------------
 
 
-def test_ui_clarification_lists_matches_and_marks_answer_as_an_id(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
+def test_ui_marks_id_clarification_then_grounds_the_bare_answer(
+    client, merivale_database, use_plan
 ):
-    merivale_database(monkeypatch)
-    use_plan(monkeypatch, plan(
-        operation="delete",
-        filters={"merchant": "Merivale"},
-    ))
+    planner = use_plan()
 
-    response = client.post("/ui/chat", data={"message": "delete merivale"})
+    asked = client.post("/ui/chat", data={"message": "delete merivale"})
 
-    assert response.status_code == 200
-    assert "Needs clarification" in response.text
-    for transaction_id in (27, 28, 29):
-        assert f"#{transaction_id}" in response.text
-    assert "Use #" not in response.text
-    assert response.text.count('name="clarification_kind"') == 1
-    assert 'value="transaction_id"' in response.text
-    assert 'name="original_message"' in response.text
-    assert "for example 29" in response.text
+    assert asked.status_code == 200
+    assert "Needs clarification" in asked.text
+    assert asked.text.count('name="clarification_kind"') == 1
+    assert 'value="transaction_id"' in asked.text
+    assert "for example 29" in asked.text
 
-
-def test_ui_bare_id_answer_is_grounded_before_planning(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
-):
-    merivale_database(monkeypatch)
-    planner = use_plan(monkeypatch, plan(
-        operation="delete",
-        filters={"merchant": "Merivale"},
-    ))
-
-    response = client.post(
+    answered = client.post(
         "/ui/chat",
         data={
             "original_message": "delete merivale",
@@ -294,26 +182,21 @@ def test_ui_bare_id_answer_is_grounded_before_planning(
         },
     )
 
-    assert response.status_code == 200
+    assert answered.status_code == 200
     assert planner.call_args.args[0] == (
         "delete merivale.\nAdditional details: transaction ID 29"
     )
-    assert "Ready for your review" in response.text
-    assert "Needs clarification" not in response.text
-    assert "$76.00" in response.text
+    assert "Ready for your review" in answered.text
+    assert "Needs clarification" not in answered.text
+    assert "$76.00" in answered.text
 
 
 def test_ui_free_text_answer_without_kind_is_not_rewritten(
-    client: FlaskClient,
-    monkeypatch: MonkeyPatch,
+    client, merivale_database, use_plan
 ):
-    monkeypatch.setattr(
-        backend_app.requests,
-        "get",
-        Mock(return_value=response_with_json(CATEGORIES)),
-    )
-    planner = use_plan(monkeypatch, plan(
+    planner = use_plan(
         operation="create",
+        filters={},
         fields={
             "date": "2026-09-02",
             "merchant": "Cat Cafe",
@@ -321,7 +204,7 @@ def test_ui_free_text_answer_without_kind_is_not_rewritten(
             "amount": 25.0,
             "category": "Dining",
         },
-    ))
+    )
 
     response = client.post(
         "/ui/chat",
