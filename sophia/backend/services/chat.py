@@ -140,37 +140,60 @@ def _answer_barely_using():
     return " ".join(sentences)
 
 
-def _answer_upcoming():
+WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
+COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
+DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
+NAMED_HORIZON = re.compile(r"\b(fortnight|month)\b", re.I)
+NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
+UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
+MAX_HORIZON_DAYS = 180
+
+
+def _horizon_days(message):
+    """How many days ahead a what's-due question looks: a count of days, weeks or months, a fortnight or month, else a week."""
+    counted = DAYS_AHEAD.search(message or "")
+    named = NAMED_HORIZON.search(message or "")
+    if counted:
+        number = counted.group(1).lower()
+        days = (int(number) if number.isdigit() else WORD_NUMBERS[number]) * UNIT_DAYS[counted.group(2).lower()]
+    else:
+        days = NAMED_HORIZON_DAYS[named.group(1).lower()] if named else 7
+    return min(max(days, 1), MAX_HORIZON_DAYS)
+
+
+def _answer_upcoming(days=7):
+    """Every bill occurrence from today for the next days, soonest first, as one sentence."""
     today = config.DEMO_TODAY
     bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
-    window_end = today + timedelta(days=7)
-    names = []
-    for bill in bills:
-        names.extend(occ.name for occ in project(bill, today, window_end))
-    if not names:
-        return "Nothing is due in the next 7 days."
-    return f"Coming up this week: {', '.join(names)}."
+    occurrences = sorted((occ for bill in bills for occ in project(bill, today, today + timedelta(days=days))), key=lambda occ: occ.date)
+    span = f"the next {days} day{'s' if days != 1 else ''}"
+    if not occurrences:
+        return f"Nothing is due in {span}."
+    items = ", ".join(f"{occ.name} on {_day_month(occ.date)} ({money.format_actual(occ.amount_cents)})" for occ in occurrences)
+    return f"Coming up {'this week' if days == 7 else 'in ' + span}: {items}."
 
 
-def _resolve_question(question):
+def _resolve_question(question, message=""):
     if question == "total":
         return _answer_total()
     if question == "barely_using":
         return _answer_barely_using()
     if question == "upcoming":
-        return _answer_upcoming()
+        return _answer_upcoming(_horizon_days(message))
     return None
 
 
 def _build_preview(data):
+    """The proposal in a classifier reply, or None for no op or a read; a dispute update that carries a reason and no status is a new dispute, whatever id the model put on it."""
     op, entity = data.get("op"), data.get("entity")
-    if not op or not entity:
+    if not op or not entity or op == "read":
         return None
-    if op == "read":
-        # A read is a question, not a change; there is nothing to apply and a
-        # Confirm button for it could only end in "unsupported op 'read'".
-        return None
-    return {"op": op, "entity": entity, "id": data.get("id"), "fields": data.get("fields")}
+    fields = {key: value for key, value in (data.get("fields") or {}).items() if value is not None}
+    entity_id = data.get("id")
+    if entity == "dispute" and op == "update" and "reason" in fields and "status" not in fields:
+        op, entity_id = "create", None
+        fields.setdefault("bill_id", data.get("id"))
+    return {"op": op, "entity": entity, "id": entity_id, "fields": fields}
 
 
 # What a bill create must carry before it is worth proposing. merchant is
@@ -224,19 +247,25 @@ DATE_SPAN = re.compile(
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
 
 CHANGE_VERB = re.compile(
-    r"\b(add|adds|adding|added|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
+    r"\b(add(?:s|ing|ed)?(?! up)|create|pause|draft|log|edit|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
     r"|update|updates|set|rename|delete|dispute|record|mark|move|exclude|include|raise|lower|increase|decrease|switch)\b",
     re.I,
 )
 
 
-DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|\d+ days|two weeks)|this (week|fortnight|month))\b", re.I)
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|" + COUNT + r" (days?|weeks?|months?))|this (week|fortnight|month))\b", re.I)
+
+
+QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum)\b", re.I)
+BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
 
 
 def _is_plain_question(message):
-    """True for a message that asks rather than instructs: it ends with a question mark and names no change, so the model may not turn it into a proposal."""
+    """True for a message that asks rather than instructs, so the model may not turn it into a proposal."""
     text = (message or "").strip()
-    return text.endswith("?") and not CHANGE_VERB.search(text)
+    asking = text.endswith("?") or QUESTION_START.match(text) or TOTAL_WORDS.search(text)
+    return bool(asking) and not CHANGE_VERB.search(text)
 
 
 def _bills_named(text, bills):
@@ -278,6 +307,28 @@ def _contradicts_an_update(preview, say):
 def _mentions(text, name):
     """True when name appears in text as a whole word or phrase, ignoring case."""
     return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I) is not None
+
+
+DISPUTE_VERB = re.compile(r"\bdisput(e|es|ed|ing)\b", re.I)
+REASON_SPLIT = re.compile(r",\s+|\s+because\s+|\s+-\s+|:\s+|\s+as\s+", re.I)
+
+
+def _dispute_from_words(message, bills):
+    """A create-dispute proposal built from the user's own words when they say dispute and name exactly one bill; the reason is the clause after the first comma, because or dash, else the whole message."""
+    named = _bills_named(message, bills)
+    if not DISPUTE_VERB.search(message or "") or len(named) != 1:
+        return None
+    parts = REASON_SPLIT.split(message.strip(), maxsplit=1)
+    reason = parts[1].strip() if len(parts) == 2 and parts[1].strip() else message.strip()
+    return {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": named[0]["id"], "reason": reason}}
+
+
+def _retarget_to_named_bill(preview, message, bills):
+    """Point a bill update or delete at the one bill the user's own message names, since a small model sometimes says Spotify and emits Prime Video's id."""
+    named = _bills_named(message, bills)
+    if preview["entity"] == "bill" and preview["op"] in ("update", "delete") and len(named) == 1:
+        preview["id"] = named[0]["id"]
+    return preview
 
 
 def _names_a_different_bill(preview, say):
@@ -476,17 +527,23 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
-    reply = _resolve_question(data.get("question")) or data.get("say", "")
+    reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
-    preview = None if asks else _build_preview(data)
+    preview = None if asks else (_dispute_from_words(model_message, bills) or _build_preview(data))
+    if preview:
+        preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
     about_a_bill = bool(named)
     card = None
     facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
     if facts:
         reply = facts["sentence"]
+    elif asks and not about_a_bill and BARELY_WORDS.search(model_message):
+        reply = _answer_barely_using()
     elif asks and not about_a_bill and DUE_WORDS.search(model_message):
-        reply = _answer_upcoming()
+        reply = _answer_upcoming(_horizon_days(model_message))
+    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
+        reply = _answer_total()
     elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
         if card:

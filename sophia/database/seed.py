@@ -133,7 +133,7 @@ CHAT_MESSAGES = [
     ("user", "Draft a note to dispute my GymCo charge", None, 0, "2026-08-17T09:10:00"),
     ("assistant", "I've drafted a dispute letter for GymCo saying you cancelled before this charge, with a three-step checklist including removing the direct-debit authority. You can review and edit it in the Disputes tab.", None, 0, "2026-08-17T09:10:08"),
     ("user", "What's due this week?", None, 0, "2026-08-17T09:15:00"),
-    ("assistant", "Coming up this week: Anytime Fitness on 18 Aug ($17.50), Opal top-up on 25 Aug ($38.50), and Prime Video on 24 Aug ($9.99).", None, 0, "2026-08-17T09:15:05"),
+    ("assistant", "Coming up this week: Anytime Fitness on 18 Aug ($17.50), Opal commute top-up on 18 Aug ($38.50), Share-house utilities kitty on 21 Aug ($25.00).", None, 0, "2026-08-17T09:15:05"),
 ]
 
 

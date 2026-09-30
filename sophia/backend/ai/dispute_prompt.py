@@ -26,13 +26,17 @@ def _payment_lines(payments):
     return "Last payments: " + "; ".join(lines)
 
 
-def build(bill, reason, payments=None, previous_letter=None, edited_letter=None, feedback=None, error=None):
+def build(bill, reason, payments=None, evidence=None, policy=None, previous_letter=None, edited_letter=None, feedback=None, error=None):
     user_lines = [
         f"Bill: {bill.name} ({bill.merchant}), amount ${bill.amount_cents / 100:.2f}, cadence: {bill.cadence}.",
         f"Payment method: {bill.payment_method or 'not recorded'}.",
         _payment_lines(payments),
         f"Reason for dispute: {reason}.",
     ]
+    if evidence:
+        user_lines.append("Bank statement facts (cite them exactly as given; never invent other dates or amounts): " + "; ".join(evidence) + ".")
+    if policy:
+        user_lines.append("Policy notes from the user's billing guide (quote only these; never use them to compute amounts or dates; never present them as the merchant's terms): " + " ".join(policy))
     if previous_letter:
         user_lines.append(f"Previous draft letter: {previous_letter}")
     if edited_letter:

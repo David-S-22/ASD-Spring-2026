@@ -151,17 +151,32 @@ def _pending_ids():
     return {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
 
 
-def test_update_whose_reply_names_a_different_bill_is_refused_with_a_question(live_client, monkeypatch):
+def test_update_whose_model_id_is_another_bill_targets_the_bill_the_user_named(live_client, monkeypatch):
     """Observed on the 3b model: "Cancel Netflix from October" got the reply
     "ending Netflix" with {"op": "update", "id": 5} -- id 5 being Prime Video.
-    The card would have ended the wrong subscription."""
+    The user's own words name one bill, so the proposal is retargeted to it."""
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    netflix = next(b for b in bills_db_module.list_bills() if b["name"] == "Netflix")
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        _update_turn(prime["id"], "I've suggested ending Netflix from 2 October", {"end_date": "2026-10-02"}),
+    )
+    body = _text(live_client.post("/ui/chat", data={"message": "Cancel Netflix from October"}))
+
+    assert "Update Netflix" in body and "Which bill did you mean" not in body
+    latest = bills_db_module.list_suggestions(status="pending")[-1]
+    assert (latest["entity"], latest["entity_id"]) == ("bill", netflix["id"])
+    assert bills_db_module.get_bill(prime["id"])["end_date"] is None
+
+
+def test_update_whose_reply_names_a_different_bill_than_the_id_is_refused_when_the_user_named_none(live_client, monkeypatch):
     prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
     monkeypatch.setattr(
         "sophia.backend.ai.guard.chat",
         _update_turn(prime["id"], "I've suggested ending Netflix from 2 October", {"end_date": "2026-10-02"}),
     )
     pending_before = _pending_ids()
-    body = _text(live_client.post("/ui/chat", data={"message": "Cancel Netflix from October"}))
+    body = _text(live_client.post("/ui/chat", data={"message": "Cancel that one from October"}))
 
     assert "Confirm" not in body and "chat/apply" not in body
     assert "That change would apply to Prime Video, not Netflix. Which bill did you mean?" in body

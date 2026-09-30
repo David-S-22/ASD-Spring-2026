@@ -31,17 +31,22 @@ def _valid_chunk(item):
     )
 
 
-def retrieve(question, k):
-    """Return (at most k bill chunks closest first, duration_ms) from retrieve_context, fetching RETRIEVAL_MARGIN extra so the shared billing folder's other files never take a bill's slot; a tool error means the RAG server is down."""
-    data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k + RETRIEVAL_MARGIN})
+def chunks(question, k):
+    """Return (the k closest chunks of the billing folder as {id, source, text, distance}, duration_ms) from retrieve_context; ModeError when the payload has the wrong shape."""
+    data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k})
     results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, list) or not all(_valid_chunk(item) for item in results):
         raise ModeError("mcp_invalid_result")
-    chunks = [
+    return [
         {"id": r["id"], "source": str(r["metadata"].get("source", "")), "text": r["text"], "distance": float(r["distance"])}
         for r in results
-    ]
-    own_chunks = [chunk for chunk in chunks if SOURCE_PATTERN.match(chunk["source"])]
+    ], duration_ms
+
+
+def retrieve(question, k):
+    """Return (at most k bill chunks closest first, duration_ms) from retrieve_context, fetching RETRIEVAL_MARGIN extra so the shared billing folder's other files never take a bill's slot; a tool error means the RAG server is down."""
+    found, duration_ms = chunks(question, k + RETRIEVAL_MARGIN)
+    own_chunks = [chunk for chunk in found if SOURCE_PATTERN.match(chunk["source"])]
     return sorted(own_chunks, key=lambda chunk: chunk["distance"])[:k], duration_ms
 
 
