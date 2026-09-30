@@ -1,9 +1,9 @@
 from unittest.mock import Mock
 
-from pytest import MonkeyPatch, raises
+from pytest import MonkeyPatch
 
 from janelle.backend import config
-from janelle.backend.services import chat_service, rag_client, rag_corpus
+from janelle.backend.services import chat_service, rag_corpus
 from janelle.backend.services.rag_client import RAGError
 
 

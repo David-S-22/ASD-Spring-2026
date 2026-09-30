@@ -1,7 +1,6 @@
 """Measure repeatable transaction-database latency and concurrency baselines."""
 
 import argparse
-import json
 import math
 import sys
 from concurrent.futures import ThreadPoolExecutor

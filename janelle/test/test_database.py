@@ -3,7 +3,6 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-from flask.testing import FlaskClient
 from pytest import fixture, mark, raises
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -17,9 +16,7 @@ from janelle.database.models import Category, CategoryCorrection, Transaction, d
 from shared.backend import dto
 
 
-SEED_CATEGORY_COUNT = 15
 SEED_TRANSACTION_COUNT = 34
-SEED_CORRECTION_COUNT = 3
 MISSING_CATEGORY_ID = 9999
 
 
