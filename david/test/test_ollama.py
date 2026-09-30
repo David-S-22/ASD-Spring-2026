@@ -5,8 +5,10 @@ from typing import Any
 import httpx
 import pytest
 
+import pathlib
 from backend.savings_service import ollama_service
 from backend.savings_service.ollama_service import (
+    _environment_flag,
     _format_messages,
     calculate_confidence_category,
     call_ai_to_select_tool,
@@ -500,3 +502,55 @@ def test_execute_mcp_tool_success():
         assert data == {"result": "called my_tool with {'param': 123}"}
     finally:
         ollama_service.Client = orig_client
+
+
+def test_fetch_mcp_tools_returns_empty_when_mcp_disabled():
+    assert fetch_mcp_tools(mcp_enabled=False) == []
+
+
+def test_execute_mcp_tool_raises_when_mcp_disabled():
+    with pytest.raises(RuntimeError, match="MCP is disabled"):
+        execute_mcp_tool("search_transactions", {}, mcp_enabled=False)
+
+
+def test_execute_mcp_tool_raises_when_rag_disabled():
+    with pytest.raises(RuntimeError, match="RAG is disabled"):
+        execute_mcp_tool("retrieve_context", {}, rag_enabled=False)
+
+
+@pytest.mark.parametrize(
+    "val, expected",
+    [
+        ("true", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+        ("TRUE", True),
+        ("false", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
+        ("other", False),
+    ],
+)
+def test_environment_flag_parsing(val, expected):
+    assert _environment_flag("TEST_FLAG", default=True, env={"TEST_FLAG": val}) is expected
+
+
+def test_compose_and_ci_disable_mcp_and_rag():
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    compose_path = repo_root / "docker-compose.yml"
+    ci_path = repo_root / ".github" / "workflows" / "David-CI.yml"
+
+    compose_text = compose_path.read_text(encoding="utf-8")
+    ci_text = ci_path.read_text(encoding="utf-8")
+
+    # savings-backend environment in docker-compose.yml
+    savings_section = compose_text.split("savings-backend:", 1)[1].split("depends_on:", 1)[0]
+    assert "MCP_ENABLED: ${MCP_ENABLED:-true}" in savings_section
+    assert "RAG_ENABLED: ${RAG_ENABLED:-true}" in savings_section
+
+    # David-CI.yml disables MCP and RAG during health check
+    assert 'MCP_ENABLED: "false"' in ci_text
+    assert 'RAG_ENABLED: "false"' in ci_text
+

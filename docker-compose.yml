@@ -246,6 +246,8 @@ services:
       OLLAMA_MODEL: llama3.1:8b
       OLLAMA_CLASSIFIER_MODEL: qwen2.5:3b
       MCP_SERVER_URL: http://host.docker.internal:8000/mcp
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      RAG_ENABLED: ${RAG_ENABLED:-true}
     depends_on:
       savings-db:
         condition: service_started

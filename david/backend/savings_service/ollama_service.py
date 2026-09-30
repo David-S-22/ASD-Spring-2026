@@ -9,6 +9,15 @@ from openai import OpenAI
 
 ConfidenceCategory = Literal["High", "Medium", "Low"]
 
+def _environment_flag(name: str, default: bool = True, env: dict[str, str] | None = None) -> bool:
+    source = os.environ if env is None else env
+    val = source.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+MCP_ENABLED = _environment_flag("MCP_ENABLED", True)
+RAG_ENABLED = _environment_flag("RAG_ENABLED", True)
 MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8000/mcp")
 OLLAMA_API_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/v1")
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "180"))
@@ -181,8 +190,17 @@ def call_ai_to_select_tool(
 def execute_mcp_tool(
     tool_name: str,
     arguments: dict[str, Any],
+    mcp_enabled: bool | None = None,
+    rag_enabled: bool | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]] | Any:
     """Executes a tool on the FastMCP server with the given arguments and returns the result data."""
+    is_mcp = MCP_ENABLED if mcp_enabled is None else mcp_enabled
+    if not is_mcp:
+        raise RuntimeError("MCP is disabled.")
+    is_rag = RAG_ENABLED if rag_enabled is None else rag_enabled
+    if tool_name == "retrieve_context" and not is_rag:
+        raise RuntimeError("RAG is disabled.")
+
     async def _call():
         async with Client(MCP_SERVER_URL) as mcp_client:
             res = await mcp_client.call_tool(tool_name, arguments=arguments)
@@ -191,8 +209,12 @@ def execute_mcp_tool(
     return asyncio.run(_call())
 
 
-def fetch_mcp_tools() -> list[dict[str, Any]]:
+def fetch_mcp_tools(mcp_enabled: bool | None = None) -> list[dict[str, Any]]:
     """Fetches tool definitions dynamically from the FastMCP server and converts them to OpenAI format."""
+    is_mcp = MCP_ENABLED if mcp_enabled is None else mcp_enabled
+    if not is_mcp:
+        return []
+
     async def _fetch():
         async with Client(MCP_SERVER_URL) as mcp_client:
             tools = await mcp_client.list_tools()
