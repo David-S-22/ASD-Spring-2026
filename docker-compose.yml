@@ -112,6 +112,7 @@ services:
       PORT: 5005
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
+      DEMO_TODAY: ${DEMO_TODAY:-2026-10-01}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
       MCP_ENABLED: ${MCP_ENABLED:-true}
@@ -130,6 +131,7 @@ services:
     environment:
       PORT: 6005
       DB_PATH: /data/bills.db
+      SEED_DATE_OFFSET_DAYS: ${SEED_DATE_OFFSET_DAYS:-42}
     volumes:
       - bills_data:/data
 

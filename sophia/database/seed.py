@@ -1,5 +1,10 @@
-"""Idempotent demo seed data for the bills database, dated relative to DEMO_TODAY=2026-08-20."""
+"""Idempotent demo seed data for the bills database, dated relative to DEMO_TODAY=2026-08-20; SEED_DATE_OFFSET_DAYS moves every date with the demo clock."""
 import json
+import os
+import re
+from datetime import datetime, timedelta
+
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?$")
 
 # The trailing status value must equal engine/status.derive_status for the row's
 # payments at DEMO_TODAY: reads never heal the cached column, only writes refresh it.
@@ -130,12 +135,25 @@ CHAT_MESSAGES = [
 ]
 
 
+def _shift(value, days):
+    """Move an ISO date or datetime string by days; anything else, including prose that names a date, is returned as is."""
+    if not (days and isinstance(value, str) and ISO_DATE.match(value)):
+        return value
+    fmt = "%Y-%m-%dT%H:%M:%S" if "T" in value else "%Y-%m-%d"
+    return (datetime.strptime(value, fmt) + timedelta(days=days)).strftime(fmt)
+
+
+def _shifted(rows, days):
+    return [tuple(_shift(value, days) for value in row) for row in rows]
+
+
 def seed(connection):
-    """Insert the demo dataset if the bills table is empty; safe to call repeatedly."""
+    """Insert the demo dataset if the bills table is empty, dates moved by SEED_DATE_OFFSET_DAYS (default 0); safe to call repeatedly."""
     cursor = connection.cursor()
     cursor.execute("SELECT COUNT(*) FROM bills")
     if cursor.fetchone()[0] > 0:
         return
+    days = int(os.environ.get("SEED_DATE_OFFSET_DAYS", "0"))
     cursor.executemany(
         """
         INSERT INTO bills
@@ -143,28 +161,28 @@ def seed(connection):
              payment_method, source, confirmed_at, created_at, exclude_from_plan, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        BILLS,
+        _shifted(BILLS, days),
     )
     cursor.executemany(
         "INSERT INTO payments (bill_id, date, amount_cents) VALUES (?, ?, ?)",
-        PAYMENTS,
+        _shifted(PAYMENTS, days),
     )
     cursor.executemany(
         "INSERT INTO disputes (id, bill_id, reason, status, opened_at) VALUES (?, ?, ?, ?, ?)",
-        DISPUTES,
+        _shifted(DISPUTES, days),
     )
     cursor.executemany(
         """
         INSERT INTO dispute_drafts (dispute_id, version, letter_text, steps_json, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        DISPUTE_DRAFTS,
+        _shifted(DISPUTE_DRAFTS, days),
     )
     cursor.executemany(
         """
         INSERT INTO chat_messages (role, content, op_json, applied, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        CHAT_MESSAGES,
+        _shifted(CHAT_MESSAGES, days),
     )
     connection.commit()

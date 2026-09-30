@@ -32,6 +32,38 @@ def client(tmp_path):
     return app.test_client()
 
 
+def _seeded_client(tmp_path):
+    db_path = str(tmp_path / "bills.db")
+    connection = database_app.get_connection(db_path)
+    database_app.load_schema(connection, database_app.SCHEMA_PATH)
+    database_app.seed(connection)
+    connection.close()
+    app = database_app.create_app(db_path=db_path)
+    app.config["TESTING"] = True
+    return app.test_client()
+
+
+def test_seed_date_offset_moves_every_dated_column_but_not_prose(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEED_DATE_OFFSET_DAYS", "42")
+    api = _seeded_client(tmp_path)
+    netflix = api.get("/bills/4").get_json()
+    assert (netflix["next_billing_date"], netflix["created_at"]) == ("2026-10-14", "2026-09-30")
+    assert api.get("/bills/1").get_json()["confirmed_at"] == "2026-09-12"
+    assert [p["date"] for p in api.get("/bills/3/payments").get_json()] == ["2026-07-28", "2026-08-27", "2026-09-27"]
+    dispute = api.get("/disputes/1").get_json()
+    assert dispute["opened_at"] == "2026-09-26"
+    draft = api.get("/disputes/1/drafts").get_json()[0]
+    assert draft["created_at"] == "2026-09-26" and "15 Jul" in draft["letter_text"]
+    assert api.get("/chat_messages").get_json()[0]["created_at"] == "2026-09-28T09:00:00"
+
+
+def test_seed_without_offset_is_unchanged(tmp_path, monkeypatch):
+    monkeypatch.delenv("SEED_DATE_OFFSET_DAYS", raising=False)
+    api = _seeded_client(tmp_path)
+    assert api.get("/bills/4").get_json()["next_billing_date"] == "2026-09-02"
+    assert api.get("/chat_messages").get_json()[0]["created_at"] == "2026-08-17T09:00:00"
+
+
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
