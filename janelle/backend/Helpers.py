@@ -13,6 +13,14 @@ from .services.chat_service import ChatError
 
 
 TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
+TRANSACTION_DATE_RANGES = {
+    "all",
+    "last_7_days",
+    "last_30_days",
+    "last_90_days",
+    "this_month",
+    "this_year",
+}
 
 # A clarification answer that is only a transaction reference, such as
 # "29", "#29", "id 29", "transaction 29", "number 29." or "the id: 29".
@@ -34,14 +42,6 @@ def normalize_transaction_id_answer(clarification):
     if match is None:
         return clarification
     return f"transaction ID {int(match.group(1))}"
-TRANSACTION_DATE_RANGES = {
-    "all",
-    "last_7_days",
-    "last_30_days",
-    "last_90_days",
-    "this_month",
-    "this_year",
-}
 
 
 def parse_transaction_datetime(value):

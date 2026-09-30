@@ -30,23 +30,16 @@ class RAGError(Exception):
         super().__init__(self.message)
 
 
-def _request(method, path, payload=None):
+def _request(path, payload):
     if not config.RAG_ENABLED:
         raise RAGError("rag_disabled")
 
     try:
-        url = f"{config.RAG_SERVER_URL}{path}"
-        if method == "GET":
-            response = requests.get(
-                url,
-                timeout=config.RAG_TIMEOUT_SECONDS,
-            )
-        else:
-            response = requests.post(
-                url,
-                json=payload,
-                timeout=config.RAG_TIMEOUT_SECONDS,
-            )
+        response = requests.post(
+            f"{config.RAG_SERVER_URL}{path}",
+            json=payload,
+            timeout=config.RAG_TIMEOUT_SECONDS,
+        )
     except requests.Timeout:
         raise RAGError("rag_timeout") from None
     except requests.RequestException:
@@ -64,17 +57,9 @@ def _request(method, path, payload=None):
     return body
 
 
-def health():
-    """Return the server health body, including its collection names."""
-    body = _request("GET", "/health")
-    if not isinstance(body.get("collections"), list):
-        raise RAGError("rag_invalid_response")
-    return body
-
-
 def refresh(feature, ids, documents, metadatas=None):
     """Rebuild one collection and return ``{"feature", "total"}``."""
-    body = _request("POST", "/refresh", {
+    body = _request("/refresh", {
         "feature": feature,
         "ids": list(ids),
         "documents": list(documents),
@@ -106,7 +91,7 @@ def retrieve(feature, question, k=3, where=None):
     payload = {"feature": feature, "question": question, "k": k}
     if where is not None:
         payload["where"] = where
-    body = _request("POST", "/retrieve", payload)
+    body = _request("/retrieve", payload)
 
     results = body.get("results")
     if not isinstance(results, list) or not all(

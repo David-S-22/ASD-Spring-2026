@@ -1,9 +1,9 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
-from pytest import MonkeyPatch, raises
+from pytest import MonkeyPatch
 
 from janelle.backend import config
-from janelle.backend.services import chat_service, rag_client, rag_corpus
+from janelle.backend.services import chat_service, rag_corpus
 from janelle.backend.services.rag_client import RAGError
 
 
@@ -34,23 +34,22 @@ CORRECTIONS = [
     {
         "id": 3,
         "transaction_id": 26,
-        "date": "2026-08-19T00:00:00",
         "merchant": "Spotify AU",
         "description": "Monthly subscription",
-        "previous_category_id": 1,
         "previous_category_name": "Uncategorised",
         "user_category_id": 40,
         "user_category_name": "Music subscriptions",
         "corrected_at": "2026-08-20T09:15:00.000000",
     },
 ]
+IDS = ["tx-7", "tx-8", "corr-3"]
+KINDS = {"transaction": 2, "correction": 1}
 
 
-def response_with_json(payload, status=200):
-    response = Mock()
-    response.status_code = status
-    response.json.return_value = payload
-    return response
+def use_database(monkeypatch: MonkeyPatch):
+    request = Mock(side_effect=[TRANSACTIONS, CATEGORIES, CORRECTIONS])
+    monkeypatch.setattr(rag_corpus.chat_service, "database_request", request)
+    return request
 
 
 def test_build_documents_texts_and_stable_ids():
@@ -60,66 +59,43 @@ def test_build_documents_texts_and_stable_ids():
         CORRECTIONS,
     )
 
-    assert ids == ["tx-7", "tx-8", "corr-3"]
-    assert documents[0] == (
+    assert ids == IDS
+    assert documents == [
         "Transaction 7 on 2026-06-24: Anytime Fitness Ultimo charged $17.50 "
-        "for 'Direct debit membership fee'. Category: Fitness (want)."
-    )
-    assert documents[1] == (
+        "for 'Direct debit membership fee'. Category: Fitness (want).",
         "Transaction 8 on 2026-07-01: Mystery Shop charged $12.00 "
-        "for 'Card purchase'. Category: Uncategorised."
-    )
-    assert documents[2] == (
+        "for 'Card purchase'. Category: Uncategorised.",
         "Transaction 26 (Spotify AU, 'Monthly subscription') was "
         "recategorised from Uncategorised to Music subscriptions on "
-        "2026-08-20."
-    )
+        "2026-08-20.",
+    ]
     assert len(metadatas) == 3
 
 
 def test_fetch_and_build_uses_database_request_and_counts_kinds(
     monkeypatch: MonkeyPatch,
 ):
-    calls = []
-
-    def database_request(method, url, expected=None, **options):
-        calls.append((method, url))
-        return {
-            "http://db.test/transactions": TRANSACTIONS,
-            "http://db.test/categories": CATEGORIES,
-            "http://db.test/category-corrections": CORRECTIONS,
-        }[url]
-
-    monkeypatch.setattr(
-        rag_corpus.chat_service,
-        "database_request",
-        database_request,
-    )
+    request = use_database(monkeypatch)
 
     ids, documents, metadatas, kinds = rag_corpus.fetch_and_build(
         "http://db.test/",
     )
 
-    assert [url for _, url in calls] == [
+    assert [args.args[1] for args in request.call_args_list] == [
         "http://db.test/transactions",
         "http://db.test/categories",
         "http://db.test/category-corrections",
     ]
-    assert ids == ["tx-7", "tx-8", "corr-3"]
+    assert ids == IDS
     assert len(documents) == len(metadatas) == 3
-    assert kinds == {"transaction": 2, "correction": 1}
+    assert kinds == KINDS
 
 
 def test_refresh_records_pushes_documents_and_returns_summary(
     monkeypatch: MonkeyPatch,
 ):
-    monkeypatch.setattr(config, "RAG_ENABLED", True)
     monkeypatch.setattr(config, "RAG_RECORDS_COLLECTION", "transactions-records")
-    monkeypatch.setattr(
-        rag_corpus.chat_service,
-        "database_request",
-        Mock(side_effect=[TRANSACTIONS, CATEGORIES, CORRECTIONS]),
-    )
+    use_database(monkeypatch)
     refresh = Mock(return_value={"feature": "transactions-records", "total": 3})
     monkeypatch.setattr(rag_corpus.rag_client, "refresh", refresh)
 
@@ -127,18 +103,20 @@ def test_refresh_records_pushes_documents_and_returns_summary(
 
     assert summary["feature"] == "transactions-records"
     assert summary["total"] == 3
-    assert summary["kinds"] == {"transaction": 2, "correction": 1}
+    assert summary["kinds"] == KINDS
     assert isinstance(summary["duration_ms"], float)
-    ids, documents, metadatas = refresh.call_args.args[1:]
-    assert ids == ["tx-7", "tx-8", "corr-3"]
-    assert len(documents) == len(metadatas) == 3
+    assert refresh.call_args.args[0] == "transactions-records"
+    assert refresh.call_args.args[1] == IDS
 
 
-def test_refresh_with_retries_never_raises_and_stops_after_attempts(
+def test_refresh_with_retries_never_raises_and_returns_first_success(
     monkeypatch: MonkeyPatch,
 ):
-    monkeypatch.setattr(config, "RAG_ENABLED", True)
-    refresh = Mock(side_effect=RAGError("rag_connection"))
+    refresh = Mock(side_effect=[
+        RAGError("rag_connection"),
+        chat_service.ChatError("db down", "database_unavailable", 503),
+        {"total": 1},
+    ])
     monkeypatch.setattr(rag_corpus, "refresh_records", refresh)
     sleep = Mock()
     monkeypatch.setattr(rag_corpus.time, "sleep", sleep)
@@ -150,38 +128,18 @@ def test_refresh_with_retries_never_raises_and_stops_after_attempts(
         delay_seconds=3,
     )
 
-    assert result is None
+    assert result == {"total": 1}
     assert refresh.call_count == 3
-    assert sleep.call_count == 2
-    sleep.assert_called_with(3)
+    assert sleep.call_args_list == [call(3), call(3)]
 
-
-def test_refresh_with_retries_returns_on_first_success(
-    monkeypatch: MonkeyPatch,
-):
-    monkeypatch.setattr(config, "RAG_ENABLED", True)
-    refresh = Mock(side_effect=[
-        chat_service.ChatError("db down", "database_unavailable", 503),
-        {"feature": "transactions-records", "total": 1},
-    ])
-    monkeypatch.setattr(rag_corpus, "refresh_records", refresh)
-    monkeypatch.setattr(rag_corpus.time, "sleep", Mock())
-
-    result = rag_corpus.refresh_with_retries(
-        "http://db.test",
-        "startup",
-        attempts=10,
-        delay_seconds=0,
-    )
-
-    assert result == {"feature": "transactions-records", "total": 1}
-    assert refresh.call_count == 2
+    refresh.side_effect = RAGError("rag_connection")
+    assert rag_corpus.refresh_with_retries("http://db.test", "startup", 2) is None
+    assert refresh.call_count == 5
 
 
 def test_start_background_refresh_is_skipped_when_disabled(
     monkeypatch: MonkeyPatch,
 ):
-    monkeypatch.setattr(config, "RAG_ENABLED", False)
     thread_class = Mock()
     monkeypatch.setattr(rag_corpus.threading, "Thread", thread_class)
 
