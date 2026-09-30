@@ -527,6 +527,8 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
+    if data.get("question") == "upcoming" and not DUE_WORDS.search(model_message):
+        data["question"] = "none"
     reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     preview = None if asks else (_dispute_from_words(model_message, bills) or _build_preview(data))
