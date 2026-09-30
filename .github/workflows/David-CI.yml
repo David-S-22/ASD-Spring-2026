@@ -44,6 +44,9 @@ jobs:
         run: docker compose build savings-frontend savings-backend savings-db
       - name: Run Savings Service
         run: docker compose up --no-deps --detach savings-frontend savings-backend savings-db
+        env:
+          MCP_ENABLED: "false"
+          RAG_ENABLED: "false"
       - name: Check frontend availability
         run: |
           for i in $(seq 1 8); do
