@@ -151,21 +151,55 @@
         hideError();
       });
 
+      function setAiSuggestionLoading(container) {
+        if (!container) return;
+        const suggestionBox = container.querySelector('.ai-suggestion-textbox');
+        if (suggestionBox) suggestionBox.value = 'Waiting for AI suggestion...';
+
+        const sourcesValue = container.querySelector('.ai-meta-value');
+        if (sourcesValue) sourcesValue.textContent = 'Waiting for AI suggestion...';
+
+        const confidenceBadge = container.querySelector('.confidence-badge');
+        if (confidenceBadge) {
+          confidenceBadge.textContent = 'Waiting...';
+          confidenceBadge.className = 'confidence-badge confidence-none';
+        }
+
+        const feedbackInput = container.querySelector('#ai-feedback-input');
+        if (feedbackInput) {
+          feedbackInput.value = '';
+          feedbackInput.placeholder = 'Waiting for AI suggestion...';
+          feedbackInput.disabled = true;
+        }
+
+        container.querySelectorAll('button').forEach(function(b) {
+          b.disabled = true;
+        });
+      }
+
       document.addEventListener('htmx:beforeRequest', function(evt) {
         const elt = evt.detail.elt;
-        const container = elt.closest('#ai-suggestion-container');
-        if (container && (elt.classList.contains('btn-accept') || elt.classList.contains('btn-cancel') || elt.classList.contains('btn-refresh'))) {
-          const suggestionBox = container.querySelector('.ai-suggestion-textbox');
-          if (suggestionBox) suggestionBox.value = 'Waiting for AI suggestion...';
-          const feedbackInput = container.querySelector('#ai-feedback-input');
-          if (feedbackInput) {
-            feedbackInput.value = '';
-            feedbackInput.placeholder = 'Waiting for AI suggestion...';
-            feedbackInput.disabled = true;
-          }
-          container.querySelectorAll('button').forEach(function(b) {
-            b.disabled = true;
-          });
+        const target = evt.detail.target;
+        const requestPath = (evt.detail.requestConfig && evt.detail.requestConfig.path) ||
+                            (elt && elt.getAttribute && (elt.getAttribute('hx-get') || elt.getAttribute('hx-post'))) || '';
+        const container = (elt && elt.closest ? elt.closest('#ai-suggestion-container') : null) ||
+                          (target && target.closest ? target.closest('#ai-suggestion-container') : null) ||
+                          document.getElementById('ai-suggestion-container');
+
+        const isAiRefresh = Boolean(
+          (container && elt && (
+            elt.classList.contains('btn-accept') ||
+            elt.classList.contains('btn-cancel') ||
+            elt.classList.contains('btn-refresh') ||
+            elt === container ||
+            container.contains(elt)
+          )) ||
+          (target && (target.id === 'ai-suggestion-container' || (target.closest && target.closest('#ai-suggestion-container')))) ||
+          (typeof requestPath === 'string' && requestPath.includes('/ai-suggestion'))
+        );
+
+        if (isAiRefresh && container) {
+          setAiSuggestionLoading(container);
         }
       });
 
