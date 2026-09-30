@@ -45,6 +45,15 @@ under `/<id>`). Transaction lists accept `search_text`, `merchant`,
 The database API also exposes `POST /transactions/<id>/category-correction`
 and `GET /category-corrections`.
 
+HTMX fragments under `/ui/` back the frontend. Each transaction row has a
+Delete button (`DELETE /ui/transactions/<id>`) that asks for confirmation
+and re-renders the table on the same page with the active filters. The
+"Manage categories" screen (`GET /ui/categories`) lists categories with
+their transaction counts; Delete (`DELETE /ui/categories/<id>`) is disabled
+while a category still has transactions, and the database also refuses to
+delete the protected `Uncategorised` category or one referenced by a
+correction. Errors are shown inline above the table.
+
 | Endpoint | Purpose |
 |---|---|
 | `POST /chat` | Plan a read, create, update, or delete request. |

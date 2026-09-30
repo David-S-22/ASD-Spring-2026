@@ -8,16 +8,17 @@ from flask.logging import default_handler
 
 from . import config
 from .Helpers import (
-    align_transactions_with_corresponding_category_names,
     database_response_error,
     format_currency,
     format_transaction_date,
     json_object,
     json_response,
+    render_categories_page,
     render_category_form,
+    render_category_list,
     render_transaction_form,
     render_transaction_page,
-    render_transaction_table,
+    render_transaction_table_from_database,
 )
 from .services import mcp_client, rag_client, rag_corpus
 from .services.chat_service import ChatError
@@ -179,50 +180,41 @@ def setup_app(db_url: str) -> Flask:
 
     @application.route("/ui/transactions")
     def get_transaction_rows():
+        return render_transaction_table_from_database(db_url)
+
+    @application.delete("/ui/transactions/<int:transaction_id>")
+    def delete_ui_transaction(transaction_id):
+        """Delete one row from the table and re-render the current page.
+
+        The table fragment is returned directly so HTMX swaps it in place;
+        no ``transactionsChanged`` trigger is fired because that would make
+        the fresh table reload itself a second time.
+        """
         try:
-            transaction_response = requests.get(
-                f"{db_url}/transactions",
+            response = requests.delete(
+                f"{db_url}/transactions/{transaction_id}",
                 timeout=config.DATABASE_TIMEOUT_SECONDS,
             )
-            transaction_response.raise_for_status()
-            transactions = transaction_response.json()
-
-            category_response = requests.get(
-                f"{db_url}/categories",
-                timeout=config.DATABASE_TIMEOUT_SECONDS,
-            )
-            category_response.raise_for_status()
-            categories = category_response.json()
-
-            if (
-                not isinstance(transactions, list)
-                or not all(
-                    isinstance(row, dict)
-                    for row in transactions
-                )
-                or not isinstance(categories, list)
-                or not all(
-                    isinstance(row, dict)
-                    for row in categories
-                )
-            ):
-                raise ValueError("invalid database response")
-        except (ValueError, RecursionError):
-            return render_transaction_table(
-                [],
-                "Unable to load transactions because the database response was invalid.",
-            ), 502
         except requests.RequestException:
-            return render_transaction_table(
-                [],
-                "Unable to load transactions because the database service is unavailable.",
-            ), 502
+            return render_transaction_table_from_database(
+                db_url,
+                notice="The transaction could not be deleted because the database is unavailable.",
+                notice_kind="error",
+            )
 
-        return render_transaction_table(
-            align_transactions_with_corresponding_category_names(
-                transactions,
-                categories,
-            ),
+        if response.status_code >= 400:
+            return render_transaction_table_from_database(
+                db_url,
+                notice=database_response_error(
+                    response,
+                    "The transaction could not be deleted.",
+                ),
+                notice_kind="error",
+            )
+
+        return render_transaction_table_from_database(
+            db_url,
+            notice="Transaction deleted.",
         )
 
     @application.get("/ui/transactions/page")
@@ -236,6 +228,42 @@ def setup_app(db_url: str) -> Flask:
     @application.get("/ui/categories/new")
     def get_new_category_form():
         return render_category_form()
+
+    @application.get("/ui/categories")
+    def get_categories_page():
+        return render_categories_page(db_url)
+
+    @application.delete("/ui/categories/<int:category_id>")
+    def delete_ui_category(category_id):
+        """Delete a category and re-render the manage-categories list.
+
+        The database refuses to delete the protected category or one that is
+        still referenced by transactions or corrections; that message is
+        shown as-is so the user knows why nothing changed.
+        """
+        try:
+            response = requests.delete(
+                f"{db_url}/categories/{category_id}",
+                timeout=config.DATABASE_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException:
+            return render_category_list(
+                db_url,
+                notice="The category could not be deleted because the database is unavailable.",
+                notice_kind="error",
+            )
+
+        if response.status_code >= 400:
+            return render_category_list(
+                db_url,
+                notice=database_response_error(
+                    response,
+                    "The category could not be deleted.",
+                ),
+                notice_kind="error",
+            )
+
+        return render_category_list(db_url, notice="Category deleted.")
 
     @application.post("/ui/categories")
     def create_ui_category():
@@ -265,7 +293,7 @@ def setup_app(db_url: str) -> Flask:
                 values,
             )
 
-        return render_transaction_page(
+        return render_categories_page(
             db_url,
             notice="Category saved.",
         )
