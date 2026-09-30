@@ -113,6 +113,7 @@ services:
       BILLS_DB_API_URL: http://bills-db:6005
       FRONTEND_ORIGIN: http://localhost:3005
       OLLAMA_URL: http://ollama:11434
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
       MCP_ENABLED: ${MCP_ENABLED:-true}
       MCP_SERVER_URL: http://host.docker.internal:8000/mcp
       RAG_ENABLED: ${RAG_ENABLED:-true}

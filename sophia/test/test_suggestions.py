@@ -28,11 +28,13 @@ CREATE_DISNEY = {
                "type": "subscription", "payment_method": "card"},
     "question": "none", "say": "I've suggested adding Disney Plus — approve it to save.",
 }
+DISNEY_MESSAGE = "Add Disney Plus, $15 a month, first charge 5 September, paid by card"
+SPOTIFY_MESSAGE = "I cancelled Spotify from September — remove the future payments"
 
 
 def test_chat_proposal_creates_a_pending_suggestion_not_a_bill(live_client, monkeypatch):
     before = len(bills_db_module.list_bills())
-    _propose(live_client, monkeypatch, CREATE_DISNEY)
+    _propose(live_client, monkeypatch, CREATE_DISNEY, message=DISNEY_MESSAGE)
     assert len(bills_db_module.list_bills()) == before
     pending = bills_db_module.list_suggestions(status="pending")
     assert pending
@@ -43,7 +45,7 @@ def test_chat_proposal_creates_a_pending_suggestion_not_a_bill(live_client, monk
 
 
 def test_approve_applies_and_refreshes_the_bills_table(live_client, monkeypatch):
-    _propose(live_client, monkeypatch, CREATE_DISNEY)
+    _propose(live_client, monkeypatch, CREATE_DISNEY, message=DISNEY_MESSAGE)
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
 
     response = live_client.post(f"/ui/suggestions/{suggestion_id}/approve")
@@ -105,7 +107,7 @@ def test_approving_a_delete_for_a_missing_bill_fails_honestly(live_client, monke
 def test_a_suggestion_applies_at_most_once(live_client, monkeypatch):
     """The double-click/double-approve guard: the second approve must not
     create a second bill."""
-    _propose(live_client, monkeypatch, CREATE_DISNEY, message="add disney again")
+    _propose(live_client, monkeypatch, CREATE_DISNEY, message=DISNEY_MESSAGE)
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
 
     first = live_client.post(f"/ui/suggestions/{suggestion_id}/approve")
@@ -123,7 +125,7 @@ def test_update_suggestion_panel_shows_a_before_after_diff(live_client, monkeypa
     _propose(live_client, monkeypatch, {
         "op": "update", "entity": "bill", "id": spotify["id"],
         "fields": {"end_date": "2026-09-16"}, "question": "none",
-        "say": "I've suggested ending Spotify — approve to save."})
+        "say": "I've suggested ending Spotify — approve to save."}, message=SPOTIFY_MESSAGE)
     panel = _text(live_client.get("/ui/suggestions"))
     assert "Update Spotify" in panel
     assert "2026-09-16" in panel
@@ -133,7 +135,7 @@ def test_update_suggestion_panel_shows_a_before_after_diff(live_client, monkeypa
 def test_chat_reply_card_names_the_change(live_client, monkeypatch):
     """No more blind Confirm buttons: the inline card carries the same titled,
     field-level detail the panel shows."""
-    response = _propose(live_client, monkeypatch, CREATE_DISNEY, message="add disney once more")
+    response = _propose(live_client, monkeypatch, CREATE_DISNEY, message=DISNEY_MESSAGE)
     body = _text(response)
     assert "Add bill: Disney Plus" in body
     assert "$15.00" in body
@@ -181,7 +183,7 @@ def test_invalid_cadence_becomes_a_question_not_a_proposal(live_client, monkeypa
 def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatch):
     """One surface for one decision: the reply carries a pointer, and the only
     decidable card in the response is the panel's (arriving out of band)."""
-    response = _propose(live_client, monkeypatch, CREATE_DISNEY, message="add disney plus")
+    response = _propose(live_client, monkeypatch, CREATE_DISNEY, message=DISNEY_MESSAGE)
     body = _text(response)
     assert "review it in Suggestions below" in body  # the pointer line
     # every decidable card in the response belongs to the panel: one per
@@ -193,15 +195,17 @@ def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatc
     assert 'id="suggestions-panel" hx-swap-oob="true"' in body
 
 
-def test_reply_pointer_names_the_actual_target_not_the_models_claim(live_client, monkeypatch):
+def test_reply_pointer_names_the_actual_target_when_the_reply_names_no_bill(live_client, monkeypatch):
     """Field case: asked about Netflix, the model emitted Prime Video's id.
-    The pointer must name the real target from the suggestion row, so the
-    mismatch is visible right in the conversation."""
+    A reply that names Netflix is refused before it gets here; one that names
+    no bill is not, so the pointer must name the real target from the
+    suggestion row and the mismatch stays visible in the conversation."""
     prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
     response = _propose(live_client, monkeypatch, {
         "op": "update", "entity": "bill", "id": prime["id"],
         "fields": {"end_date": "2026-09-02"}, "question": "none",
-        "say": "I've suggested ending Netflix after 2 Sep — approve it to save."})
+        "say": "I've suggested ending it after 2 Sep — approve it to save."},
+        message="Cancel Prime Video from September")
     body = _text(response)
     assert "Proposed: <strong>Update Prime Video</strong>" in body
     assert "nothing is saved until you approve" in body
@@ -232,7 +236,7 @@ def test_suggest_asks_tally_for_another_option(live_client, monkeypatch):
     of band. This is the behaviour Reject used to have."""
     spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
     calls = _propose_then_adapt(monkeypatch, spotify["id"])
-    live_client.post("/ui/chat", data={"message": "end spotify"})
+    live_client.post("/ui/chat", data={"message": "end spotify from September"})
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
 
     response = live_client.post(f"/ui/suggestions/{suggestion_id}/suggest")
@@ -253,7 +257,7 @@ def test_reject_is_quiet_and_does_not_spawn_a_replacement(live_client, monkeypat
     no model turn, no replacement."""
     spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
     calls = _propose_then_adapt(monkeypatch, spotify["id"])
-    live_client.post("/ui/chat", data={"message": "end spotify"})
+    live_client.post("/ui/chat", data={"message": "end spotify from September"})
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
     calls_before = len(calls)
     # Earlier tests in this module share the live DB and leave pending rows, so
@@ -272,7 +276,7 @@ def test_reject_is_quiet_and_does_not_spawn_a_replacement(live_client, monkeypat
 def test_suggestion_card_offers_all_three_actions(live_client, monkeypatch):
     spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
     _propose_then_adapt(monkeypatch, spotify["id"])
-    live_client.post("/ui/chat", data={"message": "end spotify"})
+    live_client.post("/ui/chat", data={"message": "end spotify from September"})
     suggestion_id = bills_db_module.list_suggestions(status="pending")[-1]["id"]
 
     body = _text(live_client.get("/ui/suggestions"))

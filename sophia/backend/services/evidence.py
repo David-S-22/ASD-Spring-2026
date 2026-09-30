@@ -91,6 +91,7 @@ def ask(question):
         validate_grounded_answer,
         grounded_prompt.FALLBACK,
         timeout=config.GROUNDED_TIMEOUT_SECONDS,
+        temperature=config.GROUNDED_TEMPERATURE,
     )
     if data["fallback"]:
         logger.info("RAG_TOOL feature=%s k=%s kept=%s best=%s confidence=none insufficient=true fallback=true duration_ms=%s",
