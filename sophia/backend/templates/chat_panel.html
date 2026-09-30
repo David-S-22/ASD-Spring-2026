@@ -1,16 +1,10 @@
-{# Ask Tally chat panel fragment: chips, history with preview cards, input + Ask button. #}
+{# Ask Tally chat panel fragment: history with preview cards, input + Ask button. #}
 <div class="chat-panel">
-  <div class="chips">
-    <button type="button" data-chip="What do my bills add up to?">What do my bills add up to?</button>
-    <button type="button" data-chip="Which subscriptions am I barely using?">Which subscriptions am I barely using?</button>
-    <button type="button" data-chip="I cancelled Spotify from September — remove the future payments">I cancelled Spotify from September — remove the future payments</button>
-    <button type="button" data-chip="Draft a note to dispute my GymCo charge">Draft a note to dispute my GymCo charge</button>
-  </div>
   {# id is a fragment contract: the reject flow's adapt reply appends here
      out of band (hx-swap-oob="beforeend:#chat-history"). #}
   <div class="history" id="chat-history">
     {% if not messages %}
-    <p class="chat-welcome">Ask about your bills, or pick one of the suggestions above.</p>
+    <p class="chat-welcome">Ask about your bills.</p>
     {% endif %}
     {% for message in messages %}
     {% if message.heading %}<h4 class="history-heading">{{ message.heading }}</h4>{% endif %}

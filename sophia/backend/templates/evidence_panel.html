@@ -1,11 +1,6 @@
-{# Ask-with-evidence card: chips, question form, result slot. Root id is a fragment contract. #}
+{# Ask-with-evidence card: question form, result slot. Root id is a fragment contract. #}
 <div class="evidence-panel card" id="evidence-panel">
   <h3>Ask with evidence <span class="mode-badge mode-{{ 'on' if enabled else 'off' }}">RAG {{ 'enabled' if enabled else 'disabled' }}</span></h3>
-  <div class="chips">
-    <button type="button" data-evidence-chip="How much is my music subscription?">How much is my music subscription?</button>
-    <button type="button" data-evidence-chip="Which bill is overdue?">Which bill is overdue?</button>
-    <button type="button" data-evidence-chip="What is the capital of France?">What is the capital of France?</button>
-  </div>
   <form hx-post="/bills-backend/ui/evidence" hx-target="#evidence-result" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]" hx-indicator="find .working">
     <input name="question" placeholder="Ask about a bill" required>
     <button type="submit">Ask</button>

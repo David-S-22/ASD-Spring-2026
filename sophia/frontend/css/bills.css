@@ -343,8 +343,7 @@
 
 .timeline ul,
 .dispute-panel ul,
-.dispute-panel ol,
-.chat-panel .chips {
+.dispute-panel ol {
   list-style: none;
   padding: 0;
 }
@@ -387,13 +386,6 @@
   border: 1px solid var(--warn-bg);
   padding: 0.5em;
   border-radius: 6px;
-}
-
-.chat-panel .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4em;
-  margin-bottom: 0.6em;
 }
 
 .chat-panel .message {
