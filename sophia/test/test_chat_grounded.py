@@ -111,6 +111,15 @@ def test_a_question_naming_a_bill_is_grounded_even_when_the_model_says_upcoming(
     assert questions == ["When is Netflix due?"] and "Coming up this week" not in body
 
 
+@pytest.mark.parametrize("message", ["What's due this week?", "What is coming up in the next two weeks?", "Anything upcoming?"])
+def test_a_general_question_about_what_is_due_is_code_computed_whatever_the_model_says(live_client, modes_on, monkeypatch, message):
+    fake_model(monkeypatch, PLAIN_QUESTION)
+    questions = fake_evidence(monkeypatch, INSUFFICIENT)
+    body = _text(live_client.post("/ui/chat", data={"message": message}))
+    assert questions == [] and ("Coming up this week" in body or "Nothing is due" in body)
+    assert "couldn't find a bill" not in body
+
+
 def test_a_general_question_the_model_tags_upcoming_stays_code_computed(live_client, modes_on, monkeypatch):
     fake_model(monkeypatch, dict(PLAIN_QUESTION, question="upcoming"))
     questions = fake_evidence(monkeypatch, GROUNDED)
@@ -124,6 +133,14 @@ def test_a_question_with_a_change_verb_still_proposes(live_client, modes_on, mon
     questions = fake_evidence(monkeypatch, GROUNDED)
     body = _text(live_client.post("/ui/chat", data={"message": "Can you cancel Netflix from 14 October?"}))
     assert "Proposed:" in body and "Update Netflix" in body and questions == []
+
+
+def test_chat_panel_shows_the_rag_mode_badge(live_client, modes_on, monkeypatch):
+    body = _text(live_client.get("/ui/chat"))
+    assert 'class="mode-badge mode-on">RAG enabled</span>' in body
+    monkeypatch.setattr(config, "RAG_ENABLED", False)
+    body = _text(live_client.get("/ui/chat"))
+    assert 'class="mode-badge mode-off">RAG disabled</span>' in body
 
 
 def test_api_chat_carries_the_grounded_card(live_client, modes_on, monkeypatch):

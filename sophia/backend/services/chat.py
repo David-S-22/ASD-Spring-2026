@@ -228,6 +228,9 @@ CHANGE_VERB = re.compile(
 )
 
 
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|next (week|fortnight|month|\d+ days|two weeks)|this (week|fortnight|month))\b", re.I)
+
+
 def _is_plain_question(message):
     """True for a message that asks rather than instructs: it ends with a question mark and names no change, so the model may not turn it into a proposal."""
     text = (message or "").strip()
@@ -432,8 +435,11 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     reply = _resolve_question(data.get("question")) or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     preview = None if asks else _build_preview(data)
+    about_a_bill = asks and _names_a_bill(model_message, bills)
     card = None
-    if grounded and not preview and (data.get("question") in (None, "none") or (asks and _names_a_bill(model_message, bills))):
+    if asks and not about_a_bill and DUE_WORDS.search(model_message):
+        reply = _answer_upcoming()
+    elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
         if card:
             reply = card["answer"]
