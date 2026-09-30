@@ -306,6 +306,18 @@ def plan_transaction(context):
                 ),
                 "retryable": True,
             }
+    # Trusted backstop: when the user named exactly one transaction ID
+    # (for example answering a clarification with "transaction ID 29") but
+    # the planner left transaction_id empty, target that row directly so the
+    # clarification loop cannot repeat. Reads are left alone.
+    if (
+        not plan.get("fallback")
+        and plan.get("operation") in ("update", "delete")
+        and plan.get("transaction_id") is None
+    ):
+        mentioned = grounded_transaction_ids(context["message"])
+        if len(mentioned) == 1:
+            plan = {**plan, "transaction_id": mentioned.pop()}
     return plan
 
 
@@ -1114,6 +1126,29 @@ def load_available_transactions(plan, context):
         chat_service.transaction_row(row, context["category_names"])
         for row in rows
     ]
+
+
+TRANSACTION_ID_MENTION_PATTERNS = (
+    r"\btransaction(?:\s+id)?\s*(?:[:=#-]\s*)?(\d+)\b",
+    r"\bid\s*(?:[:=#-]\s*)?(\d+)\b",
+    r"(?<![a-z0-9])#(\d+)\b",
+)
+
+
+def grounded_transaction_ids(message):
+    """Return every transaction ID the user named explicitly.
+
+    Only the same explicit forms accepted by ``transaction_id_is_grounded``
+    count ("transaction 29", "transaction ID: 29", "id 29", "#29"); bare
+    numbers are ignored because they are usually amounts or dates.
+    """
+    found = set()
+    for pattern in TRANSACTION_ID_MENTION_PATTERNS:
+        for match in re.finditer(pattern, message or "", re.IGNORECASE):
+            value = int(match.group(1))
+            if value > 0:
+                found.add(value)
+    return found
 
 
 def transaction_id_is_grounded(message, transaction_id):

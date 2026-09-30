@@ -1,0 +1,28 @@
+<section id="transactions-content"
+         class="panel transaction-form-screen">
+    <button type="button"
+            class="back-button"
+            hx-get="/transactions-backend/ui/transactions/page"
+            hx-target="#transactions-content"
+            hx-swap="outerHTML">
+        &larr; Back to transactions
+    </button>
+
+    <div class="transactions-toolbar">
+        <div>
+            <h1>Manage categories</h1>
+            <p>Delete categories you no longer need. A category with transactions must be emptied first.</p>
+        </div>
+        <div class="transactions-toolbar-actions">
+            <button id="add-category-button"
+                    type="button"
+                    hx-get="/transactions-backend/ui/categories/new"
+                    hx-target="#transactions-content"
+                    hx-swap="outerHTML">
+                + Add category
+            </button>
+        </div>
+    </div>
+
+    {{ category_list|safe }}
+</section>

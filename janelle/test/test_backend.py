@@ -962,7 +962,10 @@ def test_ui_create_category_posts_payload_and_returns_page(
 
     assert response.status_code == 200
     assert "Category saved." in response.text
-    assert '<option value="90">Education</option>' in response.text
+    assert "Manage categories" in response.text
+    assert 'id="categories-list"' in response.text
+    assert "<td>Education</td>" in response.text
+    assert 'id="transaction-filters"' not in response.text
     post.assert_called_once_with(
         f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
         json={
@@ -971,10 +974,16 @@ def test_ui_create_category_posts_payload_and_returns_page(
         },
         timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
     )
-    get.assert_called_once_with(
-        f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
-        timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
-    )
+    assert get.call_args_list == [
+        call(
+            f"{backend_app.config.TRANSACTIONS_DB_URL}/categories",
+            timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+        ),
+        call(
+            f"{backend_app.config.TRANSACTIONS_DB_URL}/transactions",
+            timeout=backend_app.config.DATABASE_TIMEOUT_SECONDS,
+        ),
+    ]
 
 
 def test_ui_create_category_preserves_database_error(

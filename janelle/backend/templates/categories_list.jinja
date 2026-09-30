@@ -1,0 +1,67 @@
+{% autoescape true %}
+<div id="categories-list" class="categories-list">
+    {% if notice %}
+    <p class="transaction-notice{% if notice_kind == 'error' %} transaction-notice-error{% endif %}"
+       role="{{ 'alert' if notice_kind == 'error' else 'status' }}">
+        {{ notice }}
+    </p>
+    {% endif %}
+    <div class="transactions-table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Transactions</th>
+                    <th class="transactions-actions-heading">
+                        <span class="screen-reader-only">Actions</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="categories">
+                {% if error %}
+                <tr>
+                    <td colspan="4">{{ error }}</td>
+                </tr>
+                {% else %}
+                {% for category in categories %}
+                <tr>
+                    <td>{{ category.get("name", "") }}</td>
+                    <td>{{ category.get("type") or "No type" }}</td>
+                    <td>{{ category.get("transaction_count", 0) }}</td>
+                    <td class="transactions-actions-cell">
+                        {% if category.get("id") is not none %}
+                        {% if category.get("transaction_count", 0) > 0 %}
+                        <button type="button"
+                                class="table-action-button danger-action-button"
+                                disabled
+                                title="Move or delete its transactions before deleting this category.">
+                            Delete
+                        </button>
+                        {% else %}
+                        <button type="button"
+                                class="table-action-button danger-action-button"
+                                aria-label="Delete category {{ category.get('name', '') }}"
+                                hx-delete="/transactions-backend/ui/categories/{{ category.get('id') }}"
+                                hx-confirm="Delete the category {{ category.get('name', '') }}? This cannot be undone."
+                                hx-target="#categories-list"
+                                hx-swap="outerHTML"
+                                hx-sync="#categories-list:replace"
+                                hx-disabled-elt="this">
+                            Delete
+                        </button>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4">No categories found.</td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endautoescape %}

@@ -1,5 +1,6 @@
 """Shared helpers for the Transactions Flask application."""
 
+import re
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
@@ -12,6 +13,27 @@ from .services.chat_service import ChatError
 
 
 TRANSACTION_PAGE_SIZES = (5, 10, 15, 20)
+
+# A clarification answer that is only a transaction reference, such as
+# "29", "#29", "id 29", "transaction 29", "number 29." or "the id: 29".
+TRANSACTION_ID_ANSWER = re.compile(
+    r"^\s*(?:(?:the\s+)?(?:transaction|txn|tx|id|number|no\.?)\s*)*"
+    r"[#:=-]?\s*(\d+)\s*\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def normalize_transaction_id_answer(clarification):
+    """Rewrite a bare ID answer into the explicit form the planner grounds.
+
+    Only used when the clarification asked the user to choose between
+    matching transactions, so a lone number cannot be mistaken for an
+    amount or a day of the month.
+    """
+    match = TRANSACTION_ID_ANSWER.match(clarification or "")
+    if match is None:
+        return clarification
+    return f"transaction ID {int(match.group(1))}"
 TRANSACTION_DATE_RANGES = {
     "all",
     "last_7_days",
@@ -139,19 +161,41 @@ def format_currency(value):
     return f"{sign}${abs(amount):,.2f}"
 
 
-def get_form_categories(db_url):
+def get_database_rows(db_url, resource):
     response = requests.get(
-        f"{db_url}/categories",
+        f"{db_url}/{resource}",
         timeout=config.DATABASE_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    categories = response.json()
+    rows = response.json()
     if (
-        not isinstance(categories, list)
-        or not all(isinstance(category, dict) for category in categories)
+        not isinstance(rows, list)
+        or not all(isinstance(row, dict) for row in rows)
     ):
-        raise ValueError("invalid categories response")
-    return categories
+        raise ValueError(f"invalid {resource} response")
+    return rows
+
+
+def get_form_categories(db_url):
+    return get_database_rows(db_url, "categories")
+
+
+def get_transactions_with_category_names(db_url):
+    transactions = get_database_rows(db_url, "transactions")
+    categories = get_database_rows(db_url, "categories")
+    return align_transactions_with_corresponding_category_names(
+        transactions,
+        categories,
+    )
+
+
+def count_transactions_per_category(transactions):
+    counts = {}
+    for transaction in transactions:
+        category_id = transaction.get("category_id")
+        if isinstance(category_id, int):
+            counts[category_id] = counts.get(category_id, 0) + 1
+    return counts
 
 
 def database_response_error(response, fallback):
@@ -216,7 +260,73 @@ def render_transaction_form(db_url, error=None, values=None):
     )
 
 
-def render_transaction_table(transactions, error=None):
+def render_transaction_table_from_database(
+    db_url,
+    notice=None,
+    notice_kind="success",
+):
+    try:
+        transactions = get_transactions_with_category_names(db_url)
+    except (ValueError, RecursionError):
+        return render_transaction_table(
+            [],
+            "Unable to load transactions because the database response was invalid.",
+        ), 502
+    except requests.RequestException:
+        return render_transaction_table(
+            [],
+            "Unable to load transactions because the database service is unavailable.",
+        ), 502
+    return render_transaction_table(
+        transactions,
+        notice=notice,
+        notice_kind=notice_kind,
+    ), 200
+
+
+def render_category_list(db_url, notice=None, notice_kind="success"):
+    """Render the manage-categories list fragment with usage counts."""
+    error = None
+    categories = []
+    usage = {}
+    try:
+        categories = get_form_categories(db_url)
+        usage = count_transactions_per_category(
+            get_database_rows(db_url, "transactions")
+        )
+    except (ValueError, RecursionError):
+        error = (
+            "Unable to load categories because the database response was invalid."
+        )
+    except requests.RequestException:
+        error = (
+            "Unable to load categories because the database service is unavailable."
+        )
+    return render_template(
+        "categories_list.jinja",
+        categories=[
+            {**category, "transaction_count": usage.get(category.get("id"), 0)}
+            for category in categories
+        ],
+        error=error,
+        notice=notice,
+        notice_kind=notice_kind,
+    )
+
+
+def render_categories_page(db_url, notice=None, notice_kind="success"):
+    return render_template(
+        "categories_page.jinja",
+        category_list=render_category_list(db_url, notice, notice_kind),
+    )
+
+
+def render_transaction_table(
+    transactions,
+    error=None,
+    notice=None,
+    notice_kind="success",
+):
     requested_page_size = request.args.get("page_size", type=int)
     page_size = (
         requested_page_size
@@ -249,6 +359,8 @@ def render_transaction_table(transactions, error=None):
         "transactions_table.jinja",
         transactions=transactions[first_index:last_index],
         error=error,
+        notice=notice,
+        notice_kind=notice_kind,
         page=page,
         page_size=page_size,
         page_sizes=TRANSACTION_PAGE_SIZES,

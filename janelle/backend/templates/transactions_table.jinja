@@ -4,6 +4,12 @@
      hx-trigger="transactionsChanged from:body"
      hx-include="#transaction-filters, #transactions-page-size"
      hx-swap="outerHTML">
+    {% if notice %}
+    <p class="transaction-notice{% if notice_kind == 'error' %} transaction-notice-error{% endif %}"
+       role="{{ 'alert' if notice_kind == 'error' else 'status' }}">
+        {{ notice }}
+    </p>
+    {% endif %}
     <div class="transactions-table-wrapper">
         <table>
             <thead>
@@ -13,12 +19,15 @@
                     <th>Description</th>
                     <th>Amount</th>
                     <th>Category</th>
+                    <th class="transactions-actions-heading">
+                        <span class="screen-reader-only">Actions</span>
+                    </th>
                 </tr>
             </thead>
             <tbody id="transactions">
                 {% if error %}
                 <tr>
-                    <td colspan="5">{{ error }}</td>
+                    <td colspan="6">{{ error }}</td>
                 </tr>
                 {% else %}
                 {% for transaction in transactions %}
@@ -28,10 +37,26 @@
                     <td>{{ transaction.get("description", "") }}</td>
                     <td>{{ "%.2f"|format(transaction.get("amount")) }}</td>
                     <td>{{ transaction.get("category_name") or transaction.get("category_id") or "Uncategorised" }}</td>
+                    <td class="transactions-actions-cell">
+                        {% if transaction.get("id") is not none %}
+                        <button type="button"
+                                class="table-action-button danger-action-button"
+                                aria-label="Delete transaction at {{ transaction.get('merchant', '') }} on {{ transaction.get('date', '')[:16] }}"
+                                hx-delete="/transactions-backend/ui/transactions/{{ transaction.get('id') }}?page={{ page }}"
+                                hx-confirm="Delete the {{ '%.2f'|format(transaction.get('amount')) }} transaction at {{ transaction.get('merchant', '') }}? This cannot be undone."
+                                hx-target="#transactions-table"
+                                hx-swap="outerHTML"
+                                hx-include="#transaction-filters, #transactions-page-size"
+                                hx-sync="#transactions-table:replace"
+                                hx-disabled-elt="this">
+                            Delete
+                        </button>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5">
+                    <td colspan="6">
                         {% if filters_active %}
                         No transactions match your filters.
                         {% else %}

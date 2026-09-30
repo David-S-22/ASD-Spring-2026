@@ -28,7 +28,8 @@ def test_frontend_loads_transaction_rows_with_htmx():
     assert 'hx-include="#transaction-filters, #transactions-page-size"' in page
     assert 'hx-swap="outerHTML"' in page
     assert "<th>ID</th>" not in page
-    assert 'colspan="5"' in page
+    assert 'colspan="6"' in page
+    assert 'colspan="5"' not in page
 
 
 def test_transaction_table_has_page_size_and_navigation_controls():
@@ -51,9 +52,11 @@ def test_transaction_table_has_page_size_and_navigation_controls():
     assert 'aria-label="Next page"' in table
     assert "&rarr;" in table
     assert "Page {{ page }} of {{ total_pages }}" in table
+    # Root reload, previous, next, and the per-row delete button all keep the
+    # active filters and page size when they replace the table.
     assert table.count(
         'hx-include="#transaction-filters, #transactions-page-size"'
-    ) == 3
+    ) == 4
 
 
 def test_transaction_page_has_search_category_and_date_filters():
@@ -114,9 +117,11 @@ def test_toolbar_buttons_load_transaction_and_category_forms_with_htmx():
     ).read_text(encoding="utf-8")
 
     assert 'class="transactions-toolbar-actions"' in page
-    assert 'id="add-category-button"' in page
-    assert 'hx-get="/transactions-backend/ui/categories/new"' in page
-    assert "+ Add category" in page
+    # Adding a category lives on the manage-categories screen only.
+    assert 'id="add-category-button"' not in page
+    assert 'hx-get="/transactions-backend/ui/categories/new"' not in page
+    assert 'id="manage-categories-button"' in page
+    assert 'hx-get="/transactions-backend/ui/categories"' in page
     assert 'id="add-transaction-button"' in page
     assert 'type="button"' in page
     assert 'hx-get="/transactions-backend/ui/transactions/new"' in page
@@ -139,7 +144,9 @@ def test_category_form_contains_fields_and_htmx_actions():
     assert 'hx-target="#transactions-content"' in form
     assert 'hx-swap="outerHTML"' in form
     assert 'hx-disabled-elt="#save-category-button"' in form
-    assert "Back to transactions" in form
+    assert 'hx-get="/transactions-backend/ui/categories"' in form
+    assert "Back to categories" in form
+    assert "Back to transactions" not in form
     assert 'id="category-name"' in form
     assert 'name="name"' in form
     assert 'maxlength="80"' in form

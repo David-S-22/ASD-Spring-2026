@@ -5,13 +5,13 @@
             <p>Review the transactions you have entered.</p>
         </div>
         <div class="transactions-toolbar-actions">
-            <button id="add-category-button"
+            <button id="manage-categories-button"
                     class="secondary-action-button"
                     type="button"
-                    hx-get="/transactions-backend/ui/categories/new"
+                    hx-get="/transactions-backend/ui/categories"
                     hx-target="#transactions-content"
                     hx-swap="outerHTML">
-                + Add category
+                Manage categories
             </button>
             <button id="add-transaction-button"
                     type="button"
@@ -103,10 +103,13 @@
                         <th>Description</th>
                         <th>Amount</th>
                         <th>Category</th>
+                        <th class="transactions-actions-heading">
+                            <span class="screen-reader-only">Actions</span>
+                        </th>
                     </tr>
                 </thead>
                 <tbody id="transactions">
-                    <tr><td colspan="5">Loading...</td></tr>
+                    <tr><td colspan="6">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
