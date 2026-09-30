@@ -61,6 +61,10 @@ class _Config:
     def MCP_SERVER_URL(self) -> str:
         return _resolve("MCP_SERVER_URL", _url)
 
+    @property
+    def MCP_TIMEOUT_SECONDS(self) -> float:
+        return float(os.environ.get("MCP_TIMEOUT_SECONDS", "15"))
+
     def check_all(self) -> None:
         """Resolve every configured variable, raising if any is missing or invalid.
 

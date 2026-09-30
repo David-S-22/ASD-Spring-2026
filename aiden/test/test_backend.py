@@ -31,34 +31,27 @@ def test_index(client: FlaskClient):
     assert resp.json["container"] == "anomalies-backend"
 
 
-def test_ollama_thinking_trace_is_extracted_without_becoming_anomaly_output():
-    response = {
-        "output": [
-            {
-                "type": "message",
-                "content": [
-                    {"thinking": "Amount is unusually large."},
-                    {"type": "output_text", "text": '{"is_suspicious": true}'},
-                ],
-            }
-        ]
-    }
-
-    assert ollama_api._extract_thinking(response) == "Amount is unusually large."
-    assert ollama_api._extract_response_text(response) == '{"is_suspicious": true}'
-
-
-def test_ollama_prompt_enables_thinking_and_requests_logprobs(monkeypatch: MonkeyPatch):
+def test_ollama_prompt_requests_logprobs(monkeypatch: MonkeyPatch):
     captured = {}
 
     def create(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(output_text="{}")
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="{}"),
+                ),
+            ],
+        )
 
     monkeypatch.setattr(
         ollama_api,
         "_get_client",
-        lambda: SimpleNamespace(responses=SimpleNamespace(create=create)),
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=create),
+            ),
+        ),
     )
 
     ollama_api.prompt(
@@ -69,39 +62,39 @@ def test_ollama_prompt_enables_thinking_and_requests_logprobs(monkeypatch: Monke
         output_tokens=100,
     )
 
-    assert captured["instructions"] == "system"
-    assert captured["input"] == "user"
-    assert captured["extra_body"] == {"think": True}
+    assert captured["messages"] == [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "user"},
+    ]
+    assert captured["logprobs"] is True
     assert captured["top_logprobs"] == ollama_api._TOP_LOGPROBS
-    assert captured["include"] == ["message.output_text.logprobs"]
-    assert captured["max_output_tokens"] == 100
+    assert captured["max_tokens"] == 100
 
 
 def test_ollama_prompt_returns_mean_confidence(monkeypatch: MonkeyPatch):
     import math
 
     response = {
-        "output": [
+        "choices": [
             {
-                "type": "message",
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": '{"is_suspicious": true}',
-                        "logprobs": [
-                            {
-                                "token": "a",
-                                "logprob": -0.1,
-                                "top_logprobs": [{"token": "b", "logprob": -5.0}],
-                            },
-                            {
-                                "token": "c",
-                                "logprob": -0.3,
-                                "top_logprobs": [{"token": "d", "logprob": -9.0}],
-                            },
-                        ],
-                    },
-                ],
+                "message": {
+                    "role": "assistant",
+                    "content": '{"is_suspicious": true}',
+                },
+                "logprobs": {
+                    "content": [
+                        {
+                            "token": "a",
+                            "logprob": -0.1,
+                            "top_logprobs": [{"token": "b", "logprob": -5.0}],
+                        },
+                        {
+                            "token": "c",
+                            "logprob": -0.3,
+                            "top_logprobs": [{"token": "d", "logprob": -9.0}],
+                        },
+                    ],
+                },
             }
         ],
     }
@@ -110,7 +103,9 @@ def test_ollama_prompt_returns_mean_confidence(monkeypatch: MonkeyPatch):
         ollama_api,
         "_get_client",
         lambda: SimpleNamespace(
-            responses=SimpleNamespace(create=lambda **kwargs: response),
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **kwargs: response),
+            ),
         ),
     )
 
@@ -312,19 +307,18 @@ def test_check_transaction_persists_mean_confidence_from_logprobs(
     import math
 
     response = {
-        "output": [
+        "choices": [
             {
-                "type": "message",
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": '{"is_suspicious": true, "justification": "Confident finding"}',
-                        "logprobs": [
-                            {"token": "a", "logprob": -0.02},
-                            {"token": "b", "logprob": -0.05},
-                        ],
-                    },
-                ],
+                "message": {
+                    "role": "assistant",
+                    "content": '{"is_suspicious": true, "justification": "Confident finding"}',
+                },
+                "logprobs": {
+                    "content": [
+                        {"token": "a", "logprob": -0.02},
+                        {"token": "b", "logprob": -0.05},
+                    ],
+                },
             }
         ],
     }
@@ -371,6 +365,56 @@ def test_check_transaction_confidence_is_none_without_logprobs(
 
     assert persisted is not None
     assert persisted.confidence is None
+
+
+def test_review_injects_mcp_examples_into_prompt(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"is_suspicious": false, "justification": "ok"}'))],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.ollama_api._get_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+    )
+    intercept_mcp(
+        monkeypatch,
+        confirmed=[
+            {
+                "transaction": {"merchant": "Sketchy ATM", "amount": 5000, "description": "cash", "date": "2024-01-01"},
+                "anomaly": {"agent_reason_suspected": "large cash withdrawal"},
+            }
+        ],
+        rejected=[
+            {
+                "transaction": {"merchant": "Coles", "amount": 42, "description": "groceries", "date": "2024-01-02"},
+                "anomaly": {"agent_reason_suspected": "flagged in error"},
+            }
+        ],
+    )
+
+    transaction = dto.Transaction(
+        id=97,
+        amount=10,
+        merchant="Coffee",
+        date=datetime.now(),
+        description="latte",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    user_content = captured["messages"][1]["content"]
+    assert "Confirmed suspicious examples" in user_content
+    assert "Sketchy ATM" in user_content
+    assert "Rejected (not suspicious) examples" in user_content
+    assert "Coles" in user_content
 
 
 def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
@@ -687,6 +731,13 @@ def integrate_services(monkeypatch: MonkeyPatch):
     monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
     monkeypatch.setenv("MCP_SERVER_URL", "http://mock-mcp-server/mcp")
 
+    # fastmcp bypasses the requests-based RequestsMock, so stub the MCP client by
+    # default; tests that need reviewed examples override this via intercept_mcp.
+    monkeypatch.setattr(
+        "backend.services.mcp_client.call_tool",
+        lambda name, arguments=None: ([], 0.0),
+    )
+
     dburl = re.compile(r"^http://mock-database-url/anomalies(/.*)?$")
     transactionsurl = re.compile(r"^http://mock-transactions-url/.+$")
 
@@ -713,9 +764,17 @@ def intercept(app_to_inject: Flask, request: PreparedRequest):
         return resp.status_code, dict(resp.headers), resp.get_data()
 
 def intercept_ollama(monkeypatch: MonkeyPatch, model_response: str):
-    create = lambda **kwargs: SimpleNamespace(output_text=model_response)
+    create = lambda **kwargs: SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=model_response),
+            ),
+        ],
+    )
     fake_client = SimpleNamespace(
-        responses=SimpleNamespace(create=create),
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        ),
     )
 
     # Monkeypatch ollama api
@@ -725,7 +784,26 @@ def intercept_ollama_response(monkeypatch: MonkeyPatch, response):
     """Intercept Ollama with a full response payload (e.g. including logprobs)."""
     create = lambda **kwargs: response
     fake_client = SimpleNamespace(
-        responses=SimpleNamespace(create=create),
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        ),
     )
 
     monkeypatch.setattr("backend.services.ollama_api._get_client", lambda: fake_client)
+
+def intercept_mcp(monkeypatch: MonkeyPatch, confirmed=None, rejected=None):
+    """Stub the MCP client so the agent sees reviewed examples without a server."""
+    from backend.services.agent_api import (
+        _CONFIRMED_ANOMALIES_TOOL,
+        _REJECTED_ANOMALIES_TOOL,
+    )
+
+    results = {
+        _CONFIRMED_ANOMALIES_TOOL: confirmed or [],
+        _REJECTED_ANOMALIES_TOOL: rejected or [],
+    }
+
+    monkeypatch.setattr(
+        "backend.services.mcp_client.call_tool",
+        lambda name, arguments=None: (results.get(name, []), 0.0),
+    )
