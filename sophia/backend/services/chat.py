@@ -204,6 +204,23 @@ def _contradicts_an_update(preview, say):
     return bool(target) and target.lower() not in (say or "").lower()
 
 
+def _mentions(text, name):
+    """True when name appears in text as a whole word or phrase, ignoring case."""
+    return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I) is not None
+
+
+def _names_a_different_bill(preview, say):
+    """Return (target_name, other_name) when an update's reply names another bill but not its own target, else None."""
+    if preview["op"] != "update" or preview["entity"] != "bill" or not say:
+        return None
+    rows = bills_db.list_bills()
+    target = next((row["name"] for row in rows if row["id"] == preview.get("id")), None)
+    if not target or _mentions(say, target):
+        return None
+    other = next((row["name"] for row in rows if row["id"] != preview.get("id") and _mentions(say, row["name"])), None)
+    return (target, other) if other else None
+
+
 def _vet_proposal(preview, say=""):
     """Vet a proposal *before* it reaches the user.
 
@@ -220,6 +237,10 @@ def _vet_proposal(preview, say=""):
             "I need to be clearer about that one — I can add a new bill, or change an "
             "existing one, and that came out as both. Which did you mean?"
         )
+    wrong_target = _names_a_different_bill(preview, say)
+    if wrong_target:
+        target, other = wrong_target
+        return None, f"That change would apply to {target}, not {other}. Which bill did you mean?"
     try:
         fields = _normalise_chat_fields(preview["entity"], preview["op"], preview["fields"] or {})
         allowed = BILL_FIELD_WHITELIST[preview["entity"]]

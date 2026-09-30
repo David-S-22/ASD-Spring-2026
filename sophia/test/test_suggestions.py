@@ -193,15 +193,16 @@ def test_proposal_renders_in_the_panel_only_not_the_chat(live_client, monkeypatc
     assert 'id="suggestions-panel" hx-swap-oob="true"' in body
 
 
-def test_reply_pointer_names_the_actual_target_not_the_models_claim(live_client, monkeypatch):
+def test_reply_pointer_names_the_actual_target_when_the_reply_names_no_bill(live_client, monkeypatch):
     """Field case: asked about Netflix, the model emitted Prime Video's id.
-    The pointer must name the real target from the suggestion row, so the
-    mismatch is visible right in the conversation."""
+    A reply that names Netflix is refused before it gets here; one that names
+    no bill is not, so the pointer must name the real target from the
+    suggestion row and the mismatch stays visible in the conversation."""
     prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
     response = _propose(live_client, monkeypatch, {
         "op": "update", "entity": "bill", "id": prime["id"],
         "fields": {"end_date": "2026-09-02"}, "question": "none",
-        "say": "I've suggested ending Netflix after 2 Sep — approve it to save."})
+        "say": "I've suggested ending it after 2 Sep — approve it to save."})
     body = _text(response)
     assert "Proposed: <strong>Update Prime Video</strong>" in body
     assert "nothing is saved until you approve" in body

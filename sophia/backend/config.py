@@ -10,6 +10,9 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://host.docker.internal:11434")
 DRAFT_MODEL = os.environ.get("DRAFT_MODEL", "llama3.1:8b")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen2.5:3b")
 AI_TIMEOUT_SECONDS = int(os.environ.get("AI_TIMEOUT_SECONDS", "90"))
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+AI_TEMPERATURE = float(os.environ.get("AI_TEMPERATURE", "0.2"))
+GROUNDED_TEMPERATURE = float(os.environ.get("GROUNDED_TEMPERATURE", "0"))
 DEMO_TODAY = datetime.strptime(os.environ.get("DEMO_TODAY", "2026-08-20")[:10], "%Y-%m-%d").date()
 
 

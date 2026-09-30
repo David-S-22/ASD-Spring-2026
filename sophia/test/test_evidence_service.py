@@ -45,8 +45,8 @@ def fake_retrieval(monkeypatch, results):
 def fake_model(monkeypatch, payload):
     attempts = []
 
-    def chat(model, messages, timeout=None):
-        attempts.append((model, messages, timeout))
+    def chat(model, messages, timeout=None, temperature=None):
+        attempts.append((model, messages, timeout, temperature))
         return {"message": {"content": json.dumps(payload)}}
 
     monkeypatch.setattr(guard, "chat", chat)
@@ -74,6 +74,7 @@ def test_grounded_answer_cites_only_retrieved_sources_and_rates_the_cited_chunk(
     result = evidence.ask("Which bill is overdue?")
     assert calls == [("retrieve_context", {"feature": "billing", "question": "Which bill is overdue?", "k": 6})]
     assert attempts[0][0] == config.CHAT_MODEL and attempts[0][2] == config.GROUNDED_TIMEOUT_SECONDS
+    assert attempts[0][3] == config.GROUNDED_TEMPERATURE
     assert result["insufficient"] is False and result["fallback"] is False
     assert result["citations"] == [{"source": "bill-7-home-internet.md", "bill_id": 7, "title": "Home internet", "distance": 1.083}]
     assert result["confidence"] == "medium"

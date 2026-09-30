@@ -141,6 +141,85 @@ def test_say_that_claims_a_new_bill_must_not_ship_an_update_to_an_existing_one(l
     assert bills_db_module.get_bill(gymco["id"])["amount_cents"] == gymco["amount_cents"]
 
 
+def _update_turn(bill_id, say, fields):
+    return lambda model, messages, timeout=None: {"message": {"content": json.dumps({
+        "op": "update", "entity": "bill", "id": bill_id, "fields": fields, "question": "none", "say": say})}}
+
+
+def _pending_ids():
+    return {r["id"] for r in bills_db_module.list_suggestions(status="pending")}
+
+
+def test_update_whose_reply_names_a_different_bill_is_refused_with_a_question(live_client, monkeypatch):
+    """Observed on the 3b model: "Cancel Netflix from October" got the reply
+    "ending Netflix" with {"op": "update", "id": 5} -- id 5 being Prime Video.
+    The card would have ended the wrong subscription."""
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        _update_turn(prime["id"], "I've suggested ending Netflix from 2 October", {"end_date": "2026-10-02"}),
+    )
+    pending_before = _pending_ids()
+    body = _text(live_client.post("/ui/chat", data={"message": "Cancel Netflix from October"}))
+
+    assert "Confirm" not in body and "chat/apply" not in body
+    assert "That change would apply to Prime Video, not Netflix. Which bill did you mean?" in body
+    assert _pending_ids() == pending_before, "no approvable card may be built for the wrong bill"
+    assert bills_db_module.get_bill(prime["id"])["end_date"] is None
+
+
+def test_update_whose_reply_names_its_target_still_yields_a_proposal(live_client, monkeypatch):
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        _update_turn(prime["id"], "I've suggested ending Prime Video from 2 October", {"end_date": "2026-10-02"}),
+    )
+    pending_before = _pending_ids()
+    body = _text(live_client.post("/ui/chat", data={"message": "Cancel Prime Video from October"}))
+
+    assert "Proposed: <strong>Update Prime Video</strong>" in body
+    assert "Which bill did you mean" not in body
+    created = [r for r in bills_db_module.list_suggestions(status="pending") if r["id"] not in pending_before]
+    assert [(r["op"], r["entity"], r["entity_id"]) for r in created] == [("update", "bill", prime["id"])]
+
+
+def test_spotify_cancel_reply_naming_spotify_still_yields_a_proposal(live_client, monkeypatch):
+    spotify = next(b for b in bills_db_module.list_bills() if b["name"] == "Spotify")
+    monkeypatch.setattr(
+        "sophia.backend.ai.guard.chat",
+        _update_turn(spotify["id"], "I've suggested ending Spotify after 1 Oct", {"end_date": "2026-10-01"}),
+    )
+    pending_before = _pending_ids()
+    body = _text(live_client.post("/ui/chat", data={"message": "I cancelled Spotify from October"}))
+
+    assert "Proposed: <strong>Update Spotify</strong>" in body
+    created = [r for r in bills_db_module.list_suggestions(status="pending") if r["id"] not in pending_before]
+    assert [(r["op"], r["entity"], r["entity_id"]) for r in created] == [("update", "bill", spotify["id"])]
+
+
+def test_update_whose_reply_names_no_bill_is_not_refused(live_client):
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    preview = {"op": "update", "entity": "bill", "id": prime["id"], "fields": {"end_date": "2026-10-02"}}
+    vetted, reply = _vet_proposal(preview, "I've suggested ending it from 2 October")
+    assert vetted == {"end_date": "2026-10-02"} and reply is None
+
+
+def test_bill_name_inside_another_word_is_not_a_mention(live_client):
+    """Rent is a bill name; "current" contains it, and must not read as naming Rent."""
+    netflix = next(b for b in bills_db_module.list_bills() if b["name"] == "Netflix")
+    preview = {"op": "update", "entity": "bill", "id": netflix["id"], "fields": {"end_date": "2026-10-02"}}
+    vetted, reply = _vet_proposal(preview, "I've suggested ending your current plan from 2 October")
+    assert vetted == {"end_date": "2026-10-02"} and reply is None
+
+
+def test_bill_names_match_case_insensitively(live_client):
+    prime = next(b for b in bills_db_module.list_bills() if b["name"] == "Prime Video")
+    preview = {"op": "update", "entity": "bill", "id": prime["id"], "fields": {"end_date": "2026-10-02"}}
+    vetted, reply = _vet_proposal(preview, "I've suggested ending NETFLIX from 2 October")
+    assert vetted is None
+    assert reply == "That change would apply to Prime Video, not Netflix. Which bill did you mean?"
+
+
 def test_incoherent_op_from_the_model_falls_back_honestly(live_client, monkeypatch):
     """op without entity now fails validation on both attempts; the reply must
     be the fallback, not the model's 'Added it for you.'"""
