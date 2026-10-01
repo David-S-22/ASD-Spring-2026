@@ -43,7 +43,7 @@ Guidance:
 - A cash-like, generic, or unfamiliar merchant is a legitimate reason to flag a transaction.
 - Only mark a transaction not suspicious when nothing about the supplied fields stands out as unusual.
 - Do not claim fraud as a fact and do not invent missing context; describe only what the supplied fields show.
-- Keep the explanation concise and factual.
+- Keep the explanation concise and factual, and between 30 and 50 words long.
 
 Before evaluating the transaction, review the reviewed-example transactions
 provided in the user message:
@@ -65,7 +65,7 @@ Return ONLY valid JSON matching this schema:
   "justification": string
 }}
 
-Always populate "justification" with a concise explanation of your decision — even when "is_suspicious" is false, briefly state why the transaction looks legitimate. Never leave it empty.
+Always populate "justification" with a concise explanation of your decision, between 30 and 50 words long — even when "is_suspicious" is false, briefly state why the transaction looks legitimate. Never leave it empty.
 
 Do not return Markdown, code fences, commentary, or any additional fields.
 """
