@@ -1,0 +1,13 @@
+# Opt-in override: gives the composed Ollama an NVIDIA GPU. Only for machines with an NVIDIA card and the
+# NVIDIA container runtime (Docker Desktop on Windows with WSL2 has it); without them Compose refuses to start ollama.
+# Use:  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Check: docker exec ollama ollama ps   (PROCESSOR should read "100% GPU")
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

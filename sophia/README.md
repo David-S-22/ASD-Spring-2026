@@ -30,6 +30,17 @@ docker compose up -d
 
 Then open `http://localhost:3005`. `docker compose down` to stop.
 
+### GPU for the composed Ollama (optional)
+
+The composed `ollama` service runs on CPU unless it is given a GPU. On a machine with an NVIDIA card, add the opt-in override:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+docker exec ollama ollama ps
+```
+
+`PROCESSOR` should read `100% GPU`. To make plain `docker compose up` use it, set `COMPOSE_FILE` in your shell (`docker-compose.yml;docker-compose.gpu.yml` on Windows, `:` as the separator elsewhere). Measured on an RTX 2000 Ada (8 GB), 1 Oct 2026: an Ask Tally turn 8-15 s on CPU, 1-3 s on GPU; a dispute letter with evidence 42-75 s on CPU, about 15 s on GPU. `qwen2.5:3b` and `llama3.1:8b` do not fit in 8 GB together, so the first call after switching model takes 9-14 s. Without an NVIDIA runtime the override makes Compose refuse to start `ollama`, which is why it is not in the main file.
+
 ### Local, without Docker
 
 Three processes, each from the repo root so `sophia` resolves as a package:
