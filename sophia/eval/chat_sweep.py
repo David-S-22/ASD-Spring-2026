@@ -20,7 +20,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CORPUS = Path(os.environ.get("CHAT_QUERIES", REPO_ROOT / "sophia" / "eval" / "chat_queries.yaml"))
-REPORTS = REPO_ROOT / "docs" / "release-2" / "sophia" / "chat-eval"
+REPORTS = REPO_ROOT / "docs" / "release-1" / "sophia" / "chat-eval"
 
 
 def score(entry, payload):
