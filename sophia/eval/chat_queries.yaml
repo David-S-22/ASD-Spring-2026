@@ -1,0 +1,81 @@
+# Ask Tally regression corpus: the route each phrasing must take whatever the classifier says.
+# route: total | upcoming | barely_using | tool | grounded | proposal | ask_back
+# expect: contains / not (substrings of the reply), title (proposal card title), insufficient (grounded)
+- message: "What do my bills add up to each month?"
+  route: total
+  expect: {contains: ["ongoing monthly total"]}
+- message: "What do my bills add up to each month"
+  route: total
+- message: "Add up my bills"
+  route: total
+- message: "What's coming up in the next two weeks"
+  route: upcoming
+  expect: {contains: ["next 14 days"], not: ["this week"]}
+- message: "What's due this week?"
+  route: upcoming
+  expect: {contains: ["this week"]}
+- message: "Is anything due next month?"
+  route: upcoming
+  expect: {contains: ["next 30 days"]}
+- message: "What will I pay in the next 3 weeks?"
+  route: upcoming
+  expect: {contains: ["next 21 days"]}
+- message: "Which subscriptions am I barely using?"
+  route: barely_using
+- message: "Which bill is overdue?"
+  route: grounded
+- message: "Why is my home internet overdue"
+  route: grounded
+- message: "When is my Netflix subscription next charged?"
+  route: grounded
+- message: "When is Netflix due?"
+  route: grounded
+- message: "How do I pay my home internet bill?"
+  route: grounded
+- message: "What does my gymco membership cost and how do I pay it?"
+  route: grounded
+- message: "How much is my car insurance?"
+  route: grounded
+  expect: {insufficient: true}
+- message: "What is my car insurance bill cost for this month?"
+  route: grounded
+  expect: {insufficient: true}
+- message: "What has Spotify actually charged me?"
+  route: tool
+- message: "Has GymCo charged me?"
+  route: tool
+- message: "Update my Spotify to $15.99 a month"
+  route: proposal
+  expect: {title: "Update Spotify"}
+- message: "I cancelled Spotify from October - remove the future payments"
+  route: proposal
+  expect: {title: "Update Spotify"}
+- message: "Cancel Netflix from October"
+  route: proposal
+  expect: {title: "Update Netflix"}
+- message: "Can you cancel Netflix from 14 October?"
+  route: proposal
+  expect: {title: "Update Netflix"}
+- message: "Add a Disney+ subscription for 17.99 monthly starting 5th September"
+  route: proposal
+  expect: {title: "Add bill: Disney+"}
+- message: "Add Disney Plus, $15 a month, first charge 5 September, paid by card"
+  route: proposal
+  expect: {title: "Add bill: Disney Plus"}
+- message: "Add a gym membership"
+  route: ask_back
+  expect: {contains: ["I just need"]}
+- message: "Add Netflix"
+  route: ask_back
+- message: "I want to dispute the GymCo charge, I never signed up for it"
+  route: proposal
+  expect: {title: "Open dispute for GymCo"}
+- message: "I want to dispute the Electricity charge, I was charged twice in July"
+  route: proposal
+  expect: {title: "Open dispute for Electricity"}
+- message: "Dispute my Spotify charge, the price went up without notice (the $17.99 row)."
+  route: proposal
+  expect: {title: "Open dispute for Spotify", contains: ["opening a dispute for Spotify"]}
+- message: "Draft a note to dispute my GymCo charge"
+  route: proposal
+  expect: {title: "Open dispute for GymCo"}

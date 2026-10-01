@@ -254,10 +254,17 @@ CHANGE_VERB = re.compile(
 
 
 DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|scheduled)\b", re.I)
+PAY_WORDS = re.compile(r"\b(pay|paying|owe|spend|spending)\b", re.I)
+
+
+def _asks_what_is_due(message):
+    """True for a question about what is due: a due word, or a time horizon together with a pay word."""
+    text = message or ""
+    return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
 
 
 QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
-TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
 BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
 
 
@@ -527,9 +534,12 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
-    if data.get("question") == "upcoming" and not (DUE_WORDS.search(model_message) or DAYS_AHEAD.search(model_message) or NAMED_HORIZON.search(model_message)):
+    agrees = {"upcoming": _asks_what_is_due(model_message), "total": bool(TOTAL_WORDS.search(model_message)), "barely_using": bool(BARELY_WORDS.search(model_message))}
+    if data.get("question") in agrees and not agrees[data.get("question")]:
         data["question"] = "none"
-    reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
+    answered = _resolve_question(data.get("question"), model_message)
+    route = data.get("question") if answered else "plain"
+    reply = answered or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     from_words = None if asks else _dispute_from_words(model_message, bills)
     preview = None if asks else (from_words or _build_preview(data))
@@ -542,24 +552,34 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     card = None
     facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
     if facts:
+        route = "tool"
         reply = facts["sentence"]
     elif asks and not about_a_bill and BARELY_WORDS.search(model_message):
         reply = _answer_barely_using()
-    elif asks and not about_a_bill and DUE_WORDS.search(model_message):
+        route = "barely_using"
+    elif asks and not about_a_bill and _asks_what_is_due(model_message):
         reply = _answer_upcoming(_horizon_days(model_message))
+        route = "upcoming"
     elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
         reply = _answer_total()
-    elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
+        route = "total"
+    elif asks and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
         if card:
             reply = card["answer"]
+            route = "grounded"
+    if not preview and not asks and CHANGE_VERB.search(model_message or ""):
+        route = "ask_back"
     canonical_fields = None
     if preview:
         canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
         if reply_override:
             reply = reply_override
             preview = None
+            route = "ask_back"
 
+    if preview:
+        route = "proposal"
     assistant_row = bills_db.create_chat_message(
         {"role": "assistant", "content": reply, "op_json": json.dumps(preview) if preview else None}
     )
@@ -585,6 +605,7 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         "fallback": bool(data.get("fallback", False)) and card is None and facts is None,
         "grounded": card,
         "tool": facts,
+        "route": route,
     }
 
 
