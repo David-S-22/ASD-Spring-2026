@@ -632,9 +632,12 @@ def _suggestion_action_response(action, suggestion_id):
     pre_row = bills_db.get_suggestion(suggestion_id)
     was_pending = bool(pre_row and pre_row["status"] == "pending")
     toast = None
+    opened_dispute = None
     try:
         if action == "approve":
-            chat_service.approve_suggestion(suggestion_id)
+            applied = chat_service.approve_suggestion(suggestion_id)
+            if pre_row and (pre_row["op"], pre_row["entity"]) == ("create", "dispute") and isinstance(applied, dict):
+                opened_dispute = applied.get("id")
             toast = "Done — change saved."
         else:
             chat_service.reject_suggestion(suggestion_id)
@@ -651,6 +654,8 @@ def _suggestion_action_response(action, suggestion_id):
     html = _render_suggestions_panel() + adapt_html
     if status == "applied":
         html += _render_bills_table_oob()
+    if opened_dispute:
+        html += _render_dispute_panel(dispute_id=opened_dispute, oob=True) + _render_dispute_list(oob=True)
     response = make_response(html, 200)
     # The panel is the only surface that renders a decidable suggestion, and
     # this response replaces it wholesale — nothing else needs telling.
@@ -658,7 +663,7 @@ def _suggestion_action_response(action, suggestion_id):
     # chat, flipped by a response-header trigger event, detached the clicked
     # button while htmx was still processing the response, and htmx then
     # quietly dropped the out-of-band table refresh.)
-    response.headers["HX-Trigger"] = json.dumps({"toast": toast})
+    response.headers["HX-Trigger"] = json.dumps({"toast": toast, "switchTab": "disputes"} if opened_dispute else {"toast": toast})
     return response
 
 

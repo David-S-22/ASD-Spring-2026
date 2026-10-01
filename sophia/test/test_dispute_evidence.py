@@ -310,3 +310,31 @@ def test_a_new_dispute_is_opened_on_the_demo_date_not_the_databases_clock(live_c
     monkeypatch.setattr("sophia.backend.ai.guard.chat", lambda model, messages, timeout=None, temperature=None: {"message": {"content": json.dumps({"letter_text": "x" * 100, "steps": ["Step one", "Step two"], "escalation": ["Merchant support"], "payment_method_note": None})}})
     live_client.post(f"/ui/suggestions/{sid}/approve")
     assert bills_db_module.list_disputes()[-1]["opened_at"] == config.DEMO_TODAY.isoformat()
+
+
+def test_approving_a_dispute_proposal_opens_the_panel_with_its_evidence_and_switches_to_disputes(live_client, monkeypatch):
+    fake_all_tools(monkeypatch)
+    fake_draft(monkeypatch)
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", lambda model, messages, timeout=None, temperature=None: {"message": {"content": json.dumps(
+        {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": 3, "reason": "Late fee added"}, "question": "none", "say": "Opening."})}})
+    live_client.post("/ui/chat", data={"message": "Draft a note to dispute my Spotify charge"})
+    sid = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+    fake_draft(monkeypatch)
+    response = live_client.post(f"/ui/suggestions/{sid}/approve")
+    body = _text(response)
+    assert response.status_code == 200
+    assert 'id="dispute-panel"' in body and 'hx-swap-oob="true"' in body and 'class="evidence-used"' in body
+    assert "15 Jul Spotify AU $13.99, flagged by Spending Alerts and confirmed by you" in body and "compare_bill_with_bank_charges" in body
+    assert 'id="dispute-list" hx-swap-oob="true"' in body
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert trigger["switchTab"] == "disputes" and trigger["toast"] == "Done — change saved."
+
+
+def test_approving_a_bill_update_does_not_open_the_dispute_panel(live_client, monkeypatch):
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", lambda model, messages, timeout=None, temperature=None: {"message": {"content": json.dumps(
+        {"op": "update", "entity": "bill", "id": 3, "fields": {"amount": 15.99}, "question": "none", "say": "I've suggested changing Spotify to $15.99 a month."})}})
+    live_client.post("/ui/chat", data={"message": "Update my Spotify to $15.99 a month"})
+    sid = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+    response = live_client.post(f"/ui/suggestions/{sid}/approve")
+    assert response.status_code == 200 and 'id="dispute-panel"' not in _text(response)
+    assert "switchTab" not in json.loads(response.headers["HX-Trigger"])
