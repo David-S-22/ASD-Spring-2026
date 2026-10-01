@@ -6,11 +6,12 @@ that writes those, always through the same CRUD calls a manual edit uses.
 """
 import json
 import re
+import threading
 from datetime import date, timedelta
 from decimal import Decimal
 
 from sophia.backend import config
-from sophia.backend.ai import chat_prompt, guard
+from sophia.backend.ai import chat_prompt, guard, ollama_client
 from sophia.backend.ai.schemas import validate_chat_response
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
@@ -525,6 +526,11 @@ def _bank_charges(bill):
     return {"sentence": sentence, "tool": COMPARE_TOOL, "rows": rows, "duration_ms": duration_ms}
 
 
+def _warm_in_background(model):
+    """Start loading a model on a daemon thread; a dispute proposal uses it so Approve does not wait for the draft model to swap in."""
+    threading.Thread(target=ollama_client.warm, args=(model,), daemon=True).start()
+
+
 def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
     """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
@@ -599,6 +605,11 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
             }
         )
         preview["suggestion_id"] = suggestion["id"]
+        if (preview["op"], preview["entity"]) == ("create", "dispute"):
+            try:
+                _warm_in_background(config.DRAFT_MODEL)
+            except Exception:
+                pass
     return {
         "reply": reply,
         "op": preview["op"] if preview else None,

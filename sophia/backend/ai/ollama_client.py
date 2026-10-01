@@ -20,3 +20,11 @@ def chat(model, messages, timeout=None, temperature=None):
     )
     response.raise_for_status()
     return response.json()
+
+
+def warm(model):
+    """Ask Ollama to load a model without generating (an empty prompt), so the next real call does not wait for it; failures are ignored."""
+    try:
+        requests.post(f"{config.OLLAMA_URL}/api/generate", json={"model": model, "prompt": "", "keep_alive": config.OLLAMA_KEEP_ALIVE}, timeout=config.AI_TIMEOUT_SECONDS)
+    except Exception:
+        return None
