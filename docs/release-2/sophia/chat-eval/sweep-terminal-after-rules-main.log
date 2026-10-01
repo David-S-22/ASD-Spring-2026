@@ -1,0 +1,41 @@
+# After the loop's four rules: main corpus x1, 1 Oct 2026 11:35, GPU
+
+[PASS]   1.3s 'What do my bills add up to each month?' -> total
+[PASS]   0.9s 'What do my bills add up to each month' -> total
+[PASS]   1.8s 'Add up my bills' -> total
+[PASS]   1.0s 'how much do i spend altogether each month (bills and subs)' -> total
+[PASS]   2.0s 'total for netflix and spotify together this month?' -> total
+[PASS]   1.2s "What's coming up in the next two weeks" -> upcoming
+[PASS]   1.4s "What's due this week?" -> upcoming
+[PASS]   1.5s 'Is anything due next month?' -> upcoming
+[PASS]   2.0s 'What will I pay in the next 3 weeks?' -> upcoming
+[PASS]   2.0s 'please tell me what i have to pay over the next fortnight' -> upcoming
+[PASS]   1.6s "what's upcoming for netflix and gymco (just this month)" -> upcoming
+[PASS]   1.0s 'Which subscriptions am I barely using?' -> barely_using
+[PASS]   1.4s 'are netflix or disney+ ones i never use (be honest)' -> barely_using
+[PASS]   4.0s 'Which bill is overdue?' -> grounded
+[PASS]   4.1s 'Why is my home internet overdue' -> grounded
+[PASS]   3.8s 'When is my Netflix subscription next charged?' -> grounded
+[PASS]   4.0s 'When is Netflix due?' -> grounded
+[PASS]   4.5s 'How do I pay my home internet bill?' -> grounded
+[PASS]   4.1s 'What does my gymco membership cost and how do I pay it?' -> grounded
+[PASS]   3.3s 'How much is my car insurance?' -> grounded
+[PASS]   4.0s 'What is my car insurance bill cost for this month?' -> grounded
+[PASS]   1.3s 'What has Spotify actually charged me?' -> tool
+[PASS]   1.4s 'Has GymCo charged me?' -> tool
+[PASS]   1.0s 'please check what Electricity debited' -> tool
+[PASS]   1.3s 'was i charged by spotify lately' -> tool
+[PASS]   1.3s 'Update my Spotify to $15.99 a month' -> proposal
+[PASS]   1.3s 'I cancelled Spotify from October - remove the future payment' -> proposal
+[PASS]   1.3s 'Cancel Netflix from October' -> proposal
+[PASS]   1.2s 'Can you cancel Netflix from 14 October?' -> proposal
+[PASS]   1.9s 'Add a Disney+ subscription for 17.99 monthly starting 5th Se' -> proposal
+[PASS]   2.0s 'Add Disney Plus, $15 a month, first charge 5 September, paid' -> proposal
+[PASS]   2.0s 'Add a gym membership' -> ask_back
+[PASS]   1.2s 'Add Netflix' -> ask_back
+[PASS]   1.4s 'I want to dispute the GymCo charge, I never signed up for it' -> proposal
+[PASS]   1.2s 'I want to dispute the Electricity charge, I was charged twic' -> proposal
+[PASS]   1.2s 'Dispute my Spotify charge, the price went up without notice ' -> proposal
+[PASS]   1.3s 'Draft a note to dispute my GymCo charge' -> proposal
+
+37/37 passed; report docs\release-2\sophia\chat-eval\sweep-2026-10-01_1129.md

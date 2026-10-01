@@ -1,0 +1,19 @@
+# Ask Tally live sweep, 1 Oct 2026 10:30, branch sophia/r2-chat-eval @ 5dd62f4, 3 runs per query, base http://localhost:5005
+# PYTHONIOENCODING=utf-8 python -u -m sophia.eval.chat_sweep --runs 3 --base http://localhost:5005
+
+[PASS]  23.9s 'What do my bills add up to each month?' -> total
+[PASS]   8.4s 'What do my bills add up to each month?' -> total
+[PASS]  11.6s 'What do my bills add up to each month?' -> total
+[PASS]  23.4s 'What do my bills add up to each month' -> total
+[PASS]   8.4s 'What do my bills add up to each month' -> total
+[PASS]   9.7s 'What do my bills add up to each month' -> total
+[PASS]  11.1s 'Add up my bills' -> total
+[PASS]  47.8s 'Add up my bills' -> total
+[PASS]  13.7s 'Add up my bills' -> total
+[PASS]  25.4s "What's coming up in the next two weeks" -> upcoming
+[PASS] 167.1s "What's coming up in the next two weeks" -> upcoming
+[PASS]  87.4s "What's coming up in the next two weeks" -> upcoming
+[PASS]  87.9s "What's due this week?" -> upcoming
+[PASS]  29.1s "What's due this week?" -> upcoming
+[PASS]  25.4s "What's due this week?" -> upcoming
+[PASS]   7.8s 'Is anything due next month?' -> upcoming

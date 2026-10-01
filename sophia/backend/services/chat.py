@@ -6,11 +6,12 @@ that writes those, always through the same CRUD calls a manual edit uses.
 """
 import json
 import re
+import threading
 from datetime import date, timedelta
 from decimal import Decimal
 
 from sophia.backend import config
-from sophia.backend.ai import chat_prompt, guard
+from sophia.backend.ai import chat_prompt, guard, ollama_client
 from sophia.backend.ai.schemas import validate_chat_response
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
@@ -86,8 +87,8 @@ def _stated_text(message, history):
     return " ".join(said)
 
 
-def _answer_total():
-    """Answer the "what do my bills add up to" question with both figures.
+def _answer_total(named=None):
+    """Answer the "what do my bills add up to" question with both figures, over every bill or only the named rows.
 
     There are two defensible totals and they do not match. The table header
     shows the ongoing monthly rate -- every bill scaled to a month -- while this
@@ -98,14 +99,15 @@ def _answer_total():
     and what each measures, costs one clause.
     """
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     breakdown = month_breakdown(bills, payments, today.year, today.month, today)
     monthly_rate = sum(b.amount_cents * expected_per_month(b.cadence) for b in bills)
+    scope = " and ".join(b.name for b in bills) if named else "all bills"
     return (
         f"{today.strftime('%B')} is set to cost around "
-        f"{money.format_estimate_single(breakdown.total_high_cents)}. "
-        f"Your ongoing monthly total across all bills is {money.format_actual(monthly_rate)}."
+        f"{money.format_estimate_single(breakdown.total_high_cents)}{' for ' + scope if named else ''}. "
+        f"Your ongoing monthly total across {scope} is {money.format_actual(monthly_rate)}."
     )
 
 
@@ -143,7 +145,7 @@ def _answer_barely_using():
 WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
 COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
 DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
-NAMED_HORIZON = re.compile(r"\b(fortnight|month)\b", re.I)
+NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(fortnight|month)\b", re.I)
 NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
 UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
 MAX_HORIZON_DAYS = 180
@@ -161,10 +163,10 @@ def _horizon_days(message):
     return min(max(days, 1), MAX_HORIZON_DAYS)
 
 
-def _answer_upcoming(days=7):
-    """Every bill occurrence from today for the next days, soonest first, as one sentence."""
+def _answer_upcoming(days=7, named=None):
+    """Every bill occurrence, or only the named rows', from today for the next days, soonest first, as one sentence."""
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
     occurrences = sorted((occ for bill in bills for occ in project(bill, today, today + timedelta(days=days))), key=lambda occ: occ.date)
     span = f"the next {days} day{'s' if days != 1 else ''}"
     if not occurrences:
@@ -254,10 +256,17 @@ CHANGE_VERB = re.compile(
 
 
 DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|scheduled)\b", re.I)
+PAY_WORDS = re.compile(r"\b(pay|paying|owe|spend|spending)\b", re.I)
 
 
-QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
-TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum)\b", re.I)
+def _asks_what_is_due(message):
+    """True for a question about what is due: a due word, or a time horizon together with a pay word."""
+    text = message or ""
+    return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
+
+
+QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+)?(what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
 BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
 
 
@@ -517,6 +526,11 @@ def _bank_charges(bill):
     return {"sentence": sentence, "tool": COMPARE_TOOL, "rows": rows, "duration_ms": duration_ms}
 
 
+def _warm_in_background(model):
+    """Start loading a model on a daemon thread; a dispute proposal uses it so Approve does not wait for the draft model to swap in."""
+    threading.Thread(target=ollama_client.warm, args=(model,), daemon=True).start()
+
+
 def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
     """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
@@ -527,9 +541,12 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         fallback or chat_prompt.FALLBACK,
     )
 
-    if data.get("question") == "upcoming" and not (DUE_WORDS.search(model_message) or DAYS_AHEAD.search(model_message) or NAMED_HORIZON.search(model_message)):
+    agrees = {"upcoming": _asks_what_is_due(model_message), "total": bool(TOTAL_WORDS.search(model_message)), "barely_using": bool(BARELY_WORDS.search(model_message))}
+    if data.get("question") in agrees and not agrees[data.get("question")]:
         data["question"] = "none"
-    reply = _resolve_question(data.get("question"), model_message) or data.get("say", "")
+    answered = _resolve_question(data.get("question"), model_message)
+    route = data.get("question") if answered else "plain"
+    reply = answered or data.get("say", "")
     asks = grounded and _is_plain_question(model_message)
     from_words = None if asks else _dispute_from_words(model_message, bills)
     preview = None if asks else (from_words or _build_preview(data))
@@ -538,28 +555,38 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     if preview:
         preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
-    about_a_bill = bool(named)
+    about_a_bill = len(named) == 1
     card = None
     facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
     if facts:
+        route = "tool"
         reply = facts["sentence"]
-    elif asks and not about_a_bill and BARELY_WORDS.search(model_message):
+    elif asks and BARELY_WORDS.search(model_message):
         reply = _answer_barely_using()
-    elif asks and not about_a_bill and DUE_WORDS.search(model_message):
-        reply = _answer_upcoming(_horizon_days(model_message))
-    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
-        reply = _answer_total()
-    elif grounded and not preview and (data.get("question") in (None, "none") or about_a_bill):
+        route = "barely_using"
+    elif asks and not about_a_bill and _asks_what_is_due(model_message):
+        reply = _answer_upcoming(_horizon_days(model_message), named)
+        route = "upcoming"
+    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message):
+        reply = _answer_total(named)
+        route = "total"
+    elif asks and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
         if card:
             reply = card["answer"]
+            route = "grounded"
+    if not preview and not asks and CHANGE_VERB.search(model_message or ""):
+        route = "ask_back"
     canonical_fields = None
     if preview:
         canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
         if reply_override:
             reply = reply_override
             preview = None
+            route = "ask_back"
 
+    if preview:
+        route = "proposal"
     assistant_row = bills_db.create_chat_message(
         {"role": "assistant", "content": reply, "op_json": json.dumps(preview) if preview else None}
     )
@@ -578,6 +605,11 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
             }
         )
         preview["suggestion_id"] = suggestion["id"]
+        if (preview["op"], preview["entity"]) == ("create", "dispute"):
+            try:
+                _warm_in_background(config.DRAFT_MODEL)
+            except Exception:
+                pass
     return {
         "reply": reply,
         "op": preview["op"] if preview else None,
@@ -585,6 +617,7 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
         "fallback": bool(data.get("fallback", False)) and card is None and facts is None,
         "grounded": card,
         "tool": facts,
+        "route": route,
     }
 
 

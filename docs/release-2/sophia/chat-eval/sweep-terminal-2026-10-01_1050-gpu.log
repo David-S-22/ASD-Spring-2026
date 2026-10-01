@@ -1,0 +1,96 @@
+# Ask Tally live sweep, 1 Oct 2026 10:50, GPU-backed Ollama (docker-compose.gpu.yml), 3 runs per query, base http://localhost:5005
+# PYTHONIOENCODING=utf-8 python -u -m sophia.eval.chat_sweep --runs 3 --base http://localhost:5005
+
+[PASS]   1.9s 'What do my bills add up to each month?' -> total
+[PASS]   1.0s 'What do my bills add up to each month?' -> total
+[PASS]   1.0s 'What do my bills add up to each month?' -> total
+[PASS]   1.8s 'What do my bills add up to each month' -> total
+[PASS]   0.8s 'What do my bills add up to each month' -> total
+[PASS]   1.8s 'What do my bills add up to each month' -> total
+[PASS]   1.9s 'Add up my bills' -> total
+[PASS]   1.8s 'Add up my bills' -> total
+[PASS]   1.8s 'Add up my bills' -> total
+[PASS]   1.5s "What's coming up in the next two weeks" -> upcoming
+[PASS]   5.9s "What's coming up in the next two weeks" -> upcoming
+[PASS]   6.2s "What's coming up in the next two weeks" -> upcoming
+[PASS]   1.9s "What's due this week?" -> upcoming
+[PASS]   1.5s "What's due this week?" -> upcoming
+[PASS]   1.6s "What's due this week?" -> upcoming
+[PASS]   0.8s 'Is anything due next month?' -> upcoming
+[PASS]   1.8s 'Is anything due next month?' -> upcoming
+[PASS]  11.4s 'Is anything due next month?' -> upcoming
+[PASS]   2.0s 'What will I pay in the next 3 weeks?' -> upcoming
+[PASS]   2.1s 'What will I pay in the next 3 weeks?' -> upcoming
+[PASS]   8.5s 'What will I pay in the next 3 weeks?' -> upcoming
+[PASS]   1.1s 'Which subscriptions am I barely using?' -> barely_using
+[PASS]   1.6s 'Which subscriptions am I barely using?' -> barely_using
+[PASS]   1.5s 'Which subscriptions am I barely using?' -> barely_using
+[PASS]   3.6s 'Which bill is overdue?' -> grounded
+[PASS]   3.2s 'Which bill is overdue?' -> grounded
+[PASS]   2.5s 'Which bill is overdue?' -> grounded
+[PASS]   2.6s 'Why is my home internet overdue' -> grounded
+[PASS]   2.9s 'Why is my home internet overdue' -> grounded
+[PASS]   2.7s 'Why is my home internet overdue' -> grounded
+[PASS]   2.1s 'When is my Netflix subscription next charged?' -> grounded
+[PASS]   2.2s 'When is my Netflix subscription next charged?' -> grounded
+[PASS]   2.3s 'When is my Netflix subscription next charged?' -> grounded
+[PASS]   2.4s 'When is Netflix due?' -> grounded
+[PASS]   2.5s 'When is Netflix due?' -> grounded
+[PASS]   2.6s 'When is Netflix due?' -> grounded
+[PASS]   3.0s 'How do I pay my home internet bill?' -> grounded
+[PASS]   3.0s 'How do I pay my home internet bill?' -> grounded
+[PASS]   3.3s 'How do I pay my home internet bill?' -> grounded
+[PASS]   2.4s 'What does my gymco membership cost and how do I pay it?' -> grounded
+[PASS]   2.7s 'What does my gymco membership cost and how do I pay it?' -> grounded
+[PASS]   2.6s 'What does my gymco membership cost and how do I pay it?' -> grounded
+[PASS]   2.0s 'How much is my car insurance?' -> grounded
+[PASS]   2.7s 'How much is my car insurance?' -> grounded
+[PASS]   2.8s 'How much is my car insurance?' -> grounded
+[PASS]   3.4s 'What is my car insurance bill cost for this month?' -> grounded
+[PASS]   2.5s 'What is my car insurance bill cost for this month?' -> grounded
+[PASS]   1.8s 'What is my car insurance bill cost for this month?' -> grounded
+[PASS]   1.4s 'What has Spotify actually charged me?' -> tool
+[PASS]   1.5s 'What has Spotify actually charged me?' -> tool
+[PASS]   1.2s 'What has Spotify actually charged me?' -> tool
+[PASS]   1.3s 'Has GymCo charged me?' -> tool
+[PASS]   1.2s 'Has GymCo charged me?' -> tool
+[PASS]   1.3s 'Has GymCo charged me?' -> tool
+[PASS]   1.4s 'Update my Spotify to $15.99 a month' -> proposal
+[PASS]   1.6s 'Update my Spotify to $15.99 a month' -> proposal
+[PASS]   1.2s 'Update my Spotify to $15.99 a month' -> proposal
+[PASS]   1.2s 'I cancelled Spotify from October - remove the future payment' -> proposal
+[PASS]   1.2s 'I cancelled Spotify from October - remove the future payment' -> proposal
+[PASS]   1.4s 'I cancelled Spotify from October - remove the future payment' -> proposal
+[PASS]   1.5s 'Cancel Netflix from October' -> proposal
+[PASS]   1.6s 'Cancel Netflix from October' -> proposal
+[PASS]   2.5s 'Cancel Netflix from October' -> proposal
+[PASS]   1.2s 'Can you cancel Netflix from 14 October?' -> proposal
+[PASS]   1.2s 'Can you cancel Netflix from 14 October?' -> proposal
+[PASS]   1.3s 'Can you cancel Netflix from 14 October?' -> proposal
+[PASS]   2.1s 'Add a Disney+ subscription for 17.99 monthly starting 5th Se' -> proposal
+[PASS]   2.1s 'Add a Disney+ subscription for 17.99 monthly starting 5th Se' -> proposal
+[PASS]   2.1s 'Add a Disney+ subscription for 17.99 monthly starting 5th Se' -> proposal
+[PASS]   2.1s 'Add Disney Plus, $15 a month, first charge 5 September, paid' -> proposal
+[PASS]   2.0s 'Add Disney Plus, $15 a month, first charge 5 September, paid' -> proposal
+[PASS]   2.2s 'Add Disney Plus, $15 a month, first charge 5 September, paid' -> proposal
+[PASS]   2.4s 'Add a gym membership' -> ask_back
+[PASS]   1.9s 'Add a gym membership' -> ask_back
+[PASS]   2.3s 'Add a gym membership' -> ask_back
+[PASS]   3.5s 'Add Netflix' -> ask_back
+[PASS]   2.2s 'Add Netflix' -> ask_back
+[PASS]   2.1s 'Add Netflix' -> ask_back
+[PASS]   1.4s 'I want to dispute the GymCo charge, I never signed up for it' -> proposal
+[PASS]   1.5s 'I want to dispute the GymCo charge, I never signed up for it' -> proposal
+[PASS]   1.9s 'I want to dispute the GymCo charge, I never signed up for it' -> proposal
+[PASS]   2.4s 'I want to dispute the Electricity charge, I was charged twic' -> proposal
+[PASS]   1.5s 'I want to dispute the Electricity charge, I was charged twic' -> proposal
+[PASS]   1.8s 'I want to dispute the Electricity charge, I was charged twic' -> proposal
+[PASS]   1.9s 'Dispute my Spotify charge, the price went up without notice ' -> proposal
+[PASS]   2.1s 'Dispute my Spotify charge, the price went up without notice ' -> proposal
+[PASS]   3.8s 'Dispute my Spotify charge, the price went up without notice ' -> proposal
+[PASS]   4.9s 'Draft a note to dispute my GymCo charge' -> proposal
+[PASS]   2.1s 'Draft a note to dispute my GymCo charge' -> proposal
+[PASS]   2.1s 'Draft a note to dispute my GymCo charge' -> proposal
+
+90/90 passed; report docs\release-2\sophia\chat-eval\sweep-2026-10-01_1053.md
+exit: 0

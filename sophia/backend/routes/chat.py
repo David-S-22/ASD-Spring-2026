@@ -8,10 +8,22 @@ from sophia.backend.services import chat as chat_service
 bp = Blueprint("chat", __name__, url_prefix="/api/chat")
 
 
+def _suggestion_title(preview):
+    """The Suggestions card title for a proposal, from its stored row, so API callers see what the panel shows."""
+    if not preview or not preview.get("suggestion_id"):
+        return None
+    from sophia.backend.routes.fragments import _suggestion_view
+
+    row = bills_db.get_suggestion(preview["suggestion_id"])
+    return _suggestion_view(row)["title"] if row else None
+
+
 @bp.post("")
 def chat():
     payload = json_body()
-    return jsonify(chat_service.send_message(payload.get("message", "")))
+    result = chat_service.send_message(payload.get("message", ""))
+    result["suggestion_title"] = _suggestion_title(result["preview"])
+    return jsonify(result)
 
 
 @bp.post("/apply")
