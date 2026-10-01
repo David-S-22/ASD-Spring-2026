@@ -65,8 +65,12 @@ def refresh_route():
 def retrieve_route():
     """Return the documents closest to the question."""
     body = request.get_json()
-    with rag_lock:
-        results = retrieve(body["feature"], body["question"], body.get("k", 3), body.get("where"))
+    try:
+        with rag_lock:
+            results = retrieve(body["feature"], body["question"], body.get("k", 3), body.get("where"))
+    except Exception as exc:
+        logger.exception("RAG retrieve failed for feature '%s'", body.get("feature") if isinstance(body, dict) else None)
+        return jsonify({"error": "RAG retrieval failed.", "details": str(exc)}), 503
     return jsonify({"results": to_json(results)})
 
 

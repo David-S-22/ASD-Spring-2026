@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname(__file__))
 import pytest
 import shutil
 
+import query as query_module
 from corpus import (
     SOURCES_DIR,
     ingest_folder,
@@ -57,6 +58,43 @@ def test_retrieve_where_filters_on_metadata(http):
     """A where filter keeps only documents whose metadata matches."""
     body = http.post("/retrieve", json={"feature": FEATURE, "question": "Which bill is overdue?", "where": {"topic": "music"}}).get_json()
     assert [result["id"] for result in body["results"]] == ["b"]
+
+
+def test_retrieve_recovers_missing_segments_from_sources(monkeypatch, tmp_path):
+    """A missing on-disk segment triggers a rebuild from sources and retries once."""
+    feature_name = "recoverable"
+    (tmp_path / feature_name).mkdir()
+    calls = {"count": 0}
+    rebuilt = []
+
+    class FakeVectorStore:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def similarity_search_with_score(self, question, k=3, filter=None):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RuntimeError("Error creating hnsw segment reader: Nothing found on disk")
+            return [("ok", 0.12)]
+
+    monkeypatch.setattr(query_module, "Chroma", FakeVectorStore)
+    monkeypatch.setattr(query_module, "_recover_feature_collection", lambda feature: rebuilt.append(feature) or True)
+
+    result = query_module.retrieve(feature_name, "question", k=1)
+
+    assert result == [("ok", 0.12)]
+    assert rebuilt == [feature_name]
+
+
+def test_retrieve_route_returns_json_when_recovery_fails(monkeypatch):
+    """Retrieve route returns a clean JSON error when collection recovery fails."""
+    monkeypatch.setattr("server.retrieve", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("broken collection")))
+
+    response = app.test_client().post("/retrieve", json={"feature": "budgets", "question": "what now?"})
+
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "RAG retrieval failed."
+    assert "broken collection" in response.get_json()["details"]
 
 
 def test_startup_ingestion_billing_collection(http):
@@ -264,4 +302,3 @@ def test_ingest_folder_non_rebuild_is_idempotent(tmp_path):
     finally:
         if feature_name in [c.name for c in client.list_collections()]:
             client.delete_collection(name=feature_name)
-

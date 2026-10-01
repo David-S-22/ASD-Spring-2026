@@ -20,9 +20,12 @@ SOURCES_DIR = Path(__file__).resolve().parent / "sources"
 
 def add_documents(feature: str, ids: List[str], documents: List[str], metadatas: Optional[List[dict]] = None) -> int:
     """Store a feature's documents in its collection and return the new total."""
-    collection = get_collection(feature)
-    collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
-    return collection.count()
+    vector_store = Chroma(client=client, collection_name=feature)
+    if metadatas is None:
+        vector_store.add_texts(documents, ids=ids)
+    else:
+        vector_store.add_texts(documents, metadatas=metadatas, ids=ids)
+    return get_collection(feature).count()
 
 
 def refresh(feature: str, ids: List[str], documents: List[str], metadatas: Optional[List[dict]] = None) -> int:
