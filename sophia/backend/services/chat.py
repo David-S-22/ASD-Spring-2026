@@ -412,6 +412,9 @@ def _vet_proposal(preview, say="", stated=None):
     cadence and dates must also appear in what the user said; stated=None
     skips that check.
     """
+    if preview["op"] == "update" and not preview.get("fields"):
+        target = (_bill_name(preview.get("id")) if preview["entity"] == "bill" else None) or "that"
+        return None, f"What would you like to change about {target}? Tell me the new amount, date or payment method and I'll propose it."
     if _contradicts_an_update(preview, say):
         return None, (
             "I need to be clearer about that one — I can add a new bill, or change an "

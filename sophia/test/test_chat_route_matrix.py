@@ -24,6 +24,7 @@ ADVERSARIAL = {
     "tag_total": {"op": None, "entity": None, "id": None, "fields": None, "question": "total", "say": "Here."},
     "wrong_update": {"op": "update", "entity": "bill", "id": 5, "fields": {"next_billing_date": "2026-10-14"}, "question": "none", "say": "Updated."},
     "invented_field": {"op": "update", "entity": "bill", "id": 6, "fields": {"disputed": True}, "question": "none", "say": "Marked."},
+    "empty_update": {"op": "update", "entity": "bill", "id": 4, "fields": {}, "question": "none", "say": "I've suggested updating your Netflix bill - approve it to provide the amount."},
 }
 
 FAITHFUL = {
@@ -35,6 +36,7 @@ FAITHFUL = {
     "Add Disney Plus, $15 a month, first charge 5 September, paid by card": {"op": "create", "entity": "bill", "id": None, "fields": {"name": "Disney Plus", "merchant": "Disney Plus", "amount": 15.0, "cadence": "monthly", "next_billing_date": "2026-09-05", "type": "subscription", "payment_method": "card"}, "question": "none", "say": "I've suggested adding Disney Plus."},
     "Add a gym membership": {"op": "create", "entity": "bill", "id": None, "fields": {"name": "Gym membership", "amount": None, "cadence": None, "next_billing_date": None, "type": "subscription"}, "question": "none", "say": "Adding."},
     "Add Netflix": {"op": None, "entity": None, "id": None, "fields": None, "question": "none", "say": "Happy to add Netflix - how much is it, how often does it bill, and when is the next charge?"},
+    "update my netflix bill (not sure what to put)": {"op": "update", "entity": "bill", "id": 4, "fields": {"amount": None, "cadence": None}, "question": "none", "say": "I've suggested updating your Netflix bill - approve it to provide the amount, billing frequency, and next date."},
     "Draft a note to dispute my GymCo charge": {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": 6, "reason": "Charged after I cancelled"}, "question": "none", "say": "I've suggested opening a dispute for GymCo."},
 }
 

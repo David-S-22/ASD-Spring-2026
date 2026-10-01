@@ -117,3 +117,6 @@
 - message: "Draft a note to dispute my GymCo charge"
   route: proposal
   expect: {title: "Open dispute for GymCo"}
+- message: "update my netflix bill (not sure what to put)"
+  route: ask_back
+  expect: {contains: ["Netflix"], not: ["approve"]}
