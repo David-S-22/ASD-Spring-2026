@@ -1,8 +1,10 @@
+import json
+
 import requests
 import pytest
 
-from backend import chat_service, db_api, proposal_service, summary_service, transactions_api
-from backend.ai import chat_prompt, guard
+from backend import chat_service, db_api, mcp_client, proposal_service, rag_client, summary_service, transactions_api
+from backend.ai import chat_prompt, grounded_prompt, guard
 from backend.app import create_app
 
 
@@ -34,6 +36,8 @@ def test_health_reports_database_up(monkeypatch):
     assert resp.get_json()["transactions_api"] == "up"
     assert resp.get_json()["transactions_count"] == 1
     assert resp.get_json()["ollama"] == "up"
+    assert resp.get_json()["mcp_mode"] in {"enabled", "disabled"}
+    assert resp.get_json()["rag_mode"] in {"enabled", "disabled"}
 
 
 def test_list_budgets(monkeypatch):
@@ -160,7 +164,7 @@ def test_send_chat_message(monkeypatch):
     monkeypatch.setattr(
         chat_service,
         "send_message",
-        lambda budget_id, message, history=None: {
+        lambda budget_id, message, history=None, integration_mode=None, context=None, skip_deterministic=None: {
             "reply": "Dining is projected to reach warning this month.",
             "mode": "advice",
             "question": None,
@@ -198,6 +202,171 @@ def test_send_chat_message(monkeypatch):
     assert resp.get_json()["assistant_message"]["content"] == "Dining is projected to reach warning this month."
     assert len(stored_messages) == 2
     assert stored_messages[1][1]["plan_json"] == {"intent": "overspending"}
+
+
+def test_send_chat_message_passes_integration_mode(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(db_api, "list_chat_messages", lambda budget_id: [])
+    monkeypatch.setattr(db_api, "create_chat_message", lambda budget_id, payload: ({"id": 1}, 201))
+
+    def fake_send_message(budget_id, message, history=None, integration_mode=None, context=None, skip_deterministic=None):
+        seen.update(
+            {
+                "budget_id": budget_id,
+                "message": message,
+                "history": history,
+                "integration_mode": integration_mode,
+                "context": context,
+                "skip_deterministic": skip_deterministic,
+            }
+        )
+        return {
+            "reply": "Shared MCP result ready.",
+            "mode": "advice",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+            "response_source": "mcp",
+            "tool_result": {"tool_name": "search_transactions", "count": 1},
+            "grounding": None,
+            "stage_trace": ["observe", "plan", "act", "adapt"],
+            "agentic_workflow": {"observe": {}, "plan": {}},
+            "user_message": {"role": "user", "content": message},
+            "assistant_message": {
+                "role": "assistant",
+                "content": "Shared MCP result ready.",
+                "response_source": "mcp",
+                "tool_result": {"tool_name": "search_transactions", "count": 1},
+                "grounding": None,
+            },
+            "messages_to_store": [
+                {"role": "user", "content": message},
+                {
+                    "role": "assistant",
+                    "content": "Shared MCP result ready.",
+                    "mode": "advice",
+                    "response_source": "mcp",
+                    "plan_json": {"intent": "mcp"},
+                    "observation_json": {"month": "2026-09"},
+                    "stage_trace": ["observe", "plan", "act", "adapt"],
+                    "tool_result_json": {"tool_name": "search_transactions", "count": 1},
+                },
+            ],
+        }
+
+    monkeypatch.setattr(chat_service, "send_message", fake_send_message)
+
+    resp = _client().post(
+        "/api/chat",
+        json={"budget_id": 1, "message": "show my recent transactions", "history": [], "integration_mode": "mcp"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["response_source"] == "mcp"
+    assert resp.get_json()["tool_result"] == {"tool_name": "search_transactions", "count": 1}
+    assert seen["integration_mode"] == "mcp"
+    assert seen["context"] is None
+    assert seen["skip_deterministic"] is None
+
+
+def test_send_chat_message_passes_context(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(db_api, "list_chat_messages", lambda budget_id: [])
+    monkeypatch.setattr(db_api, "create_chat_message", lambda budget_id, payload: ({"id": 1}, 201))
+
+    def fake_send_message(budget_id, message, history=None, integration_mode=None, context=None, skip_deterministic=None):
+        seen.update(
+            {
+                "budget_id": budget_id,
+                "message": message,
+                "history": history,
+                "integration_mode": integration_mode,
+                "context": context,
+                "skip_deterministic": skip_deterministic,
+            }
+        )
+        return {
+            "reply": "Budget line summary ready.",
+            "mode": "advice",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+            "response_source": "deterministic",
+            "tool_result": None,
+            "grounding": None,
+            "stage_trace": ["observe", "plan", "act", "adapt"],
+            "agentic_workflow": {"observe": {}, "plan": {}},
+            "user_message": {"role": "user", "content": message},
+            "assistant_message": {"role": "assistant", "content": "Budget line summary ready.", "response_source": "deterministic"},
+            "messages_to_store": [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": "Budget line summary ready.", "mode": "advice", "response_source": "deterministic"},
+            ],
+        }
+
+    monkeypatch.setattr(chat_service, "send_message", fake_send_message)
+
+    resp = _client().post(
+        "/api/chat",
+        json={
+            "budget_id": 1,
+            "message": "Tell me about this line",
+            "history": [],
+            "context": {"ui_action": "line-pressure-explainer", "target_budget_line_id": 3, "target_category": "Dining"},
+        },
+    )
+
+    assert resp.status_code == 200
+    assert seen["integration_mode"] is None
+    assert seen["context"] == {"ui_action": "line-pressure-explainer", "target_budget_line_id": 3, "target_category": "Dining"}
+    assert seen["skip_deterministic"] is None
+
+
+def test_send_chat_message_passes_skip_deterministic(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(db_api, "list_chat_messages", lambda budget_id: [])
+    monkeypatch.setattr(db_api, "create_chat_message", lambda budget_id, payload: ({"id": 1}, 201))
+
+    def fake_send_message(budget_id, message, history=None, integration_mode=None, context=None, skip_deterministic=None):
+        seen.update(
+            {
+                "budget_id": budget_id,
+                "message": message,
+                "history": history,
+                "integration_mode": integration_mode,
+                "context": context,
+                "skip_deterministic": skip_deterministic,
+            }
+        )
+        return {
+            "reply": "AI fallback ready.",
+            "mode": "advice",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+            "response_source": "ollama",
+            "tool_result": None,
+            "grounding": None,
+            "stage_trace": ["observe", "plan", "act", "adapt"],
+            "agentic_workflow": {"observe": {}, "plan": {}},
+            "user_message": {"role": "user", "content": message},
+            "assistant_message": {"role": "assistant", "content": "AI fallback ready.", "response_source": "ollama"},
+            "messages_to_store": [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": "AI fallback ready.", "mode": "advice", "response_source": "ollama"},
+            ],
+        }
+
+    monkeypatch.setattr(chat_service, "send_message", fake_send_message)
+
+    resp = _client().post(
+        "/api/chat",
+        json={"budget_id": 1, "message": "Where am I overspending most?", "history": [], "skip_deterministic": True},
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["response_source"] == "ollama"
+    assert seen["skip_deterministic"] is True
 
 def test_apply_coach_proposal_route(monkeypatch):
     monkeypatch.setattr(
@@ -423,6 +592,729 @@ def test_chat_service_summarises_budget_with_grounded_data(monkeypatch):
     assert "Dining" in result["reply"]
 
 
+def test_chat_service_runs_mcp_transaction_lookup(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {"remaining_income_high": 425400},
+            "budget_lines": [
+                {"id": 3, "category": "Dining", "projected_high_total": 79000, "warn_at": 70000, "hard_cap": 85000}
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        mcp_client,
+        "call_tool",
+        lambda name, arguments: [
+            {"date": "2026-09-02", "merchant": "Merivale", "description": "Dinner", "amount": 84.5, "category_name": "Dining"},
+            {"date": "2026-09-09", "merchant": "The Oaks", "description": "Lunch", "amount": 21.0, "category_name": "Dining"},
+        ],
+    )
+
+    result = chat_service.send_message(1, "show me recent transactions for dining", integration_mode="mcp")
+
+    assert result["response_source"] == "mcp"
+    assert result["tool_result"]["tool_name"] == "search_transactions"
+    assert result["tool_result"]["count"] == 2
+    assert "shared MCP transaction search" in result["reply"]
+
+
+def test_chat_service_runs_grounded_rag_reply(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {"remaining_income_high": 425400},
+            "budget_lines": [
+                {"id": 3, "category": "Dining", "projected_high_total": 79000, "warn_at": 70000, "hard_cap": 85000}
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        rag_client,
+        "retrieve",
+        lambda feature, question, k: [
+            {"id": "budgets-1", "text": "# Dining guidance\nReduce non-essential dining when pressure is high.", "metadata": {"source": "budgets/budget-guidance.md"}, "distance": 0.42}
+        ],
+    )
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "answer": "Dining is under the most pressure, so reducing discretionary meals would make the biggest difference.",
+            "cited": ["budgets/budget-guidance.md"],
+            "insufficient_context": False,
+            "fallback": False,
+        },
+    )
+
+    result = chat_service.send_message(
+        1,
+        "using grounded budget guidance with sources, what should I focus on this month?",
+        integration_mode="rag",
+    )
+
+    assert result["response_source"] == "rag"
+    assert result["grounding"]["confidence"] == "high"
+    assert result["grounding"]["insufficient_context"] is False
+    assert result["grounding"]["citations"][0]["source"] == "budgets/budget-guidance.md"
+
+
+def test_chat_service_contextual_mcp_uses_target_budget_line(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {"remaining_income_high": 534000},
+            "budget_lines": [
+                {"id": 3, "category": "Dining", "projected_high_total": 19000, "warn_at": 19000, "hard_cap": 24000},
+                {"id": 11, "category": "Transport", "projected_high_total": 7000, "warn_at": 7000, "hard_cap": 10000},
+            ],
+        },
+    )
+    seen = {}
+
+    def fake_call_tool(name, arguments):
+        seen["name"] = name
+        seen["arguments"] = arguments
+        return [{"date": "2026-09-01", "merchant": "Cafe", "description": "Lunch", "amount": 18.0, "category_name": "Dining"}]
+
+    monkeypatch.setattr(mcp_client, "call_tool", fake_call_tool)
+
+    result = chat_service.send_message(
+        1,
+        "Show me the evidence",
+        integration_mode="mcp",
+        context={"ui_action": "line-transactions", "target_budget_line_id": 3, "target_category": "Dining"},
+    )
+
+    assert result["response_source"] == "mcp"
+    assert seen["name"] == "search_transactions"
+    assert seen["arguments"]["category_name"] == "Dining"
+    assert "Dining" in result["reply"]
+
+
+def test_chat_service_contextual_event_affordability_uses_planned_event(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 7000,
+                "planned_est_high_total": 19000,
+                "remaining_income_high": 534000,
+            },
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                }
+            ],
+            "planned_events": [
+                {"id": 9, "label": "Weekend trip", "category": "Dining", "est_high": 19000, "status": "planned"}
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Weekend trip would keep Dining within the hard cap, but it would use most of the remaining room this month.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
+
+    result = chat_service.send_message(
+        1,
+        "Can I still afford this planned event?",
+        context={"ui_action": "event-affordability", "target_planned_event_id": 9, "target_category": "Dining"},
+    )
+
+    assert result["response_source"] == "ollama"
+    assert "Weekend trip" in result["user_message"]["content"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Dining" in system_context
+    assert "Requested spend: $190.00" in system_context
+    assert "Projected spend after request: $380.00" in system_context
+
+
+def test_chat_service_skip_deterministic_routes_to_ollama(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {"remaining_income_high": 534000},
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(chat_service, "_deterministic_reply", lambda *_args, **_kwargs: pytest.fail("deterministic reply should be skipped"))
+    monkeypatch.setattr(rag_client, "retrieve", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "mode": "advice",
+            "say": "AI-only test response.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        },
+    )
+
+    result = chat_service.send_message(1, "Where am I overspending most?", skip_deterministic=True)
+
+    assert result["response_source"] == "ollama"
+    assert result["reply"] == "AI-only test response."
+
+
+def test_chat_service_affordability_train_ticket_prefers_ollama_with_computed_facts(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-10"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-10", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 3000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 557000,
+            },
+            "budget_lines": [
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 3000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 3000,
+                    "warn_at": 1500,
+                    "hard_cap": 2500,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Transport is already over cap, so another $20.00 would add more pressure and take it to $50.00 projected.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
+
+    result = chat_service.send_message(1, "can i afford to buy a $20 train ticket")
+
+    assert result["response_source"] == "ollama"
+    assert result["agentic_workflow"]["plan"]["execution_path"] == "ollama"
+    assert result["agentic_workflow"]["plan"]["uses_deterministic_facts"] is True
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Transport" in system_context
+    assert "Requested spend: $20.00" in system_context
+    assert "Projected spend after request: $50.00" in system_context
+    assert "Threshold state after request: over_hard_cap" in system_context
+
+
+def test_chat_service_affordability_follow_up_quantity_reuses_previous_amount(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-10"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-10", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 3000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 557000,
+            },
+            "budget_lines": [
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 3000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 3000,
+                    "warn_at": 1500,
+                    "hard_cap": 2500,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    history = [
+        {"role": "user", "content": "can i afford to buy a $20 train ticket"},
+        {"role": "assistant", "content": "No, that would put Transport over its hard cap."},
+    ]
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Two more at that amount would add $40.00, taking Transport to $70.00 projected.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
+
+    result = chat_service.send_message(1, "can i afford to buy 2", history)
+
+    assert result["response_source"] == "ollama"
+    assert result["mode"] == "advice"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Requested spend: $40.00" in system_context
+    assert "Projected spend after request: $70.00" in system_context
+
+
+def test_chat_service_affordability_guardrail_overrides_ollama_when_skip_is_off(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-10"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-10", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 3000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 557000,
+            },
+            "budget_lines": [
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 3000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 3000,
+                    "warn_at": 1500,
+                    "hard_cap": 2500,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "mode": "proposal",
+            "say": "I prepared a proposal to raise the hard cap.",
+            "question": None,
+            "proposal": {
+                "proposal_type": "adjust_budget_line_thresholds",
+                "operations": [{"action": "update_budget_line", "budget_line_id": 11, "fields": {"hard_cap": 5000}}],
+            },
+            "fallback": False,
+        },
+    )
+
+    result = chat_service.send_message(1, "can i afford to buy a $20 train ticket")
+
+    assert result["response_source"] == "deterministic"
+    assert result["mode"] == "advice"
+    assert result["proposal"] is None
+    assert "adding $20.00 would take the projected total to $50.00" in result["reply"]
+
+
+def test_chat_service_skip_deterministic_bypasses_affordability_guardrail(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-10"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-10", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 3000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 557000,
+            },
+            "budget_lines": [
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 3000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 3000,
+                    "warn_at": 1500,
+                    "hard_cap": 2500,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "mode": "advice",
+            "say": "AI affordability response.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        },
+    )
+
+    result = chat_service.send_message(1, "can i afford to buy a $20 train ticket", skip_deterministic=True)
+
+    assert result["response_source"] == "ollama"
+    assert result["reply"] == "AI affordability response."
+
+
+def test_chat_service_ollama_path_builds_mcp_and_rag_context(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 7000,
+                "planned_est_high_total": 19000,
+                "remaining_income_high": 534000,
+            },
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    monkeypatch.setattr(
+        mcp_client,
+        "call_tool",
+        lambda name, arguments: [
+            {"date": "2026-09-01", "merchant": "Cafe", "description": "Lunch", "amount": 18.0, "category_name": "Dining"}
+        ],
+    )
+    monkeypatch.setattr(
+        rag_client,
+        "retrieve",
+        lambda feature, question, k: [
+            {
+                "id": "budgets-1",
+                "text": "# Budget Coach guidance\nExplain whether the category pressure comes from actual spend or planned events.",
+                "metadata": {"source": "budgets/budget-guidance.md"},
+                "distance": 0.42,
+            }
+        ],
+    )
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Dining is under pressure mainly because of planned spending, and the shared guidance suggests keeping that category tight.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
+
+    result = chat_service.send_message(1, "What should I focus on for Dining this month?", skip_deterministic=True)
+
+    assert result["response_source"] == "ollama"
+    assert result["tool_result"]["tool_name"] == "search_transactions"
+    assert result["tool_result"]["count"] == 1
+    assert result["grounding"]["confidence"] == "high"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Shared MCP transaction evidence" in system_context
+    assert "Retrieved guidance" in system_context
+    assert "Computed budget facts" in system_context
+    assert "Focus line: Dining" in system_context
+    assert "Budget Coach guidance" in system_context
+
+
+def test_chat_service_ollama_affordability_prompt_includes_computed_budget_facts(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-10"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-10", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 3000,
+                "planned_est_high_total": 0,
+                "remaining_income_high": 557000,
+            },
+            "budget_lines": [
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 3000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 3000,
+                    "warn_at": 1500,
+                    "hard_cap": 2500,
+                }
+            ],
+            "transactions": {"other_expenses": []},
+        },
+    )
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "AI affordability response.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
+
+    result = chat_service.send_message(1, "can i afford to buy a $20 train ticket", skip_deterministic=True)
+
+    assert result["response_source"] == "ollama"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Computed budget facts" in system_context
+    assert "Affordability target: Transport" in system_context
+    assert "Requested spend: $20.00" in system_context
+    assert "Remaining income before spend: $5,570.00" in system_context
+    assert "Remaining income after spend: $5,550.00" in system_context
+    assert "Current threshold state: over_hard_cap" in system_context
+    assert "Threshold state after request: over_hard_cap" in system_context
+
+
+def test_chat_service_uses_grounded_fallback_when_rag_model_punts(monkeypatch):
+    monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
+    monkeypatch.setattr(
+        summary_service,
+        "build_budget_summary",
+        lambda _budget_id: {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {"remaining_income_high": 534000},
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                },
+                {
+                    "id": 11,
+                    "category": "Transport",
+                    "actual_spend": 7000,
+                    "planned_est_high_total": 0,
+                    "projected_high_total": 7000,
+                    "warn_at": 7000,
+                    "hard_cap": 10000,
+                },
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        rag_client,
+        "retrieve",
+        lambda feature, question, k: [
+            {
+                "id": "budgets-1",
+                "text": "# Budget Coach guidance\nPrioritise the category under the most pressure.",
+                "metadata": {"source": "budget-guidance.md"},
+                "distance": 0.898,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "answer": "I couldn't ground a reliable answer from the retrieved budget guidance right now.",
+            "cited": [],
+            "insufficient_context": True,
+            "fallback": False,
+        },
+    )
+
+    result = chat_service.send_message(
+        1,
+        "using grounded budget guidance with sources, what should I focus on this month?",
+        integration_mode="rag",
+    )
+
+    assert result["response_source"] == "rag"
+    assert result["grounding"]["insufficient_context"] is False
+    assert result["grounding"]["citations"][0]["source"] == "budget-guidance.md"
+    assert "Dining" in result["reply"]
+    assert "week-ahead planned spending" in result["reply"]
+
+
+def test_grounded_prompt_formats_money_and_week_ahead_context():
+    messages = grounded_prompt.build(
+        "Using grounded budget guidance with sources, what should I focus on this month?",
+        {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "actual_spend_total": 0,
+                "planned_est_high_total": 19000,
+                "remaining_income_high": 541000,
+            },
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                }
+            ],
+        },
+        [
+            {
+                "id": "budgets-1",
+                "text": "# Budget Coach guidance\nUse planned-event pressure to prioritise categories.",
+                "metadata": {"source": "budgets/budget-guidance.md"},
+                "distance": 0.42,
+            }
+        ],
+    )
+
+    assert "week-ahead plan or planned spending" in messages[0]["content"]
+    payload = json.loads(messages[1]["content"])
+    assert payload["budget"]["declared_income_display"] == "$5,600.00"
+    assert payload["totals"]["planned_est_high_total_display"] == "$190.00"
+    assert payload["budget_lines"][0]["actual_spend_display"] == "$0.00"
+    assert payload["budget_lines"][0]["projected_high_total_display"] == "$190.00"
+    assert payload["budget_lines"][0]["pressure_basis"] == "week-ahead planned spending"
+
+
+def test_chat_prompt_includes_supplemental_context_sections():
+    messages = chat_prompt.build(
+        "What should I focus on this month?",
+        [{"role": "user", "content": "hello"}],
+        {
+            "budget": {"id": 1, "month": "2026-09", "declared_income": 560000},
+            "totals": {
+                "declared_income": 560000,
+                "actual_spend_total": 7000,
+                "planned_est_high_total": 19000,
+                "remaining_income_high": 534000,
+            },
+            "budget_lines": [
+                {
+                    "id": 3,
+                    "category": "Dining",
+                    "actual_spend": 0,
+                    "planned_est_high_total": 19000,
+                    "projected_high_total": 19000,
+                    "warn_at": 19000,
+                    "hard_cap": 24000,
+                }
+            ],
+            "coach_proposals": [],
+        },
+        {
+            "context_hints": {"ui_action": "line-grounded-advice", "target_category": "Dining"},
+            "mcp_transactions": {
+                "tool_name": "search_transactions",
+                "count": 1,
+                "scope": "Dining",
+                "total_matched_amount": 18.0,
+                "result_preview": [
+                    {"date": "2026-09-01", "merchant": "Cafe", "amount": 18.0, "category_name": "Dining"}
+                ],
+            },
+            "rag_guidance": {
+                "retrieval": [
+                    {
+                        "id": "budgets-1",
+                        "source": "budgets/budget-guidance.md",
+                        "distance": 0.42,
+                        "text": "# Budget Coach guidance\nFocus on categories under pressure from planned events first.",
+                    }
+                ]
+            },
+        },
+    )
+
+    payload = "\n".join(message["content"] for message in messages if message.get("role") == "system")
+
+    assert "Context hints:" in payload
+    assert "Shared MCP transaction evidence" in payload
+    assert "Retrieved guidance" in payload
+    assert "Focus on categories under pressure from planned events first." in payload
+
+
 def test_chat_service_answers_overspending_from_current_thresholds(monkeypatch):
     monkeypatch.setattr(db_api, "get_budget", lambda _budget_id: {"id": 1, "month": "2026-09"})
     monkeypatch.setattr(
@@ -458,13 +1350,25 @@ def test_chat_service_answers_overspending_from_current_thresholds(monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    monkeypatch.setattr(
+        guard,
+        "run",
+        lambda *_args, **_kwargs: {
+            "mode": "advice",
+            "say": "Mobile is the line under the most pressure right now because it is already over its hard cap.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        },
+    )
 
     result = chat_service.send_message(1, "Where am I overspending most?")
 
     assert result["mode"] == "advice"
-    assert "You are overspending most in Mobile." in result["reply"]
-    assert "$20.00 over the hard cap of $100.00" in result["reply"]
+    assert result["response_source"] == "ollama"
+    assert result["reply"] == "Mobile is the line under the most pressure right now because it is already over its hard cap."
+    assert result["agentic_workflow"]["plan"]["execution_path"] == "ollama"
+    assert result["agentic_workflow"]["plan"]["execution_reason"] == "llm_first_auto"
 
 
 def test_chat_service_reuses_recent_amount_for_budget_impact(monkeypatch):
@@ -489,15 +1393,33 @@ def test_chat_service_reuses_recent_amount_for_budget_impact(monkeypatch):
             "budget_lines": [],
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "That extra $80.00 would reduce your projected remaining income from $4,254.00 to $4,174.00 this month.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "how does it affect my budget", history)
 
     assert result["mode"] == "advice"
+    assert result["response_source"] == "ollama"
     assert result["question"] is None
-    assert "$80.00" in result["reply"]
-    assert "$4,254.00" in result["reply"]
-    assert "$4,174.00" in result["reply"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Requested spend: $80.00" in system_context
+    assert "Remaining income before spend: $4,254.00" in system_context
+    assert "Remaining income after spend: $4,174.00" in system_context
 
 
 def test_chat_service_answers_category_only_affordability_from_budget(monkeypatch):
@@ -526,14 +1448,34 @@ def test_chat_service_answers_category_only_affordability_from_budget(monkeypatc
             ],
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Dining is already in warning range, but you still have $60.00 before the hard cap if you eat out again this month.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "Can I still afford to eat out this month?")
 
+    assert result["response_source"] == "ollama"
     assert result["mode"] == "advice"
     assert result["question"] is None
-    assert "Dining is already in warning range" in result["reply"]
-    assert "$60.00 left before reaching the hard cap" in result["reply"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Dining" in system_context
+    assert "Requested spend: unknown" in system_context
+    assert "Current projected spend: $790.00" in system_context
+    assert "Current threshold state: warning" in system_context
 
 
 def test_chat_service_answers_spend_more_question_from_current_mobile_budget(monkeypatch):
@@ -633,15 +1575,33 @@ def test_chat_service_keeps_music_subscription_affordability_grounded(monkeypatc
             "transactions": {"other_expenses": []},
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Another $50.00 music subscription would take Music subscriptions to $250.00 projected, which is $80.00 over the hard cap.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "can i afford a new monthly music subscription of 50$ a month")
 
     assert result["mode"] == "advice"
+    assert result["response_source"] == "ollama"
     assert result["proposal"] is None
-    assert "Music subscriptions" in result["reply"]
-    assert "$250.00" in result["reply"]
-    assert "$80.00 over the hard cap of $170.00" in result["reply"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Music subscriptions" in system_context
+    assert "Requested spend: $50.00" in system_context
+    assert "Projected spend after request: $250.00" in system_context
 
 
 def test_chat_service_treats_category_only_follow_up_as_affordability_context(monkeypatch):
@@ -675,14 +1635,32 @@ def test_chat_service_treats_category_only_follow_up_as_affordability_context(mo
             "transactions": {"other_expenses": []},
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "If you mean Music subscriptions, adding that $50.00 would take the line to $250.00 projected.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "a music subscription", history)
 
     assert result["mode"] == "advice"
+    assert result["response_source"] == "ollama"
     assert result["proposal"] is None
-    assert "Music subscriptions" in result["reply"]
-    assert "$250.00" in result["reply"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Music subscriptions" in system_context
+    assert "Requested spend: $50.00" in system_context
 
 
 def test_chat_service_uses_latest_open_proposal_for_increase_it_another_amount(monkeypatch):
@@ -788,14 +1766,31 @@ def test_chat_service_multiplies_follow_up_quantity_from_recent_affordability_co
             "transactions": {"other_expenses": []},
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Two more would add $100.00, taking Music subscriptions to $300.00 projected.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "what about 2", history)
 
     assert result["mode"] == "advice"
-    assert "$100.00" in result["reply"]
-    assert "$300.00" in result["reply"]
-    assert "$30.00 over the hard cap of $270.00" in result["reply"]
+    assert result["response_source"] == "ollama"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Requested spend: $100.00" in system_context
+    assert "Projected spend after request: $300.00" in system_context
 
 
 def test_chat_service_multiplies_two_50_music_subscriptions(monkeypatch):
@@ -829,14 +1824,31 @@ def test_chat_service_multiplies_two_50_music_subscriptions(monkeypatch):
             "transactions": {"other_expenses": []},
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Two $50.00 subscriptions would add $100.00, taking Music subscriptions to $300.00 projected.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "what about 2 $50 music subscriptions", history)
 
     assert result["mode"] == "advice"
-    assert "$100.00" in result["reply"]
-    assert "$300.00" in result["reply"]
-    assert "$30.00 over the hard cap of $270.00" in result["reply"]
+    assert result["response_source"] == "ollama"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Requested spend: $100.00" in system_context
+    assert "Projected spend after request: $300.00" in system_context
 
 
 def test_chat_service_uses_recent_music_context_for_accommodate_follow_up(monkeypatch):
@@ -934,14 +1946,31 @@ def test_chat_service_summarises_music_budget_line_without_stale_affordability(m
             "transactions": {"other_expenses": []},
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "Music subscriptions is currently at $200.00 projected, which is still within its thresholds but worth watching.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "tell me about my music subscription budget line", history)
 
+    assert result["response_source"] == "ollama"
     assert result["mode"] == "advice"
-    assert "Music subscriptions is currently spent $200.00" in result["reply"]
-    assert "The warning amount is $240.00 and the hard cap is $270.00." in result["reply"]
-    assert "within its thresholds" in result["reply"]
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Focus line: Music subscriptions at $200.00" in system_context
+    assert "Music subscriptions | projected $200.00 | warn $240.00 | cap $270.00 | state=within_threshold" in system_context
 
 
 def test_chat_service_revises_transport_proposal_for_spend_at_least_target(monkeypatch):
@@ -1194,13 +2223,31 @@ def test_chat_service_answers_yes_no_follow_up_from_recent_affordability_context
             ],
         },
     )
-    monkeypatch.setattr(guard, "run", lambda *args, **kwargs: pytest.fail("guard should not be called"))
+    captured = {}
+
+    def fake_run(_model, build_messages, _validator, _fallback):
+        captured["messages"] = build_messages(None)
+        return {
+            "mode": "advice",
+            "say": "No, another $90.00 would push Dining further over its hard cap this month.",
+            "question": None,
+            "proposal": None,
+            "fallback": False,
+        }
+
+    monkeypatch.setattr(guard, "run", fake_run)
 
     result = chat_service.send_message(1, "oh but i wont be over?", history)
 
     assert result["mode"] == "advice"
-    assert "No, that would put Dining over its hard cap." in result["reply"]
-    assert "$90.00" in result["reply"]
+    assert result["response_source"] == "ollama"
+    system_context = "\n".join(
+        message["content"]
+        for message in captured["messages"]
+        if isinstance(message, dict) and message.get("role") == "system"
+    )
+    assert "Affordability target: Dining" in system_context
+    assert "Requested spend: $90.00" in system_context
 
 
 def test_chat_service_creates_reviewable_adjustment_proposal(monkeypatch):

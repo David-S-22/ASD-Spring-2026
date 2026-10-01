@@ -32,6 +32,9 @@ jobs:
 
   build-health:
     runs-on: ubuntu-latest
+    env:
+      MCP_ENABLED: "false"
+      RAG_ENABLED: "false"
     needs: test
     steps:
       - uses: actions/checkout@v6

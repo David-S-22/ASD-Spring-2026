@@ -1,0 +1,10 @@
+Review the Budgets MCP validation evidence.
+Decide whether it demonstrates a working Release 1 Budgets MCP path through the backend.
+Call out:
+- backend health and mode state
+- whether the response source is MCP
+- whether a transaction-search style tool result was returned
+- any missing proof or reliability concern
+
+Keep the finding concise and evidence-based.
+Reply in at most 70 words.

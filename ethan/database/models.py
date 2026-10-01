@@ -207,6 +207,8 @@ class ChatMessage(db.Model):
     plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     observation_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     stage_trace: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    tool_result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    grounding_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str] = mapped_column(String(40), nullable=False)
 
     budget: Mapped[Budget] = relationship(back_populates="chat_messages")
@@ -221,7 +223,7 @@ class ChatMessage(db.Model):
             name="ck_chat_messages_mode",
         ),
         CheckConstraint(
-            "response_source IS NULL OR response_source IN ('deterministic', 'ollama')",
+            "response_source IS NULL OR response_source IN ('deterministic', 'ollama', 'mcp', 'rag')",
             name="ck_chat_messages_response_source",
         ),
     )
@@ -238,5 +240,7 @@ class ChatMessage(db.Model):
             "plan_json": self.plan_json,
             "observation_json": self.observation_json,
             "stage_trace": self.stage_trace,
+            "tool_result_json": self.tool_result_json,
+            "grounding_json": self.grounding_json,
             "created_at": self.created_at,
         }

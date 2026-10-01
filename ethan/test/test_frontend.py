@@ -29,6 +29,7 @@ def test_budgets_frontend_contains_overview_screen():
     assert 'id="coach-proposals-list"' in index_html
     assert 'id="chat-form"' in index_html
     assert 'id="chat-input"' in index_html
+    assert 'id="skip-deterministic-toggle"' in index_html
     assert 'id="reset-chat-button"' in index_html
     assert 'id="show-rejected-proposals"' in index_html
     assert "data-edit-budget-line" in index_html
@@ -39,6 +40,12 @@ def test_budgets_frontend_contains_overview_screen():
     assert "Week Ahead" in index_html
     assert "Can I afford?" in index_html
     assert "Chat with Tally (AI)" in index_html
+    assert "Show relevant transactions (MCP)" in index_html
+    assert "Get grounded advice (RAG)" in index_html
+    assert "Why is this under pressure?" in index_html
+    assert "Show transactions" in index_html
+    assert "Show similar spending" in index_html
+    assert "Can I still afford this?" in index_html
     assert "Show other expenses" in index_html
     assert "data-quick-add-budget-line" in index_html
     assert "const pageRoot = document.querySelector('.budgets-page');" in index_html
@@ -56,12 +63,26 @@ def test_budgets_frontend_contains_overview_screen():
     assert "function affordabilityOutcome(category, amountCents)" in index_html
     assert "function updateAffordabilityPreview()" in index_html
     assert "function setChatActionsEnabled(isEnabled, message)" in index_html
+    assert "function shouldSkipDeterministic()" in index_html
+    assert "function chatReadyStatusMessage()" in index_html
     assert "function renderChatMessages(messages)" in index_html
+    assert "tool_result_json" in index_html
+    assert "grounding_json" in index_html
+    assert "Insufficient context" in index_html
+    assert "data-line-chat-action" in index_html
+    assert "data-event-chat-action" in index_html
     assert "function renderCoachProposals(summary)" in index_html
     assert "async function applyCoachProposal(proposalId)" in index_html
     assert "async function rejectCoachProposal(proposalId)" in index_html
     assert "async function readApiJson(response, requestMessage, unexpectedMessage)" in index_html
     assert "data-chat-chip" in index_html
+    assert "function contextualChatRequestForLine(line, uiAction)" in index_html
+    assert "function contextualChatRequestForEvent(plannedEvent, uiAction)" in index_html
+    assert "function scrollToChatPanel()" in index_html
+    assert "coachPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });" in index_html
+    assert "async function dispatchChatMessage(message, integrationMode, context, shouldClearInput)" in index_html
+    assert "skip_deterministic: shouldSkipDeterministic()" in index_html
+    assert "scrollToChatPanel();\n                dispatchChatMessage(request.message, request.integrationMode, request.context, false)" in index_html
     assert "data-apply-proposal" in index_html
     assert "data-reject-proposal" in index_html
     assert "Projected warning" in index_html
@@ -77,3 +98,4 @@ def test_budgets_frontend_contains_overview_screen():
     assert "/summary" in index_html
     assert "/budgets-backend/api/budgets/' + encodeURIComponent(budgetId) + '/chat-messages" in index_html
     assert "This will also remove " in index_html
+    assert "|| (findBudgetByMonth(currentMonth) ? currentMonth : null)" in index_html

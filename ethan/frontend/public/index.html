@@ -792,6 +792,48 @@
             border: 1px solid rgba(148, 163, 184, 0.2);
         }
 
+        .chat-message-meta {
+            display: grid;
+            gap: 0.55rem;
+            margin-top: 0.7rem;
+            padding-top: 0.7rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+            font-size: 0.9rem;
+        }
+
+        .chat-message-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .chat-message-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.18rem 0.6rem;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            color: #cbd5e1;
+            font-size: 0.78rem;
+        }
+
+        .chat-message-badge.warning {
+            color: #fde68a;
+            border-color: rgba(245, 158, 11, 0.25);
+        }
+
+        .chat-message-badge.ok {
+            color: #bbf7d0;
+            border-color: rgba(52, 211, 153, 0.25);
+        }
+
+        .chat-message-list {
+            margin: 0;
+            padding-left: 1.1rem;
+            color: var(--color-text-muted, #94a3b8);
+        }
+
         .chat-form {
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto;
@@ -1018,7 +1060,13 @@
                                         <button type="button" class="chat-chip" data-chat-chip="Where am I overspending most?">Where am I overspending most?</button>
                                         <button type="button" class="chat-chip" data-chat-chip="Which categories are closest to warning?">Which categories are closest to warning?</button>
                                         <button type="button" class="chat-chip" data-chat-chip="Can I still afford to eat out this month?">Can I still afford to eat out this month?</button>
+                                        <button type="button" class="chat-chip" data-chat-chip="Show me the most relevant transactions for this month's budget pressure." data-chat-integration="mcp">Show relevant transactions (MCP)</button>
+                                        <button type="button" class="chat-chip" data-chat-chip="Using grounded budget guidance with sources, what should I focus on this month?" data-chat-integration="rag">Get grounded advice (RAG)</button>
                                     </div>
+                                    <label class="proposal-toggle" for="skip-deterministic-toggle">
+                                        <input id="skip-deterministic-toggle" type="checkbox" checked>
+                                        <span>Skip deterministic (testing)</span>
+                                    </label>
                                     <button id="reset-chat-button" class="chat-reset-button" type="button">Restart chat</button>
                                 </div>
                                 <div id="chat-history" class="chat-history">
@@ -1028,7 +1076,7 @@
                                     <input id="chat-input" name="message" type="text" placeholder="Ask Tally about this month's budget" autocomplete="off">
                                     <button id="send-chat-button" type="submit">Ask</button>
                                 </form>
-                                <p id="chat-status" class="chat-status">This first AI slice keeps chat context only while this page stays open.</p>
+                                <p id="chat-status" class="chat-status">Chat history is stored per budget month and can now use shared MCP and RAG integrations.</p>
                             </div>
                         </div>
                         <div class="coach-column">
@@ -1090,6 +1138,18 @@
 
         function formatChatHtml(value) {
             return escapeHtml(value).replaceAll('\n', '<br>');
+        }
+
+        function formatCurrencyFromAmount(value) {
+            if (!Number.isFinite(value)) {
+                return '-';
+            }
+            return new Intl.NumberFormat('en-AU', {
+                style: 'currency',
+                currency: 'AUD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(value);
         }
 
         function formatCurrencyFromCents(value) {
@@ -1351,11 +1411,13 @@
             const input = document.getElementById('chat-input');
             const button = document.getElementById('send-chat-button');
             const resetButton = document.getElementById('reset-chat-button');
+            const skipToggle = document.getElementById('skip-deterministic-toggle');
             const historyElement = document.getElementById('chat-history');
             const chipButtons = document.querySelectorAll('[data-chat-chip]');
             input.disabled = !isEnabled;
             button.disabled = !isEnabled;
             resetButton.disabled = !isEnabled;
+            skipToggle.disabled = !isEnabled;
             chipButtons.forEach(function (chipButton) {
                 chipButton.disabled = !isEnabled;
             });
@@ -1365,9 +1427,20 @@
             }
             setChatStatus(
                 isEnabled
-                    ? "This first AI slice keeps chat context only while this page stays open."
+                    ? chatReadyStatusMessage()
                     : (message || 'Select a budget month to start chatting with Tally.')
             );
+        }
+
+        function shouldSkipDeterministic() {
+            const toggle = document.getElementById('skip-deterministic-toggle');
+            return !!(toggle && toggle.checked);
+        }
+
+        function chatReadyStatusMessage() {
+            return shouldSkipDeterministic()
+                ? 'This first AI slice keeps chat context only while this page stays open. Deterministic rules are currently skipped for testing.'
+                : 'This first AI slice keeps chat context only while this page stays open. Deterministic rules are currently enabled.';
         }
 
         function findBudgetLine(lineId) {
@@ -1563,6 +1636,11 @@
                     + '<span>Warns at <strong>' + escapeHtml(formatCurrencyFromCents(warnAt)) + '</strong></span>'
                     + '<span>Spent <strong>' + escapeHtml(formatCurrencyFromCents(actual)) + '</strong> - Planned <strong>' + escapeHtml(formatCurrencyFromCents(Number.isFinite(line.planned_est_high_total) ? line.planned_est_high_total : 0)) + '</strong></span>'
                     + '<span class="budget-line-state ' + lineState.className + '">' + escapeHtml(lineState.label) + '</span>'
+                    + '</div>'
+                    + '<div class="budget-line-form-actions">'
+                    + '<button type="button" data-line-chat-action="line-pressure-explainer" data-line-id="' + escapeHtml(String(line.id || '')) + '">Why is this under pressure?</button>'
+                    + '<button type="button" data-line-chat-action="line-transactions" data-line-id="' + escapeHtml(String(line.id || '')) + '">Show transactions</button>'
+                    + '<button type="button" data-line-chat-action="line-grounded-advice" data-line-id="' + escapeHtml(String(line.id || '')) + '">Get grounded advice</button>'
                     + '</div>'
                     + '<div class="budget-line-form-actions">'
                     + '<button type="button" data-edit-budget-line="' + escapeHtml(line.id || '') + '">Edit</button>'
@@ -1782,6 +1860,11 @@
                     + '<span>' + escapeHtml(lowEstimate) + ' - ' + escapeHtml(highEstimate) + '</span>'
                     + '</div>'
                     + '<div class="budget-line-form-actions">'
+                    + '<button type="button" data-event-chat-action="event-affordability" data-event-id="' + escapeHtml(String(plannedEvent.id || '')) + '">Can I still afford this?</button>'
+                    + '<button type="button" data-event-chat-action="event-transactions" data-event-id="' + escapeHtml(String(plannedEvent.id || '')) + '">Show similar spending</button>'
+                    + '<button type="button" data-event-chat-action="event-grounded-advice" data-event-id="' + escapeHtml(String(plannedEvent.id || '')) + '">Get grounded advice</button>'
+                    + '</div>'
+                    + '<div class="budget-line-form-actions">'
                     + '<button type="button" data-edit-planned-event="' + escapeHtml(plannedEvent.id || '') + '">Edit</button>'
                     + '<button type="button" data-cancel-planned-event="' + escapeHtml(plannedEvent.id || '') + '">Cancel</button>'
                     + '</div>'
@@ -1816,7 +1899,41 @@
             }
             historyElement.innerHTML = budgetState.chatMessages.map(function (message) {
                 const role = message.role === 'user' ? 'user' : 'assistant';
-                return '<div class="chat-message ' + role + '">' + formatChatHtml(message.content || '') + '</div>';
+                const grounding = message.grounding || message.grounding_json || null;
+                const toolResult = message.tool_result || message.tool_result_json || null;
+                const badges = [];
+                if (role === 'assistant' && typeof message.response_source === 'string' && message.response_source) {
+                    badges.push('<span class="chat-message-badge">' + escapeHtml(message.response_source.toUpperCase()) + '</span>');
+                }
+                if (grounding && typeof grounding.confidence === 'string' && grounding.confidence && grounding.confidence !== 'none') {
+                    badges.push('<span class="chat-message-badge ok">Confidence: ' + escapeHtml(grounding.confidence) + '</span>');
+                }
+                if (grounding && grounding.insufficient_context) {
+                    badges.push('<span class="chat-message-badge warning">Insufficient context</span>');
+                }
+                const citations = grounding && Array.isArray(grounding.citations)
+                    ? grounding.citations.map(function (citation) {
+                        const label = citation && citation.label ? citation.label : (citation && citation.source ? citation.source : 'Source');
+                        const source = citation && citation.source ? citation.source : '';
+                        return '<li>' + escapeHtml(label) + (source ? ' <span>(' + escapeHtml(source) + ')</span>' : '') + '</li>';
+                    }).join('')
+                    : '';
+                const toolPreview = toolResult && Array.isArray(toolResult.result_preview)
+                    ? toolResult.result_preview.map(function (row) {
+                        const amount = row && Number.isFinite(row.amount) ? formatCurrencyFromAmount(row.amount) : '-';
+                        const merchant = row && row.merchant ? row.merchant : 'Unknown merchant';
+                        const date = row && row.date ? row.date : 'Unknown date';
+                        return '<li>' + escapeHtml(date + ' - ' + merchant) + ' (' + escapeHtml(amount) + ')</li>';
+                    }).join('')
+                    : '';
+                const meta = badges.length || citations || toolPreview
+                    ? '<div class="chat-message-meta">'
+                        + (badges.length ? '<div class="chat-message-badges">' + badges.join('') + '</div>' : '')
+                        + (toolPreview ? '<ul class="chat-message-list">' + toolPreview + '</ul>' : '')
+                        + (citations ? '<ul class="chat-message-list">' + citations + '</ul>' : '')
+                        + '</div>'
+                    : '';
+                return '<div class="chat-message ' + role + '">' + formatChatHtml(message.content || '') + meta + '</div>';
             }).join('');
             historyElement.scrollTop = historyElement.scrollHeight;
         }
@@ -2010,7 +2127,14 @@
                     throw new Error(result && result.error ? result.error : 'Unable to load chat history.');
                 }
                 renderChatMessages(Array.isArray(result) ? result.map(function (message) {
-                    return { role: message.role, content: message.content };
+                    return {
+                        role: message.role,
+                        content: message.content,
+                        mode: message.mode,
+                        response_source: message.response_source,
+                        tool_result_json: message.tool_result_json || null,
+                        grounding_json: message.grounding_json || null,
+                    };
                 }) : []);
             } catch (error) {
                 if (!isPageActive()) {
@@ -2063,15 +2187,72 @@
             }
         }
 
-        async function sendChatMessage(event) {
-            event.preventDefault();
+        function contextualChatRequestForLine(line, uiAction) {
+            if (!line || !line.category) {
+                return null;
+            }
+            const request = {
+                integrationMode: 'auto',
+                context: {
+                    ui_action: uiAction,
+                    target_budget_line_id: Number(line.id),
+                    target_category: line.category,
+                },
+            };
+            if (uiAction === 'line-transactions') {
+                request.integrationMode = 'mcp';
+                request.message = 'Show me the most relevant transactions for ' + line.category + ' this month.';
+                return request;
+            }
+            if (uiAction === 'line-grounded-advice') {
+                request.integrationMode = 'rag';
+                request.message = 'Using grounded budget guidance with sources, what should I focus on for ' + line.category + ' this month?';
+                return request;
+            }
+            request.message = 'Tell me about the ' + line.category + ' budget line.';
+            return request;
+        }
+
+        function contextualChatRequestForEvent(plannedEvent, uiAction) {
+            if (!plannedEvent || !plannedEvent.category) {
+                return null;
+            }
+            const request = {
+                integrationMode: 'auto',
+                context: {
+                    ui_action: uiAction,
+                    target_planned_event_id: Number(plannedEvent.id),
+                    target_category: plannedEvent.category,
+                },
+            };
+            if (uiAction === 'event-affordability') {
+                request.message = 'Can I still afford this planned event?';
+                return request;
+            }
+            if (uiAction === 'event-transactions') {
+                request.integrationMode = 'mcp';
+                request.message = 'Show me similar recent transactions for ' + plannedEvent.category + ' this month.';
+                return request;
+            }
+            request.integrationMode = 'rag';
+            request.message = 'Using grounded budget guidance with sources, what should I watch out for with this planned event?';
+            return request;
+        }
+
+        function scrollToChatPanel() {
+            const coachPanel = document.getElementById('coach-panel');
+            if (!coachPanel || typeof coachPanel.scrollIntoView !== 'function') {
+                return;
+            }
+            coachPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function dispatchChatMessage(message, integrationMode, context, shouldClearInput) {
             if (!budgetState.activeBudgetId) {
                 setChatActionsEnabled(false, 'No budget has been created for this month yet, so chat is unavailable.');
                 return;
             }
-            const input = document.getElementById('chat-input');
             const button = document.getElementById('send-chat-button');
-            const message = input.value.trim();
             if (!message) {
                 return;
             }
@@ -2085,6 +2266,9 @@
                         budget_id: Number(budgetState.activeBudgetId),
                         message: message,
                         history: budgetState.chatMessages,
+                        integration_mode: integrationMode,
+                        context: context,
+                        skip_deterministic: shouldSkipDeterministic(),
                     }),
                 });
                 const result = await readApiJson(
@@ -2098,7 +2282,10 @@
                 if (!response.ok) {
                     throw new Error(result && result.error ? result.error : 'Unable to send chat message.');
                 }
-                input.value = '';
+                if (shouldClearInput) {
+                    const input = document.getElementById('chat-input');
+                    input.value = '';
+                }
                 renderChatMessages(budgetState.chatMessages.concat([
                     result.user_message,
                     result.assistant_message,
@@ -2111,7 +2298,13 @@
                     ? 'Tally used a fallback reply because the AI service was unavailable or returned invalid data.'
                     : 'Completed ' + ((result.stage_trace || []).join(' -> ') || 'observe -> plan -> act -> adapt')
                         + ' using '
-                        + (result.response_source === 'ollama' ? 'Ollama AI.' : 'grounded budget rules.'));
+                        + (result.response_source === 'ollama'
+                            ? 'Ollama AI.'
+                            : result.response_source === 'mcp'
+                                ? 'the shared MCP server.'
+                                : result.response_source === 'rag'
+                                    ? 'the shared RAG flow.'
+                                    : 'grounded budget rules.'));
             } catch (error) {
                 if (!isPageActive()) {
                     return;
@@ -2122,6 +2315,24 @@
                     button.disabled = false;
                 }
             }
+        }
+
+        async function sendChatMessage(event) {
+            event.preventDefault();
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            const integrationMode = input.dataset.integrationMode || 'auto';
+            let context = null;
+            if (input.dataset.chatContext) {
+                try {
+                    context = JSON.parse(input.dataset.chatContext);
+                } catch (_error) {
+                    context = null;
+                }
+            }
+            delete input.dataset.integrationMode;
+            delete input.dataset.chatContext;
+            await dispatchChatMessage(message, integrationMode, context, true);
         }
         function showEmptyMonthState(month) {
             budgetState.activeBudgetId = null;
@@ -2263,8 +2474,8 @@
                 });
                 const currentMonth = currentMonthValue();
                 budgetState.selectedMonth = budgetState.selectedMonth
-                    || (activeBudget ? activeBudget.month : null)
                     || (findBudgetByMonth(currentMonth) ? currentMonth : null)
+                    || (activeBudget ? activeBudget.month : null)
                     || currentMonth;
                 syncMonthInput();
                 await loadSelectedMonth();
@@ -2646,6 +2857,20 @@
             const deleteButton = event.target.closest('[data-delete-budget-line]');
             if (deleteButton) {
                 deleteBudgetLine(deleteButton.getAttribute('data-delete-budget-line'));
+                return;
+            }
+            const chatActionButton = event.target.closest('[data-line-chat-action]');
+            if (chatActionButton) {
+                const line = findBudgetLine(chatActionButton.getAttribute('data-line-id'));
+                const request = contextualChatRequestForLine(line, chatActionButton.getAttribute('data-line-chat-action'));
+                if (!request) {
+                    setChatStatus('Unable to start that coach action right now.');
+                    return;
+                }
+                scrollToChatPanel();
+                dispatchChatMessage(request.message, request.integrationMode, request.context, false).catch(function (error) {
+                    setChatStatus(error.message || 'Unable to send chat message.');
+                });
             }
         });
         document.getElementById('planned-events-list').addEventListener('click', function (event) {
@@ -2657,6 +2882,20 @@
             const cancelButton = event.target.closest('[data-cancel-planned-event]');
             if (cancelButton) {
                 cancelPlannedEvent(cancelButton.getAttribute('data-cancel-planned-event'));
+                return;
+            }
+            const chatActionButton = event.target.closest('[data-event-chat-action]');
+            if (chatActionButton) {
+                const plannedEvent = findPlannedEvent(chatActionButton.getAttribute('data-event-id'));
+                const request = contextualChatRequestForEvent(plannedEvent, chatActionButton.getAttribute('data-event-chat-action'));
+                if (!request) {
+                    setChatStatus('Unable to start that coach action right now.');
+                    return;
+                }
+                scrollToChatPanel();
+                dispatchChatMessage(request.message, request.integrationMode, request.context, false).catch(function (error) {
+                    setChatStatus(error.message || 'Unable to send chat message.');
+                });
             }
         });
         document.getElementById('other-expenses-panel').addEventListener('click', function (event) {
@@ -2673,7 +2912,10 @@
         document.getElementById('coach-panel').addEventListener('click', function (event) {
             const chipButton = event.target.closest('[data-chat-chip]');
             if (chipButton && !chipButton.disabled) {
-                document.getElementById('chat-input').value = chipButton.getAttribute('data-chat-chip') || '';
+                const input = document.getElementById('chat-input');
+                input.value = chipButton.getAttribute('data-chat-chip') || '';
+                input.dataset.integrationMode = chipButton.getAttribute('data-chat-integration') || 'auto';
+                delete input.dataset.chatContext;
                 document.getElementById('chat-form').requestSubmit();
                 return;
             }
@@ -2689,6 +2931,11 @@
                 rejectCoachProposal(rejectButton.getAttribute('data-reject-proposal')).catch(function (error) {
                     setChatStatus(error.message || 'Unable to reject coach proposal.');
                 });
+            }
+        });
+        document.getElementById('skip-deterministic-toggle').addEventListener('change', function () {
+            if (budgetState.activeBudgetId) {
+                setChatStatus(chatReadyStatusMessage());
             }
         });
         document.getElementById('show-rejected-proposals').addEventListener('change', function (event) {

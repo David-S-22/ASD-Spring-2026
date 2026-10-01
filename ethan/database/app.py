@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -23,7 +23,7 @@ PLANNED_EVENT_STATUSES = {"planned", "confirmed", "cancelled"}
 COACH_PROPOSAL_STATUSES = {"proposed", "accepted", "rejected"}
 CHAT_MESSAGE_ROLES = {"user", "assistant"}
 CHAT_MESSAGE_MODES = {"advice", "clarify", "proposal"}
-CHAT_RESPONSE_SOURCES = {"deterministic", "ollama"}
+CHAT_RESPONSE_SOURCES = {"deterministic", "ollama", "mcp", "rag"}
 
 
 class ApiError(Exception):
@@ -51,6 +51,42 @@ def _database_uri(db_path: str) -> str:
 
 def _now_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _current_budget_month() -> str:
+    return datetime.now().strftime("%Y-%m")
+
+
+def _derived_budget_status(month: str | None) -> str | None:
+    if month is None:
+        return None
+    current_month = _current_budget_month()
+    if month < current_month:
+        return "closed"
+    if month > current_month:
+        return "draft"
+    return "active"
+
+
+def _apply_derived_budget_status(budget: Budget) -> bool:
+    derived = _derived_budget_status(budget.month)
+    if budget.status == derived:
+        return False
+    budget.status = derived
+    budget.updated_at = _now_timestamp()
+    return True
+
+
+def _sync_budget_statuses() -> bool:
+    changed = False
+    budgets = db.session.scalars(select(Budget)).all()
+    for budget in budgets:
+        changed = _apply_derived_budget_status(budget) or changed
+    return changed
+
+
+def _budget_to_dict(budget: Budget) -> dict[str, object | None]:
+    return budget.to_dict()
 
 
 def _json_body() -> dict:
@@ -244,12 +280,85 @@ def _validate_chat_message_payload(data: dict) -> dict:
     _optional_json_object(data, "plan_json", values)
     _optional_json_object(data, "observation_json", values)
     _optional_string_list(data, "stage_trace", values)
+    _optional_json_object(data, "tool_result_json", values)
+    _optional_json_object(data, "grounding_json", values)
     _optional_int(data, "proposal_id", values)
     if values.get("role") is None:
         raise ApiError("role must be user or assistant", 422, "invalid_field")
     if values.get("content") is None:
         raise ApiError("content must not be empty", 422, "invalid_field")
     return values
+
+
+def _ensure_chat_message_columns():
+    rows = db.session.execute(text("PRAGMA table_info(chat_messages)")).fetchall()
+    existing = {str(row[1]) for row in rows}
+    missing_statements = []
+    if "tool_result_json" not in existing:
+        missing_statements.append("ALTER TABLE chat_messages ADD COLUMN tool_result_json JSON")
+    if "grounding_json" not in existing:
+        missing_statements.append("ALTER TABLE chat_messages ADD COLUMN grounding_json JSON")
+    for statement in missing_statements:
+        db.session.execute(text(statement))
+    if missing_statements:
+        db.session.commit()
+
+
+def _chat_messages_sql() -> str:
+    row = db.session.execute(
+        text("SELECT sql FROM sqlite_master WHERE type='table' AND name='chat_messages'")
+    ).fetchone()
+    if row is None or not row[0]:
+        return ""
+    return str(row[0])
+
+
+def _migrate_chat_messages_response_source_constraint():
+    sql = _chat_messages_sql()
+    if not sql or "'mcp'" in sql and "'rag'" in sql:
+        return
+    if "response_source IN ('deterministic', 'ollama')" not in sql:
+        return
+
+    db.session.execute(text(
+        """
+        CREATE TABLE chat_messages_new (
+            id INTEGER NOT NULL PRIMARY KEY,
+            budget_id INTEGER NOT NULL,
+            proposal_id INTEGER,
+            role VARCHAR(16) NOT NULL,
+            content TEXT NOT NULL,
+            mode VARCHAR(16),
+            response_source VARCHAR(16),
+            plan_json JSON,
+            observation_json JSON,
+            stage_trace JSON,
+            created_at VARCHAR(40) NOT NULL,
+            tool_result_json JSON,
+            grounding_json JSON,
+            CONSTRAINT ck_chat_messages_role CHECK (role IN ('user', 'assistant')),
+            CONSTRAINT ck_chat_messages_mode CHECK (mode IS NULL OR mode IN ('advice', 'clarify', 'proposal')),
+            CONSTRAINT ck_chat_messages_response_source CHECK (response_source IS NULL OR response_source IN ('deterministic', 'ollama', 'mcp', 'rag')),
+            FOREIGN KEY(budget_id) REFERENCES budgets (id) ON DELETE CASCADE,
+            FOREIGN KEY(proposal_id) REFERENCES coach_proposals (id) ON DELETE SET NULL
+        )
+        """
+    ))
+    db.session.execute(text(
+        """
+        INSERT INTO chat_messages_new (
+            id, budget_id, proposal_id, role, content, mode, response_source,
+            plan_json, observation_json, stage_trace, created_at, tool_result_json, grounding_json
+        )
+        SELECT
+            id, budget_id, proposal_id, role, content, mode, response_source,
+            plan_json, observation_json, stage_trace, created_at, tool_result_json, grounding_json
+        FROM chat_messages
+        """
+    ))
+    db.session.execute(text("DROP TABLE chat_messages"))
+    db.session.execute(text("ALTER TABLE chat_messages_new RENAME TO chat_messages"))
+    db.session.commit()
 
 
 def _get_budget_or_404(budget_id: str) -> Budget:
@@ -352,8 +461,12 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
     with application.app_context():
         db.create_all()
+        _ensure_chat_message_columns()
+        _migrate_chat_messages_response_source_constraint()
         if seed_demo_data:
             seed_database_if_empty()
+        if _sync_budget_statuses():
+            db.session.commit()
 
     @application.errorhandler(ApiError)
     def handle_api_error(error: ApiError):
@@ -385,8 +498,10 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
 
     @application.get("/budgets")
     def list_budgets():
+        if _sync_budget_statuses():
+            db.session.commit()
         budgets = db.session.scalars(select(Budget).order_by(Budget.month, Budget.id)).all()
-        return jsonify([budget.to_dict() for budget in budgets])
+        return jsonify([_budget_to_dict(budget) for budget in budgets])
 
     @application.post("/budgets")
     def create_budget():
@@ -401,19 +516,25 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
         )
         db.session.add(budget)
         db.session.commit()
-        return jsonify(budget.to_dict()), 201
+        if _sync_budget_statuses():
+            db.session.commit()
+        return jsonify(_budget_to_dict(budget)), 201
 
     @application.get("/budgets/by-month/<month>")
     def get_budget_by_month(month: str):
         _validate_month(month)
+        if _sync_budget_statuses():
+            db.session.commit()
         budget = db.session.scalar(select(Budget).where(Budget.month == month))
         if budget is None:
             raise ApiError("budget not found", 404, "budget_not_found")
-        return jsonify(budget.to_dict())
+        return jsonify(_budget_to_dict(budget))
 
     @application.get("/budgets/<budget_id>")
     def get_budget(budget_id: str):
-        return jsonify(_get_budget_or_404(budget_id).to_dict())
+        if _sync_budget_statuses():
+            db.session.commit()
+        return jsonify(_budget_to_dict(_get_budget_or_404(budget_id)))
 
     @application.patch("/budgets/<budget_id>")
     def patch_budget(budget_id: str):
@@ -425,7 +546,9 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
             setattr(budget, field, value)
         budget.updated_at = _now_timestamp()
         db.session.commit()
-        return jsonify(budget.to_dict())
+        if _sync_budget_statuses():
+            db.session.commit()
+        return jsonify(_budget_to_dict(budget))
 
     @application.delete("/budgets/<budget_id>")
     def delete_budget(budget_id: str):
@@ -636,6 +759,8 @@ def _create_app(db_path: str, seed_demo_data: bool = True) -> Flask:
             plan_json=values.get("plan_json"),
             observation_json=values.get("observation_json"),
             stage_trace=values.get("stage_trace"),
+            tool_result_json=values.get("tool_result_json"),
+            grounding_json=values.get("grounding_json"),
             created_at=_now_timestamp(),
         )
         db.session.add(message)

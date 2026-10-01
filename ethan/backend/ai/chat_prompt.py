@@ -191,7 +191,133 @@ def _proposal_feedback_summary(summary: dict) -> str:
     return "\n".join(lines) if lines else "No prior proposal outcomes recorded for this month."
 
 
-def build(message: str, history: list[dict], summary: dict, error: str | None = None) -> list[dict]:
+def _mcp_context_summary(chat_context: dict | None) -> str:
+    if not isinstance(chat_context, dict):
+        return "No shared MCP transaction evidence attached."
+    mcp_transactions = chat_context.get("mcp_transactions")
+    if not isinstance(mcp_transactions, dict):
+        return "No shared MCP transaction evidence attached."
+    preview = mcp_transactions.get("result_preview")
+    if not isinstance(preview, list) or not preview:
+        return "Shared MCP transaction search returned no matching preview rows."
+    lines = [
+        (
+            f"- {item.get('date') or 'unknown date'} | "
+            f"{item.get('merchant') or item.get('description') or 'unknown merchant'} | "
+            f"{_format_cents(int(round(float(item.get('amount', 0)) * 100))) if isinstance(item.get('amount'), (int, float)) and not isinstance(item.get('amount'), bool) else 'unknown amount'}"
+        )
+        for item in preview[:5]
+        if isinstance(item, dict)
+    ]
+    total_amount = mcp_transactions.get("total_matched_amount")
+    total_text = f"${float(total_amount):,.2f}" if isinstance(total_amount, (int, float)) and not isinstance(total_amount, bool) else "unknown"
+    scope = str(mcp_transactions.get("scope") or "this budget context")
+    return (
+        f"Shared MCP transaction evidence for {scope}: {mcp_transactions.get('count', 0)} match(es), total {total_text}.\n"
+        + "\n".join(lines)
+    )
+
+
+def _rag_context_summary(chat_context: dict | None) -> str:
+    if not isinstance(chat_context, dict):
+        return "No retrieved shared budget guidance attached."
+    rag_guidance = chat_context.get("rag_guidance")
+    if not isinstance(rag_guidance, dict):
+        return "No retrieved shared budget guidance attached."
+    retrieval = rag_guidance.get("retrieval")
+    if not isinstance(retrieval, list) or not retrieval:
+        return "No retrieved shared budget guidance attached."
+    lines: list[str] = []
+    for item in retrieval[:3]:
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or item.get("id") or "retrieved-source")
+        text = str(item.get("text") or "").strip().replace("\r", " ").replace("\n", " ")
+        if len(text) > 220:
+            text = text[:217].rstrip() + "..."
+        lines.append(f"- {source}: {text}")
+    return "Retrieved shared budget guidance:\n" + ("\n".join(lines) if lines else "No retrieved shared budget guidance attached.")
+
+
+def _context_hint_summary(chat_context: dict | None) -> str:
+    if not isinstance(chat_context, dict):
+        return "No UI context hints attached."
+    hints = chat_context.get("context_hints")
+    if not isinstance(hints, dict) or not hints:
+        return "No UI context hints attached."
+    parts: list[str] = []
+    for key in ("ui_action", "target_category", "target_budget_line_id", "target_planned_event_id"):
+        value = hints.get(key)
+        if value is None or value == "":
+            continue
+        parts.append(f"{key}={value}")
+    return ", ".join(parts) if parts else "No UI context hints attached."
+
+
+def _computed_budget_context_summary(chat_context: dict | None) -> str:
+    if not isinstance(chat_context, dict):
+        return "No computed budget facts attached."
+    computed = chat_context.get("computed_budget_context")
+    if not isinstance(computed, dict):
+        return "No computed budget facts attached."
+
+    kind = computed.get("kind")
+    if kind == "affordability":
+        requested = _format_cents(computed.get("requested_amount_cents"))
+        remaining_before = _format_cents(computed.get("remaining_income_before_cents"))
+        remaining_after = _format_cents(computed.get("remaining_income_after_cents"))
+        needs_amount = bool(computed.get("needs_amount_clarification"))
+        line = computed.get("line")
+        if not isinstance(line, dict):
+            if needs_amount:
+                return "- Affordability check needs the user to provide an amount before exact budget impact can be explained."
+            return (
+                f"- Requested spend: {requested}\n"
+                f"- Remaining income before spend: {remaining_before}\n"
+                f"- Remaining income after spend: {remaining_after}\n"
+                "- No specific budget line is currently resolved."
+            )
+        return (
+            f"- Affordability target: {line.get('category') or 'Unknown category'}\n"
+            f"- Requested spend: {requested}\n"
+            f"- Remaining income before spend: {remaining_before}\n"
+            f"- Remaining income after spend: {remaining_after}\n"
+            f"- Actual spend: {_format_cents(line.get('actual_spend_cents'))}\n"
+            f"- Planned spend: {_format_cents(line.get('planned_spend_cents'))}\n"
+            f"- Current projected spend: {_format_cents(line.get('projected_spend_cents'))}\n"
+            f"- Projected spend after request: {_format_cents(line.get('projected_after_spend_cents'))}\n"
+            f"- Warning amount: {_format_cents(line.get('warn_at_cents'))}\n"
+            f"- Hard cap: {_format_cents(line.get('hard_cap_cents'))}\n"
+            f"- Current threshold state: {line.get('threshold_state') or 'unknown'}\n"
+            f"- Threshold state after request: {line.get('threshold_state_after_spend') or 'unknown'}"
+        )
+
+    if kind == "pressure":
+        lines = computed.get("top_lines")
+        if not isinstance(lines, list) or not lines:
+            return "No computed budget facts attached."
+        focus_line = computed.get("focus_line")
+        parts: list[str] = []
+        if isinstance(focus_line, dict):
+            parts.append(
+                f"- Focus line: {focus_line.get('category') or 'Unknown category'} at {_format_cents(focus_line.get('projected_spend_cents'))}, "
+                f"state={focus_line.get('threshold_state') or 'unknown'}, driver={focus_line.get('primary_pressure_source') or 'unknown'}"
+            )
+        parts.append("- Top pressure lines:")
+        for line in lines[:3]:
+            if not isinstance(line, dict):
+                continue
+            parts.append(
+                f"  - {line.get('category') or 'Unknown category'} | projected {_format_cents(line.get('projected_spend_cents'))} | "
+                f"warn {_format_cents(line.get('warn_at_cents'))} | cap {_format_cents(line.get('hard_cap_cents'))} | "
+                f"state={line.get('threshold_state') or 'unknown'} | driver={line.get('primary_pressure_source') or 'unknown'}"
+            )
+        return "\n".join(parts)
+
+    return "No computed budget facts attached."
+
+
+def build(message: str, history: list[dict], summary: dict, chat_context: dict | None = None, error: str | None = None) -> list[dict]:
     budget = summary.get("budget") or {}
     totals = summary.get("totals") or {}
     lines = summary.get("budget_lines") or []
@@ -202,6 +328,9 @@ def build(message: str, history: list[dict], summary: dict, error: str | None = 
         "Never claim a budget change was applied. Proposals are suggestions only and must be reviewed by the user before anything changes. "
         "Never say you changed, updated, set, or adjusted the real budget data. When discussing a budget change, say you prepared or revised a proposal for review. "
         "You must ground every answer in the supplied budget data and recent conversation facts. "
+        "When computed budget facts are supplied, treat them as authoritative for numeric claims, threshold state, and affordability impact. "
+        "When shared transaction evidence or retrieved guidance is supplied, use it explicitly and do not contradict it. "
+        "Keep actual spend, planned spend, and projected spend clearly separated and labelled. "
         "Do not ask again for information the user already provided in the recent conversation. "
         "Keep factual budget answers separate from proposals. If the user asks where they are overspending or how they are tracking, answer directly from the current thresholds instead of proposing a change unless they explicitly ask for a suggestion or adjustment. "
         "Only create proposal mode for safe reviewable changes to existing budget-line warning or cap values. "
@@ -220,6 +349,14 @@ def build(message: str, history: list[dict], summary: dict, error: str | None = 
         + "\n".join(_line_summary(line) for line in lines[:12])
         + "\nProposal feedback:\n"
         + _proposal_feedback_summary(summary)
+        + "\nContext hints:\n"
+        + _context_hint_summary(chat_context)
+        + "\nComputed budget facts:\n"
+        + _computed_budget_context_summary(chat_context)
+        + "\nShared MCP transaction evidence:\n"
+        + _mcp_context_summary(chat_context)
+        + "\nRetrieved guidance:\n"
+        + _rag_context_summary(chat_context)
         + "\nRecent conversation:\n"
         + _history_summary(history)
     )

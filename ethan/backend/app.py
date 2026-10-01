@@ -120,6 +120,8 @@ def create_app() -> Flask:
                 "transactions_categories_count": None if transactions_categories is None else len(transactions_categories),
                 "transactions_count": None if transactions_rows is None else len(transactions_rows),
                 "ollama": _ollama_status(),
+                "mcp_mode": "enabled" if config.MCP_ENABLED else "disabled",
+                "rag_mode": "enabled" if config.RAG_ENABLED else "disabled",
             }
         )
 
@@ -232,11 +234,28 @@ def create_app() -> Flask:
             db_api.list_chat_messages(budget_id_text),
             payload.get("history"),
         )
-        result = chat_service.send_message(budget_id, payload.get("message"), combined_history)
+        if "integration_mode" in payload:
+            result = chat_service.send_message(
+                budget_id,
+                payload.get("message"),
+                combined_history,
+                payload.get("integration_mode"),
+                payload.get("context"),
+                payload.get("skip_deterministic"),
+            )
+        else:
+            result = chat_service.send_message(
+                budget_id,
+                payload.get("message"),
+                combined_history,
+                context=payload.get("context"),
+                skip_deterministic=payload.get("skip_deterministic"),
+            )
         for message_payload in result.get("messages_to_store", []):
             if isinstance(message_payload, dict):
                 db_api.create_chat_message(budget_id_text, message_payload)
         return jsonify(result)
+
     @application.get("/api/budgets/<budget_id>/coach-proposals")
     def list_coach_proposals(budget_id: str):
         return jsonify(db_api.list_coach_proposals(budget_id))
