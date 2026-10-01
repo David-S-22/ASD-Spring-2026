@@ -43,7 +43,7 @@ def load_markdown_chunks(folder: Path, feature: str) -> List[Document]:
     ]
     if not md_docs:
         return []
-    return MarkdownTextSplitter().split_documents(md_docs)
+    return MarkdownTextSplitter(chunk_size=1000, chunk_overlap=0).split_documents(md_docs)
 
 
 def load_pdf_chunks(folder: Path, feature: str) -> List[Document]:
