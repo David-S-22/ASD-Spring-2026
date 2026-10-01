@@ -1,0 +1,872 @@
+[
+ {
+  "message": "whats the total of all my bills per month",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "whats the total of all my bills per month",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 0.9,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "can you add up my bills please",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "can you add up my bills please",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.8,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how much do i spend altogether each month (bills and subs)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.9,
+  "route": "upcoming",
+  "reply": "Coming up in the next 30 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": [
+   "route upcoming != total"
+  ]
+ },
+ {
+  "message": "how much do i spend altogether each month (bills and subs)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.1,
+  "route": "upcoming",
+  "reply": "Coming up in the next 30 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": [
+   "route upcoming != total"
+  ]
+ },
+ {
+  "message": "total for netflix and spotify together this month?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 3.6,
+  "route": "grounded",
+  "reply": "The total for Netflix and Spotify together this month is $34.98.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != total"
+  ]
+ },
+ {
+  "message": "total for netflix and spotify together this month?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 3.2,
+  "route": "grounded",
+  "reply": "The total for Netflix and Spotify together this month is $34.98.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != total"
+  ]
+ },
+ {
+  "message": "what are my bills in total, roughly",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.2,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what are my bills in total, roughly",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.9,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "Please give me the sum of my montly bills",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "Please give me the sum of my montly bills",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.3,
+  "route": "total",
+  "reply": "October is set to cost around $1,766. Your ongoing monthly total across all bills is $1,731.95.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "whats due this week",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "upcoming",
+  "reply": "Coming up this week: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50).",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "whats due this week",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.8,
+  "route": "upcoming",
+  "reply": "Coming up this week: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50).",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "anything due in the next 10 days?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.8,
+  "route": "upcoming",
+  "reply": "Coming up in the next 10 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99).",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "anything due in the next 10 days?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 3.0,
+  "route": "upcoming",
+  "reply": "Coming up in the next 10 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99).",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "please tell me what i have to pay over the next fortnight",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "upcoming",
+  "reply": "Coming up in the next 14 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "please tell me what i have to pay over the next fortnight",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 6.5,
+  "route": "plain",
+  "reply": "Tally couldn't understand that \u2014 try rephrasing.",
+  "suggestion_title": null,
+  "failures": [
+   "route plain != upcoming"
+  ]
+ },
+ {
+  "message": "what's upcoming for netflix and gymco (just this month)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 4.2,
+  "route": "grounded",
+  "reply": "This month, the upcoming bills for Netflix and GymCo are $20.99 for Netflix and $24.99 for GymCo, respectively. Both are due on their respective billing dates.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != upcoming"
+  ]
+ },
+ {
+  "message": "what's upcoming for netflix and gymco (just this month)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 3.4,
+  "route": "grounded",
+  "reply": "This month, the upcoming bills for Netflix and GymCo are $20.99 for Netflix and $24.99 for GymCo, respectively. Both are due on their respective billing dates.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != upcoming"
+  ]
+ },
+ {
+  "message": "what do i owe in the next 2 weeks",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 3.2,
+  "route": "upcoming",
+  "reply": "Coming up in the next 14 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what do i owe in the next 2 weeks",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "upcoming",
+  "reply": "Coming up in the next 14 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "any bills scheduled for next month",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.2,
+  "route": "upcoming",
+  "reply": "Coming up in the next 30 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "any bills scheduled for next month",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "upcoming",
+  "reply": "Coming up in the next 30 days: Share-house utilities kitty on 2 Oct ($25.00), Prime Video on 5 Oct ($9.99), Opal commute top-up on 6 Oct ($38.50), Share-house utilities kitty on 9 Oct ($25.00), Cloud storage on 9 Oct ($2.99), Phone plan on 12 Oct ($49.00), Rent on 13 Oct ($1,100.00), Anytime Fitness",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "which subscriptions am i hardly using",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.1,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "which subscriptions am i hardly using",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.1,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what am i barely using, please",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.5,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what am i barely using, please",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.5,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "do i have any unused subscriptions?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.0,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "do i have any unused subscriptions?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "are netflix or disney+ ones i never use (be honest)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.1,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != barely_using"
+  ]
+ },
+ {
+  "message": "are netflix or disney+ ones i never use (be honest)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.3,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": [
+   "route grounded != barely_using"
+  ]
+ },
+ {
+  "message": "which subs are underused",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "which subs are underused",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "which of my subscripions am I rarely using?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "which of my subscripions am I rarely using?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "barely_using",
+  "reply": "Anytime Fitness has billed seven times since you last confirmed you're using it \u2014 worth a look at $17.50/month. Cloud storage has billed four times since you last confirmed you're using it \u2014 worth a look at $2.99/month.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "did spotify charge me this month",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "Spotify AU charged you three times in the last 90 days; the 20 Aug charge was $4.00 above your $13.99 bill.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "did spotify charge me this month",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "Spotify AU charged you three times in the last 90 days; the 20 Aug charge was $4.00 above your $13.99 bill.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what has gymco taken from my account?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "GymCo charged you two times in the last 90 days, each at your $24.99 bill amount.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what has gymco taken from my account?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "GymCo charged you two times in the last 90 days, each at your $24.99 bill amount.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "has netflix actually charged me (check the bank)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "No bank charges from Netflix in the last 90 days.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "has netflix actually charged me (check the bank)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "tool",
+  "reply": "No bank charges from Netflix in the last 90 days.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "please check what Electricity debited",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 0.8,
+  "route": "plain",
+  "reply": "Checking what Electricity charged you.",
+  "suggestion_title": null,
+  "failures": [
+   "route plain != tool"
+  ]
+ },
+ {
+  "message": "please check what Electricity debited",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.0,
+  "route": "plain",
+  "reply": "I've noted that Electricity charged you the last time. Would you like to see the details?",
+  "suggestion_title": null,
+  "failures": [
+   "route plain != tool"
+  ]
+ },
+ {
+  "message": "was i charged by spotify lately",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "ask_back",
+  "reply": "I'd need you to state the end date before I change Spotify. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": [
+   "route ask_back != tool"
+  ]
+ },
+ {
+  "message": "was i charged by spotify lately",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "ask_back",
+  "reply": "I'd need you to state the end date before I change Spotify. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": [
+   "route ask_back != tool"
+  ]
+ },
+ {
+  "message": "how much did netflix charge me, show the bank rows",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "tool",
+  "reply": "No bank charges from Netflix in the last 90 days.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how much did netflix charge me, show the bank rows",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.0,
+  "route": "tool",
+  "reply": "No bank charges from Netflix in the last 90 days.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "when is my electricity bill overdue",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.7,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "when is my electricity bill overdue",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.4,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "why is gymco overdue?",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.4,
+  "route": "grounded",
+  "reply": "GymCo subscription is overdue as its next billing date is 2026-10-15 and its status is due.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "why is gymco overdue?",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.3,
+  "route": "grounded",
+  "reply": "GymCo subscription is overdue as its next billing date is 2026-10-15 and its status is due.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how do i pay netflix and spotify (please)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 3.2,
+  "route": "grounded",
+  "reply": "To pay your Netflix and Spotify subscriptions, you should use your card as indicated in the sources. For Netflix, the next payment is due on 2026-10-14, and for Spotify, the next payment is due on 2026-09-27. Please ensure you have the payment method ready for these dates.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how do i pay netflix and spotify (please)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 3.3,
+  "route": "grounded",
+  "reply": "To pay your Netflix and Spotify subscriptions, you should use your card as indicated in the sources. For Netflix, the next payment is due on 2026-10-14, and for Spotify, the next payment is due on 2026-10-27. Please ensure you have the payment method ready for the upcoming billing dates.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "when is my spotify next charged",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.4,
+  "route": "grounded",
+  "reply": "Your Spotify subscription is charged on 2026-09-27 and will be charged again on 2026-10-27.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "when is my spotify next charged",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.7,
+  "route": "grounded",
+  "reply": "Your Spotify subscription is charged on the next billing date, which is 2026-09-27.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what does my car insurance cost",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "what does my car insurance cost",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.4,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how much does a coffee cost me per week (not a bill)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.3,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "how much does a coffee cost me per week (not a bill)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.9,
+  "route": "grounded",
+  "reply": "Tally couldn't find a bill that covers that.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "change spotify to 15.99 a month",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "proposal",
+  "reply": "I've suggested changing Spotify to $15.99 a month \u2014 approve it to save.",
+  "suggestion_title": "Update Spotify",
+  "failures": []
+ },
+ {
+  "message": "change spotify to 15.99 a month",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.1,
+  "route": "proposal",
+  "reply": "I've suggested changing Spotify to $15.99 a month \u2014 approve it to save.",
+  "suggestion_title": "Update Spotify",
+  "failures": []
+ },
+ {
+  "message": "please cancel netflix from 1 november",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "proposal",
+  "reply": "I've suggested ending Netflix after 1 Nov \u2014 approve it to save.",
+  "suggestion_title": "Update Netflix",
+  "failures": []
+ },
+ {
+  "message": "please cancel netflix from 1 november",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "proposal",
+  "reply": "I've suggested ending Netflix after 1 Nov \u2014 approve it to save.",
+  "suggestion_title": "Update Netflix",
+  "failures": []
+ },
+ {
+  "message": "pause gymco from 20 October (going overseas)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "proposal",
+  "reply": "I've suggested pausing GymCo after 20 Oct \u2014 approve it to save.",
+  "suggestion_title": "Update GymCo",
+  "failures": []
+ },
+ {
+  "message": "pause gymco from 20 October (going overseas)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "proposal",
+  "reply": "I've suggested pausing GymCo after 20 Oct \u2014 approve it to save.",
+  "suggestion_title": "Update GymCo",
+  "failures": []
+ },
+ {
+  "message": "dispute my electricity charge, billed twice",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "proposal",
+  "reply": "I've suggested opening a dispute for Electricity \u2014 approve it to draft the letter.",
+  "suggestion_title": "Open dispute for Electricity",
+  "failures": []
+ },
+ {
+  "message": "dispute my electricity charge, billed twice",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.2,
+  "route": "proposal",
+  "reply": "I've suggested opening a dispute for Electricity \u2014 approve it to draft the letter.",
+  "suggestion_title": "Open dispute for Electricity",
+  "failures": []
+ },
+ {
+  "message": "please dispute the spotify charge because the price went up",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "proposal",
+  "reply": "I've suggested opening a dispute for Spotify \u2014 approve it to draft the letter.",
+  "suggestion_title": "Open dispute for Spotify",
+  "failures": []
+ },
+ {
+  "message": "please dispute the spotify charge because the price went up",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "proposal",
+  "reply": "I've suggested opening a dispute for Spotify \u2014 approve it to draft the letter.",
+  "suggestion_title": "Open dispute for Spotify",
+  "failures": []
+ },
+ {
+  "message": "add disney+ $15 monthly, first charge 5 november, subscription",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "proposal",
+  "reply": "I've suggested adding Disney Plus at $15 a month from 5 Nov \u2014 approve it to save.",
+  "suggestion_title": "Add bill: Disney Plus",
+  "failures": [
+   "title 'Add bill: Disney Plus' != 'Add bill: Disney+'"
+  ]
+ },
+ {
+  "message": "add disney+ $15 monthly, first charge 5 november, subscription",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "proposal",
+  "reply": "I've suggested adding Disney Plus at $15 a month from 5 Nov \u2014 approve it to save.",
+  "suggestion_title": "Add bill: Disney Plus",
+  "failures": [
+   "title 'Add bill: Disney Plus' != 'Add bill: Disney+'"
+  ]
+ },
+ {
+  "message": "add a bill",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars). I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "add a bill",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.7,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need what the bill is called, the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date, whether it's a bill or a subscription. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "please add a streaming subscription",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.9,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "please add a streaming subscription",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "change my spotify",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.7,
+  "route": "ask_back",
+  "reply": "I'd need you to state the amount (in dollars), the next billing date before I change Spotify. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "change my spotify",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "ask_back",
+  "reply": "I'd need you to state the amount (in dollars), the next billing date before I change Spotify. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "add disney+ (not sure about the price yet)",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.3,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "add disney+ (not sure about the price yet)",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.9,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "i want to add a gym and a phone plan",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 2.0,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "i want to add a gym and a phone plan",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.6,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "create a new subscription for me pls",
+  "attempt": 1,
+  "status": 200,
+  "seconds": 1.7,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ },
+ {
+  "message": "create a new subscription for me pls",
+  "attempt": 2,
+  "status": 200,
+  "seconds": 1.7,
+  "route": "ask_back",
+  "reply": "Happy to add that \u2014 I just need the amount (in dollars), how often it bills (weekly, fortnightly or monthly), the next billing date. I won't guess details you haven't given me.",
+  "suggestion_title": null,
+  "failures": []
+ }
+]

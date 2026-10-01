@@ -86,8 +86,8 @@ def _stated_text(message, history):
     return " ".join(said)
 
 
-def _answer_total():
-    """Answer the "what do my bills add up to" question with both figures.
+def _answer_total(named=None):
+    """Answer the "what do my bills add up to" question with both figures, over every bill or only the named rows.
 
     There are two defensible totals and they do not match. The table header
     shows the ongoing monthly rate -- every bill scaled to a month -- while this
@@ -98,14 +98,15 @@ def _answer_total():
     and what each measures, costs one clause.
     """
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     breakdown = month_breakdown(bills, payments, today.year, today.month, today)
     monthly_rate = sum(b.amount_cents * expected_per_month(b.cadence) for b in bills)
+    scope = " and ".join(b.name for b in bills) if named else "all bills"
     return (
         f"{today.strftime('%B')} is set to cost around "
-        f"{money.format_estimate_single(breakdown.total_high_cents)}. "
-        f"Your ongoing monthly total across all bills is {money.format_actual(monthly_rate)}."
+        f"{money.format_estimate_single(breakdown.total_high_cents)}{' for ' + scope if named else ''}. "
+        f"Your ongoing monthly total across {scope} is {money.format_actual(monthly_rate)}."
     )
 
 
@@ -143,7 +144,7 @@ def _answer_barely_using():
 WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
 COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
 DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
-NAMED_HORIZON = re.compile(r"\b(fortnight|month)\b", re.I)
+NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(fortnight|month)\b", re.I)
 NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
 UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
 MAX_HORIZON_DAYS = 180
@@ -161,10 +162,10 @@ def _horizon_days(message):
     return min(max(days, 1), MAX_HORIZON_DAYS)
 
 
-def _answer_upcoming(days=7):
-    """Every bill occurrence from today for the next days, soonest first, as one sentence."""
+def _answer_upcoming(days=7, named=None):
+    """Every bill occurrence, or only the named rows', from today for the next days, soonest first, as one sentence."""
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
     occurrences = sorted((occ for bill in bills for occ in project(bill, today, today + timedelta(days=days))), key=lambda occ: occ.date)
     span = f"the next {days} day{'s' if days != 1 else ''}"
     if not occurrences:
@@ -263,7 +264,7 @@ def _asks_what_is_due(message):
     return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
 
 
-QUESTION_START = re.compile(r"^(what|which|when|how|why|is|are|does|did|has|have|any)\b", re.I)
+QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+)?(what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
 TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
 BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
 
@@ -548,20 +549,20 @@ def _model_turn(model_message, history, fallback=None, stated=None, grounded=Tru
     if preview:
         preview = _retarget_to_named_bill(preview, model_message, bills)
     named = _bills_named(model_message, bills) if asks else []
-    about_a_bill = bool(named)
+    about_a_bill = len(named) == 1
     card = None
     facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
     if facts:
         route = "tool"
         reply = facts["sentence"]
-    elif asks and not about_a_bill and BARELY_WORDS.search(model_message):
+    elif asks and BARELY_WORDS.search(model_message):
         reply = _answer_barely_using()
         route = "barely_using"
     elif asks and not about_a_bill and _asks_what_is_due(model_message):
-        reply = _answer_upcoming(_horizon_days(model_message))
+        reply = _answer_upcoming(_horizon_days(model_message), named)
         route = "upcoming"
-    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message) and data.get("question") != "total":
-        reply = _answer_total()
+    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message):
+        reply = _answer_total(named)
         route = "total"
     elif asks and not preview and (data.get("question") in (None, "none") or about_a_bill):
         card = _grounded_answer(model_message)
