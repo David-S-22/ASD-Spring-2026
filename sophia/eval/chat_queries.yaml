@@ -14,6 +14,9 @@
 - message: "total for netflix and spotify together this month?"
   route: total
   expect: {contains: ["Netflix", "Spotify"], not: ["all bills"]}
+- message: "what do netflix and spotify cost me combined per month"
+  route: total
+  expect: {contains: ["Netflix", "Spotify"], not: ["all bills"]}
 - message: "What's coming up in the next two weeks"
   route: upcoming
   expect: {contains: ["next 14 days"], not: ["this week"]}
@@ -29,12 +32,26 @@
 - message: "please tell me what i have to pay over the next fortnight"
   route: upcoming
   expect: {contains: ["next 14 days"]}
+- message: "please list what i need to pay in the next 10 days"
+  route: upcoming
+  expect: {contains: ["next 10 days"]}
+- message: "what will i pay in the next week"
+  route: upcoming
+  expect: {contains: ["this week"]}
+- message: "how much do i spend a week"
+  route: total
 - message: "what's upcoming for netflix and gymco (just this month)"
   route: upcoming
   expect: {contains: ["Netflix on", "GymCo on"], not: ["Rent"]}
 - message: "Which subscriptions am I barely using?"
   route: barely_using
 - message: "are netflix or disney+ ones i never use (be honest)"
+  route: barely_using
+- message: "which subs am i not really using"
+  route: barely_using
+- message: "is spotify one i hardly ever use (be honest)"
+  route: barely_using
+- message: "are netflix and disney+ ones i barely touch"
   route: barely_using
 - message: "Which bill is overdue?"
   route: grounded
@@ -52,6 +69,9 @@
   route: grounded
   expect: {insufficient: true}
 - message: "What is my car insurance bill cost for this month?"
+  route: grounded
+  expect: {insufficient: true}
+- message: "whats my car insurance cost per month (not sure it's tracked)"
   route: grounded
   expect: {insufficient: true}
 - message: "What has Spotify actually charged me?"

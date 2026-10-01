@@ -145,14 +145,14 @@ def _answer_barely_using():
 WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
 COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
 DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
-NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(fortnight|month)\b", re.I)
-NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
+NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(next week|fortnight|month)\b", re.I)
+NAMED_HORIZON_DAYS = {"next week": 7, "fortnight": 14, "month": 30}
 UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
 MAX_HORIZON_DAYS = 180
 
 
 def _horizon_days(message):
-    """How many days ahead a what's-due question looks: a count of days, weeks or months, a fortnight or month, else a week."""
+    """How many days ahead a what's-due question looks: a count of days, weeks or months, the next week, a fortnight or month, else a week."""
     counted = DAYS_AHEAD.search(message or "")
     named = NAMED_HORIZON.search(message or "")
     if counted:
@@ -265,9 +265,9 @@ def _asks_what_is_due(message):
     return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
 
 
-QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+)?(what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
-TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
-BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
+QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+|list\s+)?(whats|what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|combined|sum|spend|spending)\b", re.I)
+BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (?:really |ever )?(using|used|use|touch)\b|\b(unused|underused)\b", re.I)
 
 
 def _is_plain_question(message):
