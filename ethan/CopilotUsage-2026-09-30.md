@@ -1329,3 +1329,37 @@ the conflicts are still present on git
 
 ### Assistant
 **That was because the content was merged but Git had not yet been told to mark the files as resolved.** After user approval, I staged only `agentic_loop\main.py` and `agentic_loop\README.md` with `git add`, which changed them from unmerged (`UU`) to ordinary modified (`M`) so the conflict state is now cleared without committing anything.
+
+## 2026-10-01T16:13:52.862+10:00
+
+### User
+<current_datetime>2026-10-01T16:13:52.862+10:00</current_datetime>
+
+if the main.py is reverted to its main state what breaks
+
+### Assistant
+**Assuming “main state” means the original main-branch `agentic_loop\main.py` before the Budgets additions, the Budgets feature itself does not break.** The Budgets page, backend chat, MCP integration, RAG integration, and database behaviour all live under `ethan\...`, so reverting `agentic_loop\main.py` would not stop the Budgets product functionality from running.
+
+**What would break is the shared validation/evidence path added for Budgets.** The Budgets-specific loop modes (`budgets-mcp` and `budgets-rag`) would disappear, along with the helper code that probes `budgets-backend` and the shared RAG server over HTTP for those modes. That means `python -m agentic_loop.main` would no longer offer the Budgets live-validation menu entries, and the shared loop could no longer generate Budgets MCP/RAG evidence through that path. The original shared modes (`architecture`, `mcp`, `rag`) should still work if you revert to the original main version rather than to a conflicted/broken file.
+
+## 2026-10-01T16:15:20.763+10:00
+
+### User
+<current_datetime>2026-10-01T16:15:20.763+10:00</current_datetime>
+
+remove it please, undo all changes to agenticloop mani.py and readme
+
+### Assistant
+**Done.** I restored only `agentic_loop\main.py` and `agentic_loop\README.md` back to `HEAD` and cleared any staged state on those two files, so they now have no local changes and no conflict/staging state.
+
+## 2026-10-01T16:19:33.129+10:00
+
+### User
+<current_datetime>2026-10-01T16:19:33.129+10:00</current_datetime>
+
+revert to the main branch state
+
+### Assistant
+**I restored `agentic_loop\main.py` and `agentic_loop\README.md` from the `main` branch explicitly.** There is no remaining diff against `main` for those two files.
+
+**Git still shows them as modified because the current branch's `HEAD` differs from `main`.** So they are now at `main` branch content, but that content is still different from the branch you are currently on.

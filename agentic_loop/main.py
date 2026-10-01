@@ -9,13 +9,11 @@ prompts/<your-family>/ and one entry to MODES below.
 
 import asyncio
 import calendar
-import json
 import os
 import time
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from urllib import error, request
 
 import requests
 import yaml
@@ -318,181 +316,10 @@ def collect_rag():
     return True, " ".join(evidence)
 
 
-def _json_request(method: str, url: str, payload: dict | None = None, timeout: float = 20.0):
-    headers = {"Accept": "application/json"}
-    body = None
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-        body = json.dumps(payload).encode("utf-8")
-    req = request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with request.urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace").strip()
-        return False, f"{url} returned HTTP {exc.code}. {details[:300]}"
-    except error.URLError as exc:
-        return False, f"{url} could not be reached. {exc.reason}"
-    except TimeoutError:
-        return False, f"{url} timed out."
-    except OSError as exc:
-        return False, f"{url} failed. {exc}"
-    try:
-        return True, json.loads(raw)
-    except json.JSONDecodeError:
-        snippet = raw.strip().replace("\n", " ")
-        return False, f"{url} returned non-JSON output: {snippet[:300]}"
-
-
-def _budgets_backend_url() -> str:
-    return os.getenv("BUDGETS_BACKEND_URL", "http://127.0.0.1:5006").rstrip("/")
-
-
-def _budgets_rag_url() -> str:
-    return os.getenv("BUDGETS_RAG_URL", "http://127.0.0.1:5003").rstrip("/")
-
-
-def _selected_budget(base_url: str):
-    ok, budgets = _json_request("GET", f"{base_url}/api/budgets")
-    if not ok:
-        return False, budgets
-    if not isinstance(budgets, list) or not budgets:
-        return False, "No budgets were returned from the Budgets backend."
-    requested_id = os.getenv("BUDGETS_VALIDATION_BUDGET_ID")
-    if requested_id:
-        try:
-            selected_id = int(requested_id)
-        except ValueError:
-            return False, "BUDGETS_VALIDATION_BUDGET_ID must be an integer when set."
-        for budget in budgets:
-            if isinstance(budget, dict) and budget.get("id") == selected_id:
-                return True, budget
-        return False, f"Budget id {selected_id} was not found in /api/budgets."
-    candidates = [
-        budget
-        for budget in budgets
-        if isinstance(budget, dict)
-        and isinstance(budget.get("id"), int)
-        and isinstance(budget.get("month"), str)
-    ]
-    if candidates:
-        current_month = datetime.now().astimezone().strftime("%Y-%m")
-        current_budget = next((budget for budget in candidates if budget["month"] == current_month), None)
-        if current_budget is not None:
-            return True, current_budget
-        return True, max(candidates, key=lambda budget: budget["month"])
-    for budget in budgets:
-        if isinstance(budget, dict) and isinstance(budget.get("id"), int):
-            return True, budget
-    return False, "No budget with an integer id was returned from the Budgets backend."
-
-
-def _preview_lines(tool_result: dict | None) -> str:
-    if not isinstance(tool_result, dict):
-        return "none"
-    preview = tool_result.get("result_preview")
-    if not isinstance(preview, list) or not preview:
-        return "none"
-    items = []
-    for row in preview[:3]:
-        if not isinstance(row, dict):
-            continue
-        date = row.get("date") or "unknown-date"
-        merchant = row.get("merchant") or row.get("description") or "unknown-merchant"
-        amount = row.get("amount")
-        amount_text = str(amount) if amount is not None else "unknown-amount"
-        items.append(f"{date} {merchant} ({amount_text})")
-    return "; ".join(items) if items else "none"
-
-
-def collect_budgets_mcp():
-    base_url = _budgets_backend_url()
-    ok, health = _json_request("GET", f"{base_url}/health")
-    if not ok:
-        return False, health
-    ok, budget = _selected_budget(base_url)
-    if not ok:
-        return False, budget
-    ok, summary = _json_request("GET", f"{base_url}/api/budgets/{budget['id']}/summary")
-    if not ok:
-        return False, summary
-    ok, chat = _json_request(
-        "POST",
-        f"{base_url}/api/chat",
-        {
-            "budget_id": budget["id"],
-            "integration_mode": "mcp",
-            "message": "Show me the most relevant transactions for this month's budget pressure.",
-        },
-    )
-    if not ok:
-        return False, chat
-    if not isinstance(chat, dict):
-        return False, "The Budgets MCP chat validation returned an invalid payload."
-    tool_result = chat.get("tool_result") if isinstance(chat.get("tool_result"), dict) else {}
-    totals = summary.get("totals") if isinstance(summary, dict) and isinstance(summary.get("totals"), dict) else {}
-    return True, (
-        f"Budgets backend: {base_url}. "
-        f"Health ok={health.get('ok')} db_api={health.get('db_api')} transactions_api={health.get('transactions_api')} "
-        f"mcp_mode={health.get('mcp_mode')} rag_mode={health.get('rag_mode')}. "
-        f"Budget id={budget.get('id')} month={budget.get('month')} "
-        f"projected_high_total={totals.get('projected_high_total')} remaining_income_high={totals.get('remaining_income_high')}. "
-        f"MCP chat response_source={chat.get('response_source')} mode={chat.get('mode')} fallback={chat.get('fallback')} "
-        f"tool_name={tool_result.get('tool_name')} count={tool_result.get('count')} "
-        f"reply={json.dumps(chat.get('reply', ''))}. "
-        f"Preview={_preview_lines(tool_result)}."
-    )
-
-
-def collect_budgets_rag():
-    base_url = _budgets_backend_url()
-    ok, health = _json_request("GET", f"{base_url}/health")
-    if not ok:
-        return False, health
-    ok, budget = _selected_budget(base_url)
-    if not ok:
-        return False, budget
-    ok, rag_health = _json_request("GET", f"{_budgets_rag_url()}/health")
-    if not ok:
-        return False, rag_health
-    ok, chat = _json_request(
-        "POST",
-        f"{base_url}/api/chat",
-        {
-            "budget_id": budget["id"],
-            "integration_mode": "rag",
-            "message": "Using grounded budget guidance with sources, what should I focus on this month?",
-        },
-    )
-    if not ok:
-        return False, chat
-    if not isinstance(chat, dict):
-        return False, "The Budgets RAG chat validation returned an invalid payload."
-    grounding = chat.get("grounding") if isinstance(chat.get("grounding"), dict) else {}
-    citations = grounding.get("citations") if isinstance(grounding.get("citations"), list) else []
-    citation_labels = [
-        str(citation.get("label") or citation.get("source"))
-        for citation in citations[:3]
-        if isinstance(citation, dict)
-    ]
-    return True, (
-        f"Budgets backend: {base_url}. "
-        f"Health ok={health.get('ok')} db_api={health.get('db_api')} transactions_api={health.get('transactions_api')} "
-        f"mcp_mode={health.get('mcp_mode')} rag_mode={health.get('rag_mode')}. "
-        f"Budget id={budget.get('id')} month={budget.get('month')}. "
-        f"RAG health collections={json.dumps(rag_health.get('collections'))}. "
-        f"RAG chat response_source={chat.get('response_source')} mode={chat.get('mode')} fallback={chat.get('fallback')} "
-        f"confidence={grounding.get('confidence')} insufficient_context={grounding.get('insufficient_context')} "
-        f"citations={json.dumps(citation_labels)} reply={json.dumps(chat.get('reply', ''))}."
-    )
-
-
 MODES = {
     "architecture": ("Architecture", "architecture", collect_architecture),
     "mcp": ("MCP validation", "mcp", collect_mcp),
     "rag": ("RAG validation", "rag", collect_rag),
-    "budgets-mcp": ("Budgets MCP validation", "budgets_mcp", collect_budgets_mcp),
-    "budgets-rag": ("Budgets RAG validation", "budgets_rag", collect_budgets_rag),
 }
 
 
