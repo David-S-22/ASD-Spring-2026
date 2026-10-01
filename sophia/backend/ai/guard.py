@@ -4,19 +4,23 @@ import json
 from sophia.backend.ai.ollama_client import chat
 
 
-def run(model, prompt_builder, validator, fallback, timeout=None):
+def run(model, prompt_builder, validator, fallback, timeout=None, temperature=None):
     """Call model via prompt_builder(error) up to twice, validating each response.
 
     prompt_builder(error) returns a list of chat messages; error is None on the
     first attempt and the previous failure's message on the retry. Returns the
     validated response dict with fallback=False, or a copy of fallback with
-    fallback=True if both attempts fail.
+    fallback=True if both attempts fail. temperature is passed to chat only
+    when it is not None.
     """
+    chat_kwargs = {"timeout": timeout}
+    if temperature is not None:
+        chat_kwargs["temperature"] = temperature
     error = None
     for _ in range(2):
         messages = prompt_builder(error)
         try:
-            response = chat(model, messages, timeout=timeout)
+            response = chat(model, messages, **chat_kwargs)
             content = response.get("message", {}).get("content", "")
             data = json.loads(content)
         except Exception as exc:

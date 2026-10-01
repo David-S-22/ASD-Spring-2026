@@ -541,20 +541,6 @@ def build_messages(message, categories, previous_observation):
     return messages
 
 
-def transaction_context(transactions):
-    return [
-        {
-            "id": item["id"],
-            "date": item["date"],
-            "merchant": item["merchant"],
-            "description": item["description"],
-            "amount": item["amount"],
-            "category": item["category_name"],
-        }
-        for item in transactions[:12]
-    ]
-
-
 def category_validation_error(operation, fields, filters, categories):
     ids = {item["id"] for item in categories}
     names = {item["name"].casefold() for item in categories}

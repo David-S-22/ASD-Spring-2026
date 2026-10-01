@@ -273,6 +273,39 @@ def test_update_goal_rejects_invalid_messages(client: FlaskClient):
     assert response.status_code == 400
 
 @pytest.mark.usefixtures("app_ctx")
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/goal",
+        "/suggestion",
+        "/feedback",
+    ],
+)
+def test_create_endpoints_reject_malformed_json(client: FlaskClient, path):
+    response = client.post(path, data="{not-json", content_type="application/json")
+    assert response.status_code == 400
+
+    if path == "/goal":
+        assert db.session.execute(db.select(Goal)).scalars().all() == []
+    elif path == "/suggestion":
+        assert db.session.execute(db.select(Suggestion)).scalars().all() == []
+    else:
+        assert db.session.execute(db.select(Feedback)).scalars().all() == []
+
+@pytest.mark.usefixtures("app_ctx")
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "Invalid cost", "cost": "not-an-int", "date": "2026-12-01T00:00:00"},
+        {"name": "Invalid date", "cost": 100, "date": "not-a-date"},
+    ],
+)
+def test_create_goal_rejects_invalid_values_without_persisting(client: FlaskClient, payload):
+    response = client.post("/goal", json=payload)
+    assert response.status_code == 400
+    assert db.session.execute(db.select(Goal)).scalars().all() == []
+
+@pytest.mark.usefixtures("app_ctx")
 def test_update_suggestion_rejects_invalid_messages(client: FlaskClient):
     suggestions = setup_suggestions()
     response = client.patch(f"/suggestion/{suggestions[0].id}", data="", content_type="application/json")
@@ -283,6 +316,34 @@ def test_update_feedback_rejects_invalid_messages(client: FlaskClient):
     feedbacks = setup_feedback()
     response = client.patch(f"/feedback/{feedbacks[0].id}", data="", content_type="application/json")
     assert response.status_code == 400
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_feedback_invalid_category_is_atomic(client: FlaskClient):
+    feedback = setup_feedback()[0]
+    original = (feedback.feedback, feedback.category_id, feedback.timeframe)
+
+    response = client.patch(
+        f"/feedback/{feedback.id}",
+        json={"feedback": "Updated text", "category_id": "invalid"},
+    )
+
+    assert response.status_code == 400
+    persisted = db.session.get(Feedback, feedback.id)
+    assert (persisted.feedback, persisted.category_id, persisted.timeframe) == original
+
+@pytest.mark.usefixtures("app_ctx")
+def test_update_goal_invalid_values_are_atomic(client: FlaskClient):
+    goal = setup_goals()[0]
+    original = (goal.name, goal.cost, goal.date)
+
+    response = client.patch(
+        f"/goal/{goal.id}",
+        json={"name": "Updated name", "cost": "invalid"},
+    )
+
+    assert response.status_code == 400
+    persisted = db.session.get(Goal, goal.id)
+    assert (persisted.name, persisted.cost, persisted.date) == original
 
 @pytest.mark.usefixtures("app_ctx")
 def test_create_goal(client: FlaskClient):
@@ -548,5 +609,3 @@ def test_delete_feedbacks_by_category(client: FlaskClient):
     assert db.session.get(Feedback, id1) is None
     assert db.session.get(Feedback, id2) is None
     assert db.session.get(Feedback, id3) is not None
-
-

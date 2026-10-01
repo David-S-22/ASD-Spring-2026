@@ -8,7 +8,8 @@ the Transactions service. The current implementation and operating guide is
 
 | Artifact | Purpose |
 |---|---|
-| [`Transactions-AI-Workflow.jpg`](Transactions-AI-Workflow.jpg) | Transaction assistant workflow diagram. |
+| [`transactions-architecture-diagram.jpg`](transactions-architecture-diagram.jpg) | Three-service architecture diagram. |
+| [`transactions-ai-workflow-diagram.jpg`](transactions-ai-workflow-diagram.jpg) | Transaction assistant workflow diagram. |
 | [`evidence/nfr-baseline.json`](evidence/nfr-baseline.json) | Repeatable SQLite transaction-read latency and concurrency baseline. |
 | [`evidence/endpoint-smoke.json`](evidence/endpoint-smoke.json) | Captured backend and database health, CRUD, validation, and cleanup results. |
 | [`evidence/ai-workflow.log`](evidence/ai-workflow.log) | Redacted structured logs for an initial planning cycle and its confirmed write cycle. |
@@ -28,9 +29,11 @@ intermediate designs that were later changed. The current source code and
 | Endpoint smoke | Passed backend and database health checks, list requests, category CRUD, transaction CRUD, invalid chat request handling, and synthetic-data cleanup. |
 | AI workflow logging | One request ID links an initial `confirm` cycle to a confirmed `complete` cycle. Both contain PLAN, ACT, OBSERVE, and ADAPT stage records using `qwen2.5:3b`. |
 
-## Workflow diagram
+## Diagrams
 
-![Transactions AI workflow](Transactions-AI-Workflow.jpg)
+![Transactions architecture](transactions-architecture-diagram.jpg)
+
+![Transactions AI workflow](transactions-ai-workflow-diagram.jpg)
 
 ## NFR evidence
 

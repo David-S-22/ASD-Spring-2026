@@ -1,5 +1,12 @@
-"""Idempotent demo seed data for the bills database, dated relative to DEMO_TODAY=2026-08-20."""
+"""Idempotent demo seed data for the bills database, written relative to 2026-08-20 and moved DEMO_DATE_OFFSET_DAYS forward on seeding, to the demo clock DEMO_TODAY=2026-10-01."""
 import json
+import re
+from calendar import monthrange
+from datetime import date, datetime, timedelta
+
+DEMO_DATE_OFFSET_DAYS = 42
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?$")
+CYCLES_BACK = 60
 
 # The trailing status value must equal engine/status.derive_status for the row's
 # payments at DEMO_TODAY: reads never heal the cached column, only writes refresh it.
@@ -126,16 +133,55 @@ CHAT_MESSAGES = [
     ("user", "Draft a note to dispute my GymCo charge", None, 0, "2026-08-17T09:10:00"),
     ("assistant", "I've drafted a dispute letter for GymCo saying you cancelled before this charge, with a three-step checklist including removing the direct-debit authority. You can review and edit it in the Disputes tab.", None, 0, "2026-08-17T09:10:08"),
     ("user", "What's due this week?", None, 0, "2026-08-17T09:15:00"),
-    ("assistant", "Coming up this week: Anytime Fitness on 18 Aug ($17.50), Opal top-up on 25 Aug ($38.50), and Prime Video on 24 Aug ($9.99).", None, 0, "2026-08-17T09:15:05"),
+    ("assistant", "Coming up this week: Anytime Fitness on 18 Aug ($17.50), Opal commute top-up on 18 Aug ($38.50), Share-house utilities kitty on 21 Aug ($25.00).", None, 0, "2026-08-17T09:15:05"),
 ]
 
 
-def seed(connection):
-    """Insert the demo dataset if the bills table is empty; safe to call repeatedly."""
+def _shift(value, days):
+    """Move an ISO date or datetime string by days; anything else, including prose that names a date, is returned as is."""
+    if not (days and isinstance(value, str) and ISO_DATE.match(value)):
+        return value
+    fmt = "%Y-%m-%dT%H:%M:%S" if "T" in value else "%Y-%m-%d"
+    return (datetime.strptime(value, fmt) + timedelta(days=days)).strftime(fmt)
+
+
+def _shifted(rows, days):
+    return [tuple(_shift(value, days) for value in row) for row in rows]
+
+
+def _add_cadence(anchor, cadence, n):
+    """n cadence steps from anchor, with monthly days clamped to the month's length as the engine does."""
+    if cadence != "monthly":
+        return anchor + timedelta(weeks=n * (2 if cadence == "fortnightly" else 1))
+    month_index = anchor.month - 1 + n
+    year, month = anchor.year + month_index // 12, month_index % 12 + 1
+    return date(year, month, min(anchor.day, monthrange(year, month)[1]))
+
+
+def _shifted_payments(shifted_bills, days):
+    """Keep each payment on the same billing cycle after the shift, so monthly statuses survive a shift that is not whole months; a payment off any cycle moves by days."""
+    if not days:
+        return list(PAYMENTS)
+    anchors = {row[0]: (row[4], date.fromisoformat(row[5])) for row in BILLS}
+    moved = {row[0]: date.fromisoformat(row[5]) for row in shifted_bills}
+    rows = []
+    for bill_id, paid_on, amount_cents in PAYMENTS:
+        cadence, anchor = anchors[bill_id]
+        paid = date.fromisoformat(paid_on)
+        k = next((n for n in range(0, -CYCLES_BACK, -1) if _add_cadence(anchor, cadence, n) == paid), None)
+        shifted = _add_cadence(moved[bill_id], cadence, k).isoformat() if k is not None else _shift(paid_on, days)
+        rows.append((bill_id, shifted, amount_cents))
+    return rows
+
+
+def seed(connection, offset_days=DEMO_DATE_OFFSET_DAYS):
+    """Insert the demo dataset if the bills table is empty, every date moved offset_days forward; safe to call repeatedly."""
     cursor = connection.cursor()
     cursor.execute("SELECT COUNT(*) FROM bills")
     if cursor.fetchone()[0] > 0:
         return
+    days = offset_days
+    shifted_bills = _shifted(BILLS, days)
     cursor.executemany(
         """
         INSERT INTO bills
@@ -143,28 +189,28 @@ def seed(connection):
              payment_method, source, confirmed_at, created_at, exclude_from_plan, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        BILLS,
+        shifted_bills,
     )
     cursor.executemany(
         "INSERT INTO payments (bill_id, date, amount_cents) VALUES (?, ?, ?)",
-        PAYMENTS,
+        _shifted_payments(shifted_bills, days),
     )
     cursor.executemany(
         "INSERT INTO disputes (id, bill_id, reason, status, opened_at) VALUES (?, ?, ?, ?, ?)",
-        DISPUTES,
+        _shifted(DISPUTES, days),
     )
     cursor.executemany(
         """
         INSERT INTO dispute_drafts (dispute_id, version, letter_text, steps_json, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        DISPUTE_DRAFTS,
+        _shifted(DISPUTE_DRAFTS, days),
     )
     cursor.executemany(
         """
         INSERT INTO chat_messages (role, content, op_json, applied, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        CHAT_MESSAGES,
+        _shifted(CHAT_MESSAGES, days),
     )
     connection.commit()

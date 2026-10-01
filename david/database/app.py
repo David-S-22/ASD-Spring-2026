@@ -61,7 +61,7 @@ def setup_app(database_path) -> Flask:
 
     @app.route("/goal", methods=["POST"])
     def add_goal():
-        payload = request.get_json()
+        payload = request.get_json(silent=True) or {}
 
         if "name" not in payload:
             return jsonify({"error": "Missing goal field: name"}), 400
@@ -70,11 +70,13 @@ def setup_app(database_path) -> Flask:
         if "date" not in payload:
             return jsonify({"error": "Missing goal field: date"}), 400
 
-        goal = Goal(
-            name = payload["name"],
-            cost = int(payload["cost"]),
-            date = datetime.datetime.fromisoformat(payload["date"])
-        )
+        try:
+            cost = int(payload["cost"])
+            goal_date = datetime.datetime.fromisoformat(payload["date"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid goal cost or date"}), 400
+
+        goal = Goal(name=payload["name"], cost=cost, date=goal_date)
 
         db.session.add(goal)
         db.session.commit()
@@ -83,7 +85,7 @@ def setup_app(database_path) -> Flask:
 
     @app.route("/suggestion", methods=["POST"])
     def add_suggestion():
-        payload = request.get_json()
+        payload = request.get_json(silent=True) or {}
 
         if not payload or "suggestion" not in payload:
             return jsonify({"error": "Missing suggestion field"}), 400
@@ -103,7 +105,7 @@ def setup_app(database_path) -> Flask:
 
     @app.route("/feedback", methods=["POST"])
     def add_feedback():
-        payload = request.get_json()
+        payload = request.get_json(silent=True) or {}
 
         if "feedback" not in payload:
             return jsonify({"error": "Missing feedback field"}), 400
@@ -150,23 +152,27 @@ def setup_app(database_path) -> Flask:
         if "feedback" not in updated_feedback and "category_id" not in updated_feedback and "timeframe" not in updated_feedback:
             return jsonify({"error": "Missing feedback field"}), 400
 
-        if "feedback" in updated_feedback:
-            feedback_to_update.feedback = updated_feedback["feedback"]
+        new_feedback = updated_feedback.get("feedback", feedback_to_update.feedback)
 
+        new_category_id = feedback_to_update.category_id
         if "category_id" in updated_feedback:
             raw_category = updated_feedback["category_id"]
             if raw_category is not None:
                 try:
-                    feedback_to_update.category_id = int(raw_category)
+                    new_category_id = int(raw_category)
                 except (ValueError, TypeError):
                     return jsonify({"error": "Invalid category_id"}), 400
             else:
-                feedback_to_update.category_id = None
+                new_category_id = None
 
+        new_timeframe = feedback_to_update.timeframe
         if "timeframe" in updated_feedback:
             raw_timeframe = updated_feedback["timeframe"]
-            feedback_to_update.timeframe = str(raw_timeframe).strip() or None if raw_timeframe is not None else None
+            new_timeframe = str(raw_timeframe).strip() or None if raw_timeframe is not None else None
 
+        feedback_to_update.feedback = new_feedback
+        feedback_to_update.category_id = new_category_id
+        feedback_to_update.timeframe = new_timeframe
         db.session.commit()
         return jsonify(feedback_to_update.to_dto()), 200
 
@@ -200,16 +206,28 @@ def setup_app(database_path) -> Flask:
         if not goal_to_update:
             return abort(404)
 
-        updated_goal = request.get_json()
+        updated_goal = request.get_json(silent=True) or {}
         if "name" not in updated_goal and "amount" not in updated_goal and "date" not in updated_goal and "cost" not in updated_goal:
             return jsonify({"error": "No valid fields provided"}), 400
 
+        new_cost = goal_to_update.cost
+        if "cost" in updated_goal:
+            try:
+                new_cost = int(updated_goal["cost"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid goal cost"}), 400
+
+        new_date = goal_to_update.date
+        if "date" in updated_goal:
+            try:
+                new_date = datetime.datetime.fromisoformat(updated_goal["date"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid goal date"}), 400
+
         if "name" in updated_goal:
             goal_to_update.name = updated_goal["name"]
-        if "cost" in updated_goal:
-            goal_to_update.cost = int(updated_goal["cost"])
-        if "date" in updated_goal:
-            goal_to_update.date = datetime.datetime.fromisoformat(updated_goal["date"])
+        goal_to_update.cost = new_cost
+        goal_to_update.date = new_date
 
         db.session.commit()
         return jsonify(goal_to_update.to_dto()), 200

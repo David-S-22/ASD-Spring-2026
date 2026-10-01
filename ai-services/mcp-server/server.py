@@ -137,6 +137,74 @@ def get_transactions_with_rejected_anomalies() -> list[dict]:
     return _get_transactions_with_anomaly_status(False)
 
 
+BILLS_DB_URL = os.getenv("BILLS_DB_URL", "http://localhost:6005")
+
+
+def _bills_db(path: str):
+    """GET one bills-db path as JSON; 404 becomes ValueError("bill not found")."""
+    resp = requests.get(f"{BILLS_DB_URL.rstrip('/')}{path}", timeout=10)
+    if resp.status_code == 404:
+        raise ValueError("bill not found")
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _charge(row: dict, bill_amount_cents: int) -> dict:
+    """One transactions-db row as a bank charge in integer cents, with its difference from the bill."""
+    amount_cents = round(float(row["amount"]) * 100)
+    return {
+        "id": row["id"],
+        "date": parser.parse(row["date"]).date().isoformat(),
+        "amount_cents": amount_cents,
+        "description": row["description"],
+        "differs_from_bill_cents": amount_cents - bill_amount_cents,
+    }
+
+
+@mcp.tool(tags={"bills"})
+def list_bills(bill_type: str | None = None) -> list[dict]:
+    """For the Bills feature only. List the user's bills from the Bills database (read-only): id, name, merchant, amount_cents, cadence, next_billing_date, status, type, payment_method, end_date.
+
+    Args:
+        bill_type: 'bill' or 'subscription' to return only that type; omit for every bill.
+    """
+    if bill_type not in (None, "bill", "subscription"):
+        raise ValueError("bill_type must be 'bill' or 'subscription'")
+    return [bill for bill in _bills_db("/bills") if bill_type in (None, bill["type"])]
+
+
+@mcp.tool(tags={"bills"})
+def get_bill_payments(bill_id: int) -> dict:
+    """For the Bills feature only. Return {"bill", "payments": [{id, bill_id, date, amount_cents}]} for one bill, payments oldest first (read-only).
+
+    Args:
+        bill_id: The bill's id from list_bills.
+    """
+    return {"bill": _bills_db(f"/bills/{bill_id}"), "payments": _bills_db(f"/bills/{bill_id}/payments")}
+
+
+@mcp.tool(tags={"bills"})
+def compare_bill_with_bank_charges(bill_id: int, start_date: str, end_date: str) -> dict:
+    """For the Bills feature only. Return {"bill", "payments", "charges"} for one bill between two dates: the payments recorded in Bills and the bank charges from the bill's merchant, each charge in cents with differs_from_bill_cents. Nothing is matched, summed or written; the caller supplies the dates.
+
+    Args:
+        bill_id: The bill's id from list_bills.
+        start_date: First day to include, YYYY-MM-DD.
+        end_date: Last day to include, YYYY-MM-DD, on or after start_date and at most 366 days later.
+    """
+    start, end = parser.isoparse(start_date).date().isoformat(), parser.isoparse(end_date).date().isoformat()
+    if not 0 <= (parser.isoparse(end) - parser.isoparse(start)).days <= 366:
+        raise ValueError("end_date must be on or after start_date and at most 366 days later")
+    found = get_bill_payments(bill_id)
+    bill = found["bill"]
+    resp = requests.get(f"{TRANSACTIONS_DB_URL.rstrip('/')}/transactions", params={"merchant": bill["merchant"], "date_from": start, "date_to": end}, timeout=10)
+    resp.raise_for_status()
+    return {
+        "bill": bill,
+        "payments": [p for p in found["payments"] if start <= p["date"] <= end],
+        "charges": [_charge(row, bill["amount_cents"]) for row in resp.json()],
+    }
+
 
 if __name__ == "__main__":
     mcp.run(transport="http", port=8000)

@@ -9,7 +9,6 @@ from email.utils import parsedate_to_datetime
 import requests
 
 from .. import config
-from . import ollama_service
 
 
 DB_FIELDS = {"date", "merchant", "description", "amount", "category_id"}
@@ -34,17 +33,6 @@ class ChatError(Exception):
 
     def to_dict(self):
         return {"error": self.message, "code": self.code, **self.details}
-
-
-def handle_message(message, db_url):
-    from .transaction_orchestrator import orchestrate_transaction_request
-
-    return orchestrate_transaction_request(message, db_url)
-
-
-def apply_preview(payload, db_url):
-    preview = payload.get("preview") if "preview" in payload else payload
-    return execute_confirmed_write(preview, db_url)
 
 
 def execute_confirmed_write(

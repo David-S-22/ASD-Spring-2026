@@ -57,14 +57,14 @@ Architecture diagrams:
 | Service | Port | Key env vars |
 |---|---|---|
 | `bills-frontend` | 3005 | — (static + nginx proxy) |
-| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-08-20`), `AI_TIMEOUT_SECONDS` (default `90`) |
+| `bills-backend` | 5005 | `PORT`, `BILLS_DB_API_URL` (default `http://bills-db:6005`), `FRONTEND_ORIGIN` (default `http://localhost:3005`), `TRANSACTIONS_DB_API_URL` (optional; unset → stub), `OLLAMA_URL` (default `http://host.docker.internal:11434`), `DRAFT_MODEL` (`llama3.1:8b`), `CHAT_MODEL` (`qwen2.5:3b`), `DEMO_TODAY` (default `2026-10-01`), `AI_TIMEOUT_SECONDS` (default `90`), `OLLAMA_KEEP_ALIVE` (default `30m`), `AI_TEMPERATURE` (default `0.2`), `GROUNDED_TEMPERATURE` (default `0`) |
 | `bills-db` | 6005 | `PORT`, `DB_PATH` (default `./bills.db`) |
 
 `DEMO_TODAY` is parsed once in `sophia/backend/config.py`; nothing under
 `sophia/backend/engine/` ever calls `date.today()` or `datetime.now()` —
 every engine function takes `today` as an explicit argument.
 
-Compose sets `PORT`, `BILLS_DB_API_URL`, `FRONTEND_ORIGIN` and `OLLAMA_URL`
+Compose sets `PORT`, `BILLS_DB_API_URL`, `FRONTEND_ORIGIN`, `OLLAMA_URL`, `OLLAMA_KEEP_ALIVE` and the MCP/RAG switches
 for the backend — the model and demo-clock values are in-container defaults
 from `config.py`. In compose, Bills uses the team's shared `ollama` service
 (`OLLAMA_URL=http://ollama:11434`); the first `docker compose up ollama`
@@ -74,7 +74,12 @@ The `config.py` default (`http://host.docker.internal:11434`) remains the
 fallback for running bills-backend without the ollama service, and anyone
 running the backend bare on a machine without Docker Desktop should set
 `OLLAMA_URL=http://localhost:11434`; the demo clock stays
-`DEMO_TODAY=2026-08-20` by default and is overridable per environment.
+`DEMO_TODAY=2026-10-01` by default and is overridable per environment. The seed
+(`sophia/database/seed.py`) is written relative to 2026-08-20 and moved
+`DEMO_DATE_OFFSET_DAYS` (42) forward when it runs, payments staying on their
+billing cycle so every cached status holds at the demo clock; after pulling a
+seed change, drop and recreate the `bills_data` volume (`docker compose rm -sf
+bills-db && docker volume rm <project>_bills_data && docker compose up -d bills-db`).
 
 ## The two AI calls
 
@@ -176,7 +181,7 @@ Decision record: `docs/release-1/sophia/adr-bills-corpus-folder-model.md`.
 
 bills-backend reaches the shared MCP server through `clients/mcp_server.py` (a `fastmcp.Client` behind an allow-list; `MCP_SERVER_URL`, default `http://host.docker.internal:8000/mcp`). On Docker Desktop, `host.docker.internal` reaches a server bound to 127.0.0.1; on Linux, `host-gateway` resolves to the bridge address, so a 127.0.0.1-bound MCP server refuses the connection — start it as `FASTMCP_HOST=0.0.0.0 python ai-services/mcp-server/server.py`.
 Two tools are called: `search_transactions(merchant=<bill.merchant>)` (Tools card, "Match transactions") and `retrieve_context(feature="billing", question, k)` (Ask with evidence); the `billing` collection also holds two hand-written files, so Bills keeps only its own `bill-*.md` sources. Retrieval is reached only through the MCP tool, so there is no `RAG_SERVER_URL`; the shared server is retrieval-only (team decision 18 Sep; `docs/release-1/sophia/adr-bills-corpus-folder-model.md`), and the grounded answer, citations and confidence category are produced in `services/evidence.py` with `CHAT_MODEL`. Confidence is the L2 distance of the cited chunks: `high` < `RAG_HIGH`, `medium` < `RAG_MEDIUM`, `low` ≤ `RAG_LOW`; when nothing retrieved is within `RAG_LOW` the card says insufficient context and no model is called.
-Switches and knobs: `MCP_ENABLED`, `RAG_ENABLED` (code default off; compose `${…:-true}`; CI `"false"`), `MCP_TIMEOUT_SECONDS` (15), `MCP_ALLOWED_TOOLS`, `RAG_TOP_K` (3), `RAG_HIGH`/`RAG_MEDIUM`/`RAG_LOW` (0.8/1.1/1.4), `GROUNDED_TIMEOUT_SECONDS` (20 s per model attempt).
+Switches and knobs: `MCP_ENABLED`, `RAG_ENABLED` (code default off; compose `${…:-true}`; CI `"false"`), `MCP_TIMEOUT_SECONDS` (15), `MCP_ALLOWED_TOOLS`, `RAG_TOP_K` (3), `RAG_HIGH`/`RAG_MEDIUM`/`RAG_LOW` (0.8/1.1/1.4), `GROUNDED_TIMEOUT_SECONDS` (20 s per model attempt), `OLLAMA_KEEP_ALIVE` (30m; how long Ollama keeps a model loaded after a call), `AI_TEMPERATURE` (0.2; chat and dispute drafts), `GROUNDED_TEMPERATURE` (0; the grounded answer, so the same question gets the same answer).
 Codes: 503 `mcp_disabled`, `rag_disabled`, `mcp_connection`, `mcp_timeout`, `rag_unavailable` (the RAG server failing behind the MCP server); 502 `mcp_tool_error`, `mcp_invalid_result`; 400 `tool_not_allowed`. User copy never names a host, port or upstream text.
 Routes: `GET /api/tools`, `POST /api/tools/<name>`, `POST /api/evidence`; fragments `GET /ui/tools`, `POST /ui/tools/search_transactions`, `GET /ui/evidence`, `POST /ui/evidence`.
 Start order for a live run: `docker compose up -d`, then `python ai-services/rag-server/server.py`, then `python ai-services/mcp-server/server.py`. Sophia-CI runs with both switches `"false"` and asserts the refusal; it has no `rag` job and its path filter is `ai-services/rag-server/sources/billing/**`; `python sophia/rag/mcp_ragtest.py` is the terminal check of both tools.

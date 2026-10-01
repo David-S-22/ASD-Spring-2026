@@ -129,6 +129,30 @@ def test_guard_succeeds_on_first_attempt_without_retry(monkeypatch):
     assert len(calls) == 1
 
 
+def test_guard_passes_temperature_to_chat_when_set(monkeypatch):
+    seen = []
+
+    def fake_chat(model, messages, **kwargs):
+        seen.append(kwargs)
+        return _chat_response(VALID_DRAFT)
+
+    monkeypatch.setattr(guard, "chat", fake_chat)
+    guard.run("draft-model", lambda error: [{"role": "user", "content": "go"}], validate_dispute_draft, {}, timeout=5, temperature=0)
+    assert seen == [{"timeout": 5, "temperature": 0}]
+
+
+def test_guard_omits_temperature_from_the_chat_call_when_none(monkeypatch):
+    seen = []
+
+    def fake_chat(model, messages, **kwargs):
+        seen.append(kwargs)
+        return _chat_response(VALID_DRAFT)
+
+    monkeypatch.setattr(guard, "chat", fake_chat)
+    guard.run("draft-model", lambda error: [{"role": "user", "content": "go"}], validate_dispute_draft, {})
+    assert seen == [{"timeout": None}]
+
+
 def test_guard_retries_once_then_succeeds(monkeypatch):
     attempts = {"count": 0}
 

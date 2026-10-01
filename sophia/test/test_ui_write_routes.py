@@ -183,7 +183,7 @@ def test_ui_chat_never_writes_bills_and_apply_does(live_client, monkeypatch):
         return {"message": {"content": content}}
 
     monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_chat)
-    chat_response = live_client.post("/ui/chat", data={"message": "cancel this"})
+    chat_response = live_client.post("/ui/chat", data={"message": "cancel this from September"})
     assert chat_response.status_code == 200
     # Asking a question changes nothing, so it must not claim to. The apply
     # route is the one that writes, and it still sends the toast.

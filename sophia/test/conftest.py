@@ -73,7 +73,7 @@ def live_db_base_url(tmp_path_factory):
     db_path = str(tmp_path_factory.mktemp("ui-db") / "bills.db")
     connection = database_app.get_connection(db_path)
     database_app.load_schema(connection, database_app.SCHEMA_PATH)
-    database_app.seed(connection)
+    database_app.seed(connection, offset_days=0)
     connection.close()
 
     flask_app = database_app.create_app(db_path=db_path)
@@ -106,3 +106,11 @@ def live_client(live_db_base_url, monkeypatch):
     app = backend_app_module.create_app()
     app.config["TESTING"] = True
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def no_real_model_warm_up(monkeypatch):
+    """Tests never reach a real Ollama: the draft-model warm-up is a no-op unless a test replaces it."""
+    from sophia.backend.ai import ollama_client
+
+    monkeypatch.setattr(ollama_client, "warm", lambda model: None)

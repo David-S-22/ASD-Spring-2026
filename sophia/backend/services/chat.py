@@ -6,20 +6,25 @@ that writes those, always through the same CRUD calls a manual edit uses.
 """
 import json
 import re
+import threading
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sophia.backend import config
-from sophia.backend.ai import chat_prompt, guard
+from sophia.backend.ai import chat_prompt, guard, ollama_client
 from sophia.backend.ai.schemas import validate_chat_response
 from sophia.backend.clients import bills_db, transactions
 from sophia.backend.engine import BARELY_USING_THRESHOLD, money
 from sophia.backend.engine.calendar import month_breakdown
 from sophia.backend.engine.dates import expected_per_month
 from sophia.backend.engine.projection import project
+from sophia.backend.engine.status import _day_month
 from sophia.backend.services import bills as bills_service
 from sophia.backend.services import disputes as disputes_service
+from sophia.backend.services import evidence as evidence_service
 from sophia.backend.services import payments as payments_service
-from sophia.backend.services.errors import NotFound, ServiceError
+from sophia.backend.services import tools as tools_service
+from sophia.backend.services.errors import ModeError, NotFound, ServiceError
 
 # The model is asked for the real column names, but a small model drifts, and
 # it drifts predictably: it says "amount" in dollars where the column is
@@ -68,11 +73,22 @@ def _count_word(n):
 
 def _recent_history():
     rows = bills_db.list_chat_messages()
-    return [{"role": r["role"], "content": r["content"]} for r in rows[-10:]]
+    return [{"role": r["role"], "content": r["content"], "op_json": r.get("op_json")} for r in rows[-10:]]
 
 
-def _answer_total():
-    """Answer the "what do my bills add up to" question with both figures.
+def _stated_text(message, history):
+    """The user's own words since the last proposal: the only text a new proposal may draw its values from."""
+    said = [message or ""]
+    for row in reversed(history):
+        if row["role"] == "assistant" and row.get("op_json"):
+            break
+        if row["role"] == "user":
+            said.append(row["content"])
+    return " ".join(said)
+
+
+def _answer_total(named=None):
+    """Answer the "what do my bills add up to" question with both figures, over every bill or only the named rows.
 
     There are two defensible totals and they do not match. The table header
     shows the ongoing monthly rate -- every bill scaled to a month -- while this
@@ -83,14 +99,15 @@ def _answer_total():
     and what each measures, costs one clause.
     """
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
     payments = [bills_db.row_to_payment(r) for r in bills_db.list_payments()]
     breakdown = month_breakdown(bills, payments, today.year, today.month, today)
     monthly_rate = sum(b.amount_cents * expected_per_month(b.cadence) for b in bills)
+    scope = " and ".join(b.name for b in bills) if named else "all bills"
     return (
         f"{today.strftime('%B')} is set to cost around "
-        f"{money.format_estimate_single(breakdown.total_high_cents)}. "
-        f"Your ongoing monthly total across all bills is {money.format_actual(monthly_rate)}."
+        f"{money.format_estimate_single(breakdown.total_high_cents)}{' for ' + scope if named else ''}. "
+        f"Your ongoing monthly total across {scope} is {money.format_actual(monthly_rate)}."
     )
 
 
@@ -125,37 +142,60 @@ def _answer_barely_using():
     return " ".join(sentences)
 
 
-def _answer_upcoming():
+WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
+COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
+DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
+NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(fortnight|month)\b", re.I)
+NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
+UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
+MAX_HORIZON_DAYS = 180
+
+
+def _horizon_days(message):
+    """How many days ahead a what's-due question looks: a count of days, weeks or months, a fortnight or month, else a week."""
+    counted = DAYS_AHEAD.search(message or "")
+    named = NAMED_HORIZON.search(message or "")
+    if counted:
+        number = counted.group(1).lower()
+        days = (int(number) if number.isdigit() else WORD_NUMBERS[number]) * UNIT_DAYS[counted.group(2).lower()]
+    else:
+        days = NAMED_HORIZON_DAYS[named.group(1).lower()] if named else 7
+    return min(max(days, 1), MAX_HORIZON_DAYS)
+
+
+def _answer_upcoming(days=7, named=None):
+    """Every bill occurrence, or only the named rows', from today for the next days, soonest first, as one sentence."""
     today = config.DEMO_TODAY
-    bills = [bills_db.row_to_bill(r) for r in bills_db.list_bills()]
-    window_end = today + timedelta(days=7)
-    names = []
-    for bill in bills:
-        names.extend(occ.name for occ in project(bill, today, window_end))
-    if not names:
-        return "Nothing is due in the next 7 days."
-    return f"Coming up this week: {', '.join(names)}."
+    bills = [bills_db.row_to_bill(r) for r in (named or bills_db.list_bills())]
+    occurrences = sorted((occ for bill in bills for occ in project(bill, today, today + timedelta(days=days))), key=lambda occ: occ.date)
+    span = f"the next {days} day{'s' if days != 1 else ''}"
+    if not occurrences:
+        return f"Nothing is due in {span}."
+    items = ", ".join(f"{occ.name} on {_day_month(occ.date)} ({money.format_actual(occ.amount_cents)})" for occ in occurrences)
+    return f"Coming up {'this week' if days == 7 else 'in ' + span}: {items}."
 
 
-def _resolve_question(question):
+def _resolve_question(question, message=""):
     if question == "total":
         return _answer_total()
     if question == "barely_using":
         return _answer_barely_using()
     if question == "upcoming":
-        return _answer_upcoming()
+        return _answer_upcoming(_horizon_days(message))
     return None
 
 
 def _build_preview(data):
+    """The proposal in a classifier reply, or None for no op or a read; a dispute update that carries a reason and no status is a new dispute, whatever id the model put on it."""
     op, entity = data.get("op"), data.get("entity")
-    if not op or not entity:
+    if not op or not entity or op == "read":
         return None
-    if op == "read":
-        # A read is a question, not a change; there is nothing to apply and a
-        # Confirm button for it could only end in "unsupported op 'read'".
-        return None
-    return {"op": op, "entity": entity, "id": data.get("id"), "fields": data.get("fields")}
+    fields = {key: value for key, value in (data.get("fields") or {}).items() if value is not None}
+    entity_id = data.get("id")
+    if entity == "dispute" and op == "update" and "reason" in fields and "status" not in fields:
+        op, entity_id = "create", None
+        fields.setdefault("bill_id", data.get("id"))
+    return {"op": op, "entity": entity, "id": entity_id, "fields": fields}
 
 
 # What a bill create must carry before it is worth proposing. merchant is
@@ -178,10 +218,79 @@ MISSING_FIELD_QUESTIONS = {
     "cadence": "how often it bills (weekly, fortnightly or monthly)",
     "next_billing_date": "the next billing date",
     "type": "whether it's a bill or a subscription",
+    "end_date": "the end date",
 }
+
+CREATE_NEEDS_REPLY = "Happy to add that — I just need {wants}. I won't guess details you haven't given me."
+
+CADENCE_PHRASES = {
+    "monthly": ("monthly", "a month", "per month", "each month", "every month", "/month", "/mo"),
+    "weekly": ("weekly", "a week", "per week", "each week", "every week", "/week", "/wk"),
+    "fortnightly": (
+        "fortnightly", "a fortnight", "per fortnight", "each fortnight", "every fortnight",
+        "every two weeks", "every 2 weeks",
+    ),
+}
+
+MONTH_NAMES = (
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+)
+
+MONTH_WORDS = "|".join(MONTH_NAMES + ("sept",) + tuple(m[:3] for m in MONTH_NAMES))
+
+DATE_SPAN = re.compile(
+    rf"\d{{4}}-\d{{2}}-\d{{2}}|(?<!\d)\d{{1,2}}/\d{{1,2}}(?:/\d{{2,4}})?(?!\d)"
+    rf"|(?<![\d$.])\d{{1,2}}(?:st|nd|rd|th)?(?: of)? (?:{MONTH_WORDS})(?![a-z])"
+    rf"|(?<![a-z])(?:{MONTH_WORDS}) \d{{1,2}}(?!\d)"
+)
 
 
 _ADD_VERB = re.compile(r"\b(add|adds|adding|added|new bill|new subscription)\b", re.I)
+
+CHANGE_VERB = re.compile(
+    r"\b(add(?:s|ing|ed)?(?! up)|create|pause|draft|log|edit|cancel|cancels|cancelled|cancelling|end|ends|ending|stop|stops|remove|removes|change|changes"
+    r"|update|updates|set|rename|delete|dispute|record|mark|move|exclude|include|raise|lower|increase|decrease|switch)\b",
+    re.I,
+)
+
+
+DUE_WORDS = re.compile(r"\b(due|upcoming|coming up|scheduled)\b", re.I)
+PAY_WORDS = re.compile(r"\b(pay|paying|owe|spend|spending)\b", re.I)
+
+
+def _asks_what_is_due(message):
+    """True for a question about what is due: a due word, or a time horizon together with a pay word."""
+    text = message or ""
+    return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
+
+
+QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+)?(what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
+BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
+
+
+def _is_plain_question(message):
+    """True for a message that asks rather than instructs, so the model may not turn it into a proposal."""
+    text = (message or "").strip()
+    asking = text.endswith("?") or QUESTION_START.match(text) or TOTAL_WORDS.search(text)
+    return bool(asking) and not CHANGE_VERB.search(text)
+
+
+def _bills_named(text, bills):
+    """The bill rows whose name or merchant the text mentions as a whole word."""
+    return [row for row in bills if _mentions(text, row["name"]) or _mentions(text, row["merchant"])]
+
+
+CHARGE_WORDS = re.compile(r"\b(charged?|charges|charging|debited|took|taken|actually (paid|pay)|bank)\b", re.I)
+FUTURE_WORDS = re.compile(r"\b(will|next)\b", re.I)
+CHARGE_WINDOW_DAYS = 90
+COMPARE_TOOL = "compare_bill_with_bank_charges"
+
+
+def _asks_what_was_charged(message, named):
+    """True for a plain question about what one named bill's merchant charged, as opposed to what is due or coming next."""
+    return len(named) == 1 and bool(CHARGE_WORDS.search(message)) and not FUTURE_WORDS.search(message) and not DUE_WORDS.search(message)
 
 
 def _contradicts_an_update(preview, say):
@@ -204,7 +313,91 @@ def _contradicts_an_update(preview, say):
     return bool(target) and target.lower() not in (say or "").lower()
 
 
-def _vet_proposal(preview, say=""):
+def _mentions(text, name):
+    """True when name appears in text as a whole word or phrase, ignoring case."""
+    return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I) is not None
+
+
+DISPUTE_VERB = re.compile(r"\bdisput(e|es|ed|ing)\b", re.I)
+REASON_SPLIT = re.compile(r",\s+|\s+because\s+|\s+-\s+|:\s+|\s+as\s+", re.I)
+
+
+def _dispute_from_words(message, bills):
+    """A create-dispute proposal built from the user's own words when they say dispute and name exactly one bill; the reason is the clause after the first comma, because or dash, else the whole message."""
+    named = _bills_named(message, bills)
+    if not DISPUTE_VERB.search(message or "") or len(named) != 1:
+        return None
+    parts = REASON_SPLIT.split(message.strip(), maxsplit=1)
+    reason = parts[1].strip() if len(parts) == 2 and parts[1].strip() else message.strip()
+    return {"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": named[0]["id"], "reason": reason}}
+
+
+def _retarget_to_named_bill(preview, message, bills):
+    """Point a bill update or delete at the one bill the user's own message names, since a small model sometimes says Spotify and emits Prime Video's id."""
+    named = _bills_named(message, bills)
+    if preview["entity"] == "bill" and preview["op"] in ("update", "delete") and len(named) == 1:
+        preview["id"] = named[0]["id"]
+    return preview
+
+
+def _names_a_different_bill(preview, say):
+    """Return (target_name, other_name) when an update's reply names another bill but not its own target, else None."""
+    if preview["op"] != "update" or preview["entity"] != "bill" or not say:
+        return None
+    rows = bills_db.list_bills()
+    target = next((row["name"] for row in rows if row["id"] == preview.get("id")), None)
+    if not target or _mentions(say, target):
+        return None
+    other = next((row["name"] for row in rows if row["id"] != preview.get("id") and _mentions(say, row["name"])), None)
+    return (target, other) if other else None
+
+
+def _has_phrase(text, phrases):
+    """True when any phrase appears in text with no letters glued to either end."""
+    return any(re.search(rf"(?<![a-z]){re.escape(phrase)}(?![a-z])", text) for phrase in phrases)
+
+
+def _date_stated(text, days, value, need_day):
+    """True when the text gives the month of an ISO date, and its day when need_day."""
+    when = date.fromisoformat(str(value))
+    name = MONTH_NAMES[when.month - 1]
+    words = (name, name[:3]) + (("sept",) if when.month == 9 else ())
+    slashed = re.findall(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)", text)
+    month_given = (
+        _has_phrase(text, words)
+        or when.isoformat() in text
+        or any(int(d) == when.day and int(m) == when.month for d, m in slashed)
+    )
+    day_given = any(int(n) == when.day for n in days)
+    return month_given and (day_given or not need_day)
+
+
+def _ungrounded_fields(entity, op, fields, stated):
+    """Names of the proposed values the user's own words (stated) do not support.
+
+    Amounts are read from the text with its date spans removed, and days only
+    from those spans, so a stated date cannot ground a made-up amount or the
+    other way round.
+    """
+    if op not in ("create", "update") or entity != "bill":
+        return []
+    text = stated.lower().replace(",", "")
+    amounts = {Decimal(n) for n in re.findall(r"\d+(?:\.\d+)?", DATE_SPAN.sub(" ", text))}
+    days = re.findall(r"\d+", " ".join(DATE_SPAN.findall(text)))
+    ungrounded = []
+    if "amount_cents" in fields and Decimal(fields["amount_cents"]) / 100 not in amounts:
+        ungrounded.append("amount_cents")
+    cadence = fields.get("cadence")
+    if op == "create" and cadence and not _has_phrase(text, CADENCE_PHRASES.get(cadence, ())):
+        ungrounded.append("cadence")
+    for key in ("next_billing_date", "end_date"):
+        need_day = op == "create" and key == "next_billing_date"
+        if fields.get(key) and not _date_stated(text, days, fields[key], need_day):
+            ungrounded.append(key)
+    return ungrounded
+
+
+def _vet_proposal(preview, say="", stated=None):
     """Vet a proposal *before* it reaches the user.
 
     Returns (canonical_fields, None) when the proposal is appliable — fields
@@ -214,12 +407,20 @@ def _vet_proposal(preview, say=""):
     beneath the prompt's "ask, don't invent" instruction: even if the model
     ignores it and emits an under-specified create, no appliable proposal
     exists until the user has supplied the details.
+
+    With stated (the user's own words since the last proposal) the amount,
+    cadence and dates must also appear in what the user said; stated=None
+    skips that check.
     """
     if _contradicts_an_update(preview, say):
         return None, (
             "I need to be clearer about that one — I can add a new bill, or change an "
             "existing one, and that came out as both. Which did you mean?"
         )
+    wrong_target = _names_a_different_bill(preview, say)
+    if wrong_target:
+        target, other = wrong_target
+        return None, f"That change would apply to {target}, not {other}. Which bill did you mean?"
     try:
         fields = _normalise_chat_fields(preview["entity"], preview["op"], preview["fields"] or {})
         allowed = BILL_FIELD_WHITELIST[preview["entity"]]
@@ -240,7 +441,14 @@ def _vet_proposal(preview, say=""):
         missing = [f for f in CREATE_REQUIRED if not fields.get(f)]
         if missing:
             wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
-            return None, f"Happy to add that — I just need {wants}. I won't guess details you haven't given me."
+            return None, CREATE_NEEDS_REPLY.format(wants=wants)
+    ungrounded = [] if stated is None else _ungrounded_fields(preview["entity"], preview["op"], fields, stated)
+    if ungrounded:
+        wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in ungrounded)
+        if preview["op"] == "create":
+            return None, CREATE_NEEDS_REPLY.format(wants=wants)
+        target = (_bill_name(preview.get("id")) if preview["entity"] == "bill" else None) or "that"
+        return None, f"I'd need you to state {wants} before I change {target}. I won't guess details you haven't given me."
     return fields, None
 
 
@@ -249,7 +457,7 @@ def send_message(message):
         raise ServiceError("message is required")
     history = _recent_history()
     bills_db.create_chat_message({"role": "user", "content": message})
-    return _model_turn(message, history)
+    return _model_turn(message, history, stated=_stated_text(message, history))
 
 
 # The Observe→Adapt half of the loop. Sent to the model as the current turn
@@ -273,10 +481,58 @@ def adapt_after_rejection():
     without waiting for the user to speak: the model sees the rejection note
     in its history and either asks what to change or proposes a corrected
     suggestion (which lands as a fresh pending row via the same vetting)."""
-    return _model_turn(ADAPT_NUDGE, _recent_history(), fallback=ADAPT_FALLBACK)
+    history = _recent_history()
+    return _model_turn(ADAPT_NUDGE, history, fallback=ADAPT_FALLBACK, stated=_stated_text("", history), grounded=False)
 
 
-def _model_turn(model_message, history, fallback=None):
+def _grounded_answer(message):
+    """The bills-corpus answer card for a plain question, or None when a mode is off or the MCP call fails, so the chat never breaks on retrieval."""
+    if not (config.MCP_ENABLED and config.RAG_ENABLED):
+        return None
+    try:
+        return evidence_service.ask(message)
+    except (ModeError, ServiceError):
+        return None
+
+
+def _bank_charges(bill):
+    """Answer what a bill's merchant charged over the last CHARGE_WINDOW_DAYS from the MCP compare tool: (sentence, facts for the chips), or None when MCP is off or fails."""
+    if not config.MCP_ENABLED:
+        return None
+    today = config.DEMO_TODAY
+    arguments = {"bill_id": bill["id"], "start_date": (today - timedelta(days=CHARGE_WINDOW_DAYS)).isoformat(), "end_date": today.isoformat()}
+    try:
+        data, duration_ms = tools_service.call_allowed_tool(COMPARE_TOOL, arguments)
+    except ServiceError:
+        return None
+    charges = data.get("charges") or []
+    rows = []
+    for charge in charges:
+        when = _day_month(date.fromisoformat(charge["date"]))
+        delta = charge.get("differs_from_bill_cents") or 0
+        note = f"{'+' if delta > 0 else '-'}{money.format_actual(abs(delta))} vs bill" if delta else ""
+        rows.append({"date": when, "amount": money.format_actual(charge["amount_cents"]), "note": note, "delta": delta})
+    merchant = bill["merchant"]
+    if not rows:
+        sentence = f"No bank charges from {merchant} in the last {CHARGE_WINDOW_DAYS} days."
+    else:
+        sentence = f"{merchant} charged you {_count_word(len(rows))} time{'' if len(rows) == 1 else 's'} in the last {CHARGE_WINDOW_DAYS} days"
+        odd = next((r for r in rows if r["delta"]), None)
+        if odd:
+            direction = "above" if odd["delta"] > 0 else "below"
+            sentence += f"; the {odd['date']} charge was {money.format_actual(abs(odd['delta']))} {direction} your {money.format_actual(bill['amount_cents'])} bill."
+        else:
+            sentence += f", each at your {money.format_actual(bill['amount_cents'])} bill amount."
+    return {"sentence": sentence, "tool": COMPARE_TOOL, "rows": rows, "duration_ms": duration_ms}
+
+
+def _warm_in_background(model):
+    """Start loading a model on a daemon thread; a dispute proposal uses it so Approve does not wait for the draft model to swap in."""
+    threading.Thread(target=ollama_client.warm, args=(model,), daemon=True).start()
+
+
+def _model_turn(model_message, history, fallback=None, stated=None, grounded=True):
+    """One classifier turn; a plain question (no proposal, no code-computed answer) is then answered from the bills corpus when grounded."""
     bills = bills_db.list_bills()
     data = guard.run(
         config.CHAT_MODEL,
@@ -285,15 +541,52 @@ def _model_turn(model_message, history, fallback=None):
         fallback or chat_prompt.FALLBACK,
     )
 
-    reply = _resolve_question(data.get("question")) or data.get("say", "")
-    preview = _build_preview(data)
+    agrees = {"upcoming": _asks_what_is_due(model_message), "total": bool(TOTAL_WORDS.search(model_message)), "barely_using": bool(BARELY_WORDS.search(model_message))}
+    if data.get("question") in agrees and not agrees[data.get("question")]:
+        data["question"] = "none"
+    answered = _resolve_question(data.get("question"), model_message)
+    route = data.get("question") if answered else "plain"
+    reply = answered or data.get("say", "")
+    asks = grounded and _is_plain_question(model_message)
+    from_words = None if asks else _dispute_from_words(model_message, bills)
+    preview = None if asks else (from_words or _build_preview(data))
+    if from_words:
+        reply = f"I've suggested opening a dispute for {_bill_name(from_words['fields']['bill_id'])} — approve it to draft the letter."
+    if preview:
+        preview = _retarget_to_named_bill(preview, model_message, bills)
+    named = _bills_named(model_message, bills) if asks else []
+    about_a_bill = len(named) == 1
+    card = None
+    facts = _bank_charges(named[0]) if asks and _asks_what_was_charged(model_message, named) else None
+    if facts:
+        route = "tool"
+        reply = facts["sentence"]
+    elif asks and BARELY_WORDS.search(model_message):
+        reply = _answer_barely_using()
+        route = "barely_using"
+    elif asks and not about_a_bill and _asks_what_is_due(model_message):
+        reply = _answer_upcoming(_horizon_days(model_message), named)
+        route = "upcoming"
+    elif asks and not about_a_bill and TOTAL_WORDS.search(model_message):
+        reply = _answer_total(named)
+        route = "total"
+    elif asks and not preview and (data.get("question") in (None, "none") or about_a_bill):
+        card = _grounded_answer(model_message)
+        if card:
+            reply = card["answer"]
+            route = "grounded"
+    if not preview and not asks and CHANGE_VERB.search(model_message or ""):
+        route = "ask_back"
     canonical_fields = None
     if preview:
-        canonical_fields, reply_override = _vet_proposal(preview, reply)
+        canonical_fields, reply_override = _vet_proposal(preview, reply, stated=stated)
         if reply_override:
             reply = reply_override
             preview = None
+            route = "ask_back"
 
+    if preview:
+        route = "proposal"
     assistant_row = bills_db.create_chat_message(
         {"role": "assistant", "content": reply, "op_json": json.dumps(preview) if preview else None}
     )
@@ -312,7 +605,20 @@ def _model_turn(model_message, history, fallback=None):
             }
         )
         preview["suggestion_id"] = suggestion["id"]
-    return {"reply": reply, "op": preview["op"] if preview else None, "preview": preview, "fallback": data.get("fallback", False)}
+        if (preview["op"], preview["entity"]) == ("create", "dispute"):
+            try:
+                _warm_in_background(config.DRAFT_MODEL)
+            except Exception:
+                pass
+    return {
+        "reply": reply,
+        "op": preview["op"] if preview else None,
+        "preview": preview,
+        "fallback": bool(data.get("fallback", False)) and card is None and facts is None,
+        "grounded": card,
+        "tool": facts,
+        "route": route,
+    }
 
 
 def _normalise_chat_fields(entity, op, fields):
@@ -375,7 +681,7 @@ def _execute(op, entity, entity_id, clean_fields):
         draft = disputes_service.draft_for_bill(bill_row, reason)
         bills_db.create_dispute_draft(
             result["id"],
-            {"letter_text": draft["letter_text"], "steps_json": {"steps": draft["steps"], "escalation": draft["escalation"]}},
+            {"letter_text": draft["letter_text"], "steps_json": disputes_service.steps_json(draft)},
         )
         result["draft"] = draft
         return result

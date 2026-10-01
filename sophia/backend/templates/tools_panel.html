@@ -1,4 +1,4 @@
-{# Tools card: one form per allow-listed MCP tool the card exposes; every result lands in #tool-result. Root id is a fragment contract. #}
+{# Tools card: one bill picker, one button per allow-listed MCP tool the card exposes; every result lands in #tool-result. Root id is a fragment contract. #}
 <div class="tools-panel card" id="tools-panel">
   <h3>Tools <span class="mode-badge mode-{{ 'on' if enabled else 'off' }}">MCP {{ 'enabled' if enabled else 'disabled' }}</span></h3>
   <form hx-post="/bills-backend/ui/tools/search_transactions" hx-target="#tool-result" hx-swap="innerHTML" hx-disabled-elt="find button" hx-indicator="find .working">
@@ -8,7 +8,9 @@
       </select>
     </label>
     <button type="submit" class="btn-sm">Match transactions</button>
-    <span class="working" aria-live="polite">Calling search_transactions…</span>
+    <button type="button" class="btn-sm" hx-post="/bills-backend/ui/tools/get_bill_payments" hx-include="closest form" hx-target="#tool-result" hx-swap="innerHTML">Payment history</button>
+    <button type="button" class="btn-sm" hx-post="/bills-backend/ui/tools/compare_bill_with_bank_charges" hx-include="closest form" hx-target="#tool-result" hx-swap="innerHTML">Compare with bank</button>
+    <span class="working" aria-live="polite">Calling the MCP server…</span>
   </form>
   <div id="tool-result"></div>
 </div>

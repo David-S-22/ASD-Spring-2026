@@ -4,8 +4,8 @@
 - Type: bill
 - Cadence: monthly
 - Amount: $142.00
-- Next billing date: 2026-09-10
+- Next billing date: 2026-10-22
 - Status: paid
 - Payment method: bpay
-- Last payment: 2026-08-10 ($139.75)
+- Last payment: 2026-09-22 ($139.75)
 - Open disputes: 1

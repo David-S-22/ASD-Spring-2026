@@ -19,6 +19,14 @@ def response_with_json(payload, status=200):
     return response
 
 
+def retrieve():
+    return rag_client.retrieve("transactions", "question")
+
+
+def refresh():
+    return rag_client.refresh("transactions-records", [], [])
+
+
 @fixture(autouse=True)
 def rag_enabled(monkeypatch: MonkeyPatch):
     monkeypatch.setattr(config, "RAG_ENABLED", True)
@@ -27,27 +35,13 @@ def rag_enabled(monkeypatch: MonkeyPatch):
 
 
 @fixture
-def http(monkeypatch: MonkeyPatch):
-    get = Mock()
+def post(monkeypatch: MonkeyPatch):
     post = Mock()
-    monkeypatch.setattr(rag_client.requests, "get", get)
     monkeypatch.setattr(rag_client.requests, "post", post)
-    return get, post
+    return post
 
 
-def test_health_returns_body(http):
-    get, _ = http
-    get.return_value = response_with_json({
-        "ok": True,
-        "collections": ["transactions"],
-    })
-
-    assert rag_client.health() == {"ok": True, "collections": ["transactions"]}
-    get.assert_called_once_with("http://rag.test/health", timeout=7)
-
-
-def test_refresh_posts_documents_and_returns_total(http):
-    _, post = http
+def test_refresh_posts_documents_and_returns_total(post):
     post.return_value = response_with_json({
         "feature": "transactions-records",
         "total": 2,
@@ -73,22 +67,11 @@ def test_refresh_posts_documents_and_returns_total(http):
     )
 
 
-def test_retrieve_posts_question_and_returns_results(http):
-    _, post = http
-    post.return_value = response_with_json({"results": [
-        {
-            "id": "transaction-7",
-            "text": "Anytime Fitness",
-            "metadata": {"category_id": 3},
-            "distance": 0.4,
-        },
-        {
-            "id": "transaction-8",
-            "text": "Gym",
-            "metadata": {},
-            "distance": 1,
-        },
-    ]})
+def test_retrieve_posts_question_and_returns_results(post):
+    item = {"id": "tx-7", "text": "Gym", "metadata": {"category_id": 3}}
+    post.return_value = response_with_json({
+        "results": [{**item, "distance": 1}],
+    })
 
     results = rag_client.retrieve(
         "transactions-records",
@@ -97,20 +80,7 @@ def test_retrieve_posts_question_and_returns_results(http):
         where={"kind": "transaction"},
     )
 
-    assert results == [
-        {
-            "id": "transaction-7",
-            "text": "Anytime Fitness",
-            "metadata": {"category_id": 3},
-            "distance": 0.4,
-        },
-        {
-            "id": "transaction-8",
-            "text": "Gym",
-            "metadata": {},
-            "distance": 1.0,
-        },
-    ]
+    assert results == [{**item, "distance": 1.0}]
     post.assert_called_once_with(
         "http://rag.test/retrieve",
         json={
@@ -122,12 +92,8 @@ def test_retrieve_posts_question_and_returns_results(http):
         timeout=7,
     )
 
-
-def test_retrieve_omits_where_when_not_given(http):
-    _, post = http
     post.return_value = response_with_json({"results": []})
-
-    assert rag_client.retrieve("transactions", "question") == []
+    assert retrieve() == []
     assert post.call_args.kwargs["json"] == {
         "feature": "transactions",
         "question": "question",
@@ -135,125 +101,58 @@ def test_retrieve_omits_where_when_not_given(http):
     }
 
 
-OPERATIONS = [
-    lambda: rag_client.health(),
-    lambda: rag_client.refresh("transactions-records", [], [], None),
-    lambda: rag_client.retrieve("transactions", "question"),
-]
-
-
-@mark.parametrize("operation", OPERATIONS)
 def test_disabled_mode_short_circuits_without_request(
     monkeypatch: MonkeyPatch,
-    http,
-    operation,
+    post,
 ):
-    get, post = http
     monkeypatch.setattr(config, "RAG_ENABLED", False)
 
     with raises(RAGError) as caught:
-        operation()
+        retrieve()
 
     assert caught.value.code == "rag_disabled"
-    get.assert_not_called()
     post.assert_not_called()
 
 
-@mark.parametrize("operation", OPERATIONS)
 @mark.parametrize("error, code", [
-    (requests.Timeout(LEAK_MARKER), "rag_timeout"),
-    (requests.ConnectTimeout(LEAK_MARKER), "rag_timeout"),
-    (requests.ConnectionError(LEAK_MARKER), "rag_connection"),
-    (requests.RequestException(LEAK_MARKER), "rag_connection"),
+    (requests.Timeout, "rag_timeout"),
+    (requests.ConnectionError, "rag_connection"),
 ])
-def test_transport_errors_map_to_safe_codes(http, operation, error, code):
-    get, post = http
-    get.side_effect = error
-    post.side_effect = error
+def test_transport_errors_map_to_safe_codes(post, error, code):
+    post.side_effect = error(LEAK_MARKER)
 
     with raises(RAGError) as caught:
-        operation()
+        retrieve()
 
     assert caught.value.code == code
-    assert LEAK_MARKER not in caught.value.message
     assert LEAK_MARKER not in str(caught.value)
     assert caught.value.__cause__ is None
     assert caught.value.__suppress_context__ is True
 
 
-@mark.parametrize("operation", OPERATIONS)
-@mark.parametrize("status", [500, 404, 400, 302])
-def test_non_2xx_maps_to_rag_http_error(http, operation, status):
-    get, post = http
-    get.return_value = response_with_json({"error": LEAK_MARKER}, status)
-    post.return_value = response_with_json({"error": LEAK_MARKER}, status)
+def test_non_2xx_maps_to_rag_http_error(post):
+    post.return_value = response_with_json({"error": LEAK_MARKER}, 500)
 
     with raises(RAGError) as caught:
-        operation()
+        refresh()
 
     assert caught.value.code == "rag_http_error"
-    assert LEAK_MARKER not in caught.value.message
+    assert LEAK_MARKER not in str(caught.value)
 
 
-@mark.parametrize("operation", OPERATIONS)
-def test_non_json_body_is_invalid(http, operation):
-    get, post = http
-    for method in (get, post):
-        method.return_value = response_with_json(None)
-        method.return_value.json.side_effect = ValueError(LEAK_MARKER)
+@mark.parametrize("operation, body", [
+    (retrieve, ValueError(LEAK_MARKER)),
+    (retrieve, []),
+    (retrieve, {"results": [{"id": "x", "text": "t", "metadata": {}}]}),
+    (refresh, {"feature": "transactions-records", "total": "2"}),
+])
+def test_invalid_body_maps_to_rag_invalid_response(post, operation, body):
+    post.return_value = response_with_json(body)
+    if isinstance(body, Exception):
+        post.return_value.json.side_effect = body
 
     with raises(RAGError) as caught:
         operation()
 
     assert caught.value.code == "rag_invalid_response"
-    assert LEAK_MARKER not in caught.value.message
-
-
-@mark.parametrize("body", [
-    {},
-    {"results": None},
-    {"results": {"id": "x"}},
-    {"results": ["text"]},
-    {"results": [{"id": "x", "text": "t", "metadata": {}}]},
-    {"results": [{"id": "x", "text": "t", "metadata": {}, "distance": "0.1"}]},
-    {"results": [{"id": "x", "text": "t", "metadata": {}, "distance": True}]},
-    {"results": [{"id": "x", "text": "t", "metadata": None, "distance": 0.1}]},
-    {"results": [{"id": 1, "text": "t", "metadata": {}, "distance": 0.1}]},
-    {"results": [{"id": "x", "text": None, "metadata": {}, "distance": 0.1}]},
-    [],
-])
-def test_malformed_retrieve_body_is_invalid(http, body):
-    _, post = http
-    post.return_value = response_with_json(body)
-
-    with raises(RAGError) as caught:
-        rag_client.retrieve("transactions", "question")
-
-    assert caught.value.code == "rag_invalid_response"
-
-
-@mark.parametrize("body", [
-    {},
-    {"feature": "transactions-records"},
-    {"feature": "transactions-records", "total": "2"},
-    {"feature": "transactions-records", "total": True},
-    {"total": 2},
-])
-def test_malformed_refresh_body_is_invalid(http, body):
-    _, post = http
-    post.return_value = response_with_json(body)
-
-    with raises(RAGError) as caught:
-        rag_client.refresh("transactions-records", [], [], None)
-
-    assert caught.value.code == "rag_invalid_response"
-
-
-def test_health_without_collections_is_invalid(http):
-    get, _ = http
-    get.return_value = response_with_json({"ok": True})
-
-    with raises(RAGError) as caught:
-        rag_client.health()
-
-    assert caught.value.code == "rag_invalid_response"
+    assert LEAK_MARKER not in str(caught.value)

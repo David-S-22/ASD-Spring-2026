@@ -263,8 +263,7 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
     (evt.detail.elt.closest(".chat-panel form") ||
       evt.detail.elt.closest(".preview-card") ||
       evt.detail.elt.closest(".suggestion-card") ||
-      evt.detail.elt.closest(".tools-panel form") ||
-      evt.detail.elt.closest(".evidence-panel form"))
+      evt.detail.elt.closest(".tools-panel form"))
   ) {
     return;
   }
@@ -272,6 +271,21 @@ billsRoot.addEventListener("htmx:confirm", function (evt) {
   showModal(confirmPromptFor(evt.detail.elt), function () {
     evt.detail.issueRequest(true);
   });
+});
+
+function markActiveTool(elt) {
+  var form = elt && elt.closest ? elt.closest(".tools-panel form") : null;
+  if (!form) {
+    return;
+  }
+  var button = elt.matches("button") ? elt : form.querySelector("button[type=submit]");
+  form.querySelectorAll("button").forEach(function (b) {
+    b.classList.toggle("active", b === button);
+  });
+}
+
+billsRoot.addEventListener("htmx:beforeRequest", function (evt) {
+  markActiveTool(evt.detail.elt);
 });
 
 billsRoot.addEventListener("htmx:afterRequest", function (evt) {
@@ -398,30 +412,6 @@ billsRoot.addEventListener("click", function (evt) {
   // actually for.
   if (!evt.target.closest(".row-menu")) {
     closeRowMenus();
-  }
-
-  var chip = evt.target.closest("[data-chip]");
-  if (chip) {
-    var input = document.querySelector('.chat-panel input[name="message"]');
-    if (input) {
-      input.value = chip.getAttribute("data-chip");
-      if (input.form && input.form.requestSubmit) {
-        input.form.requestSubmit();
-      }
-    }
-    return;
-  }
-
-  var evidenceChip = evt.target.closest("[data-evidence-chip]");
-  if (evidenceChip) {
-    var question = document.querySelector('.evidence-panel input[name="question"]');
-    if (question) {
-      question.value = evidenceChip.getAttribute("data-evidence-chip");
-      if (question.form && question.form.requestSubmit) {
-        question.form.requestSubmit();
-      }
-    }
-    return;
   }
 
   var rewrite = evt.target.closest('[data-action="rewrite"]');

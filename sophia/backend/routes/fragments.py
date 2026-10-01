@@ -387,7 +387,7 @@ def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False
     draft = None
     if chosen:
         steps_data = json.loads(chosen["steps_json"])
-        draft = {"letter_text": chosen["letter_text"], "steps": steps_data["steps"], "escalation": steps_data["escalation"]}
+        draft = {"letter_text": chosen["letter_text"], "steps": steps_data["steps"], "escalation": steps_data["escalation"], "evidence": steps_data.get("evidence")}
 
     bill_row = bills_db.get_bill(dispute["bill_id"])
     context_line = None
@@ -395,11 +395,19 @@ def _render_dispute_panel(dispute_id=None, bill_id=None, version=None, oob=False
         next_date = _day_month_label(date.fromisoformat(bill_row["next_billing_date"]))
         context_line = f"Next billing is {next_date}. Cancel before then and you won't be charged."
 
+    if not config.MCP_ENABLED:
+        evidence_note = "Bank evidence and policy facts unavailable: MCP mode is disabled."
+    elif not config.RAG_ENABLED:
+        evidence_note = "Policy facts unavailable: RAG mode is disabled."
+    else:
+        evidence_note = None
+
     return render_template(
         "dispute_panel.html",
         dispute=dispute,
         draft=draft,
         context_line=context_line,
+        evidence_note=evidence_note,
         versions=versions,
         selected_version=chosen["version"] if chosen else None,
         oob=oob,
@@ -691,7 +699,7 @@ def _render_chat_panel():
     .history) and stay visible until the panel is re-fetched, at which point it
     returns to the welcome state.
     """
-    return render_template("chat_panel.html", messages=[])
+    return render_template("chat_panel.html", messages=[], rag_enabled=config.MCP_ENABLED and config.RAG_ENABLED)
 
 
 @bp.post("/chat")
@@ -708,7 +716,8 @@ def chat_send():
         if row:
             suggestion_title = _suggestion_view(row)["title"]
     reply_html = render_template(
-        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"]
+        "chat_reply.html", reply=result["reply"], suggestion_title=suggestion_title, fallback=result["fallback"],
+        grounded=result.get("grounded"), tool=result.get("tool"),
     )
     if suggestion_title:
         # The panel is the one surface for the proposal; refresh it so the

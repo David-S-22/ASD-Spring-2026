@@ -14,6 +14,7 @@ FEATURE = "billing"
 INSUFFICIENT_ANSWER = "Tally couldn't find a bill that covers that."
 FALLBACK_ANSWER = "Tally found matching bills but couldn't put an answer together; try again."
 SOURCE_PATTERN = re.compile(r"^bill-(\d+)-.*\.md$")
+CITED_FILE = re.compile(r"bill-\d+-\S*?\.md")
 RETRIEVAL_MARGIN = 3
 TITLE_SUFFIX = re.compile(r"\s*\((bill|subscription)\)$")
 
@@ -30,17 +31,22 @@ def _valid_chunk(item):
     )
 
 
-def retrieve(question, k):
-    """Return (at most k bill chunks closest first, duration_ms) from retrieve_context, fetching RETRIEVAL_MARGIN extra so the shared billing folder's other files never take a bill's slot; a tool error means the RAG server is down."""
-    data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k + RETRIEVAL_MARGIN})
+def chunks(question, k):
+    """Return (the k closest chunks of the billing folder as {id, source, text, distance}, duration_ms) from retrieve_context; ModeError when the payload has the wrong shape."""
+    data, duration_ms = tools_service.call_allowed_tool(tools_service.RETRIEVAL_TOOL, {"feature": FEATURE, "question": question, "k": k})
     results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, list) or not all(_valid_chunk(item) for item in results):
         raise ModeError("mcp_invalid_result")
-    chunks = [
+    return [
         {"id": r["id"], "source": str(r["metadata"].get("source", "")), "text": r["text"], "distance": float(r["distance"])}
         for r in results
-    ]
-    own_chunks = [chunk for chunk in chunks if SOURCE_PATTERN.match(chunk["source"])]
+    ], duration_ms
+
+
+def retrieve(question, k):
+    """Return (at most k bill chunks closest first, duration_ms) from retrieve_context, fetching RETRIEVAL_MARGIN extra so the shared billing folder's other files never take a bill's slot; a tool error means the RAG server is down."""
+    found, duration_ms = chunks(question, k + RETRIEVAL_MARGIN)
+    own_chunks = [chunk for chunk in found if SOURCE_PATTERN.match(chunk["source"])]
     return sorted(own_chunks, key=lambda chunk: chunk["distance"])[:k], duration_ms
 
 
@@ -54,6 +60,12 @@ def confidence_for(chunks):
     if best < config.RAG_MEDIUM:
         return "medium"
     return "low"
+
+
+def _cited_file(text):
+    """The bill file name inside one cited string; the model sometimes copies the prompt's "[Source: ...]" label around it."""
+    match = CITED_FILE.search(str(text))
+    return match.group(0) if match else text
 
 
 def _citation(chunk):
@@ -91,13 +103,14 @@ def ask(question):
         validate_grounded_answer,
         grounded_prompt.FALLBACK,
         timeout=config.GROUNDED_TIMEOUT_SECONDS,
+        temperature=config.GROUNDED_TEMPERATURE,
     )
     if data["fallback"]:
         logger.info("RAG_TOOL feature=%s k=%s kept=%s best=%s confidence=none insufficient=true fallback=true duration_ms=%s",
                     FEATURE, k, len(chunks), best, duration_ms)
         return _card(answer=FALLBACK_ANSWER, citations=[], confidence="none", insufficient=True, retrieval=retrieval, fallback=True, duration_ms=duration_ms)
     by_source = {c["source"]: c for c in survivors}
-    cited = [by_source[s] for s in dict.fromkeys(data["cited"]) if s in by_source]
+    cited = [by_source[s] for s in dict.fromkeys(_cited_file(c) for c in data["cited"]) if s in by_source]
     insufficient = bool(data["insufficient"]) or not cited
     confidence = "none" if insufficient else confidence_for(cited)
     logger.info("RAG_TOOL feature=%s k=%s kept=%s best=%s confidence=%s insufficient=%s duration_ms=%s",
