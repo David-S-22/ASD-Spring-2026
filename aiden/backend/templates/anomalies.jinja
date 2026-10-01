@@ -10,7 +10,6 @@
   <td>{{ txn.date.strftime('%Y-%m-%d') if txn else '—' }}</td>
   <td>{{ (txn.merchant if txn else '—')|e }}</td>
   <td>{{ anomaly.agent_reason_suspected|e }}</td>
-  <td class="anomaly-sources">{% if anomaly.sources %}<ul class="source-list">{% for source in anomaly.sources %}<li class="source-chip" title="{{ source|e }}">{{ source|e }}</li>{% endfor %}</ul>{% else %}<span class="no-actions" aria-label="No sources" title="No sources">—</span>{% endif %}</td>
   <td class="anomaly-confidence">{% if confidence_level is none %}<span class="no-actions" aria-label="No confidence score" title="No confidence score">—</span>{% else %}<span class="confidence-indicator confidence-{{ confidence_level }}">{{ confidence_level|capitalize }}</span>{% endif %}</td>
   <td class="anomaly-status">
     {% if anomaly.is_confirmed_by_user is none %}
@@ -35,5 +34,5 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" style="text-align: center;">No anomalies found.</td></tr>
+<tr><td colspan="5" style="text-align: center;">No anomalies found.</td></tr>
 {% endfor %}
