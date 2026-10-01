@@ -18,7 +18,6 @@ class Anomaly(db.Model): # type: ignore[name-defined]
     agent_reason_suspected: Mapped[str] = mapped_column()
     is_confirmed_by_user: Mapped[bool] = mapped_column(nullable=True)
     confidence: Mapped[float] = mapped_column(nullable=True)
-    # Filenames of the RAG reference documents the agent used to ground its finding.
     sources: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     def to_dto(self):
