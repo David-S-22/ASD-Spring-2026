@@ -1,0 +1,10 @@
+Review the Budgets RAG validation evidence.
+Decide whether it demonstrates a working Release 1 grounded-response path through the backend.
+Call out:
+- backend and RAG health signals
+- whether the response source is RAG
+- whether citations and confidence are present
+- any missing proof or reliability concern
+
+Keep the finding concise and evidence-based.
+Reply in at most 70 words.

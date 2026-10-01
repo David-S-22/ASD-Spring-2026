@@ -1,0 +1,500 @@
+﻿{
+    "captured_at":  "2026-09-30T22:36:58.5240233+10:00",
+    "budgets_backend_url":  "http://127.0.0.1:5006",
+    "rag_server_url":  "http://127.0.0.1:5003",
+    "selected_budget":  {
+                            "created_at":  "2026-09-01T09:00:00+00:00",
+                            "declared_income":  560000,
+                            "id":  9,
+                            "month":  "2026-09",
+                            "status":  "active",
+                            "updated_at":  "2026-09-01T09:00:00+00:00"
+                        },
+    "budgets_health":  {
+                           "database_health":  {
+                                                   "ok":  true
+                                               },
+                           "db_api":  "up",
+                           "mcp_mode":  "enabled",
+                           "ok":  true,
+                           "ollama":  "up",
+                           "rag_mode":  "enabled",
+                           "transactions_api":  "up",
+                           "transactions_categories_count":  15,
+                           "transactions_count":  36
+                       },
+    "summary":  {
+                    "budget":  {
+                                   "created_at":  "2026-09-01T09:00:00+00:00",
+                                   "declared_income":  560000,
+                                   "id":  9,
+                                   "month":  "2026-09",
+                                   "status":  "active",
+                                   "updated_at":  "2026-09-01T09:00:00+00:00"
+                               },
+                    "budget_lines":  [
+                                         {
+                                             "actual_spend":  0,
+                                             "budget_id":  9,
+                                             "cap_state":  false,
+                                             "category":  "Dining",
+                                             "category_id":  80,
+                                             "created_at":  "2026-09-01T09:00:00+00:00",
+                                             "hard_cap":  24000,
+                                             "id":  9,
+                                             "planned_est_high_total":  19000,
+                                             "planned_est_low_total":  17000,
+                                             "projected_high_total":  19000,
+                                             "projected_low_total":  17000,
+                                             "remaining_to_cap":  24000,
+                                             "remaining_to_warn":  19000,
+                                             "updated_at":  "2026-09-01T09:00:00+00:00",
+                                             "warn_at":  19000,
+                                             "warning_state":  false
+                                         },
+                                         {
+                                             "actual_spend":  7000,
+                                             "budget_id":  9,
+                                             "cap_state":  false,
+                                             "category":  "Transport",
+                                             "category_id":  70,
+                                             "created_at":  "2026-09-30T12:12:06.655831+00:00",
+                                             "hard_cap":  10000,
+                                             "id":  11,
+                                             "planned_est_high_total":  0,
+                                             "planned_est_low_total":  0,
+                                             "projected_high_total":  7000,
+                                             "projected_low_total":  7000,
+                                             "remaining_to_cap":  3000,
+                                             "remaining_to_warn":  0,
+                                             "updated_at":  "2026-09-30T12:12:06.655831+00:00",
+                                             "warn_at":  7000,
+                                             "warning_state":  true
+                                         }
+                                     ],
+                    "coach_proposals":  [
+                                            {
+                                                "budget_id":  9,
+                                                "created_at":  "2026-09-01T09:00:00+00:00",
+                                                "decided_at":  null,
+                                                "id":  9,
+                                                "proposal_json":  {
+                                                                      "operations":  [
+                                                                                         {
+                                                                                             "action":  "update_budget_line",
+                                                                                             "fields":  {
+                                                                                                            "hard_cap":  24500,
+                                                                                                            "warn_at":  19500
+                                                                                                        },
+                                                                                             "target":  {
+                                                                                                            "category":  "Dining"
+                                                                                                        }
+                                                                                         }
+                                                                                     ],
+                                                                      "proposal_type":  "coach_seed",
+                                                                      "user_confirmation_message":  "Adjust Dining budget for 2026-09?"
+                                                                  },
+                                                "rationale":  "Seeded proposal for dining in 2026-09.",
+                                                "rejection_reason":  null,
+                                                "status":  "proposed"
+                                            }
+                                        ],
+                    "planned_events":  [
+                                           {
+                                               "budget_id":  9,
+                                               "category":  "Dining",
+                                               "created_at":  "2026-09-01T09:00:00+00:00",
+                                               "date":  "2026-09-09",
+                                               "est_high":  19000,
+                                               "est_low":  17000,
+                                               "id":  9,
+                                               "label":  "Weekend trip",
+                                               "source":  "user",
+                                               "status":  "planned",
+                                               "updated_at":  "2026-09-01T09:00:00+00:00"
+                                           }
+                                       ],
+                    "totals":  {
+                                   "actual_spend_total":  7000,
+                                   "budget_cap_total":  34000,
+                                   "budget_warn_total":  26000,
+                                   "declared_income":  560000,
+                                   "planned_est_high_total":  19000,
+                                   "planned_est_low_total":  17000,
+                                   "projected_high_total":  26000,
+                                   "projected_low_total":  24000,
+                                   "remaining_income_high":  534000,
+                                   "remaining_income_low":  536000
+                               },
+                    "transactions":  {
+                                         "count":  2,
+                                         "other_expenses":  [
+
+                                                            ],
+                                         "uncategorised_total":  0
+                                     }
+                },
+    "rag_health":  {
+                       "collections":  [
+                                           "billing",
+                                           "transactions",
+                                           "transactions-records",
+                                           "savings",
+                                           "budgets"
+                                       ],
+                       "ok":  true
+                   },
+    "mcp_chat":  {
+                     "agentic_workflow":  {
+                                              "act":  {
+                                                          "fallback_used":  false,
+                                                          "response_mode":  "advice",
+                                                          "response_source":  "mcp",
+                                                          "used_model":  false
+                                                      },
+                                              "adapt":  {
+                                                            "proposal_created":  false,
+                                                            "proposal_id":  null,
+                                                            "replaced_proposal_ids":  [
+
+                                                                                      ],
+                                                            "reused_existing_proposal":  false
+                                                        },
+                                              "observe":  {
+                                                              "active_proposal_count":  1,
+                                                              "budget_id":  "9",
+                                                              "budget_line_count":  2,
+                                                              "history_turn_count":  9,
+                                                              "month":  "2026-09",
+                                                              "planned_event_count":  1,
+                                                              "projected_high_total":  26000,
+                                                              "remaining_income_high":  534000,
+                                                              "transactions_count":  2,
+                                                              "uncategorised_total":  0
+                                                          },
+                                              "plan":  {
+                                                           "conversation_mode":  "advice",
+                                                           "human_confirmation_required":  false,
+                                                           "intent":  "other",
+                                                           "requested_amount_cents":  null,
+                                                           "safety_checks":  [
+                                                                                 "budget_must_exist",
+                                                                                 "responses_must_stay_grounded_in_budget_summary",
+                                                                                 "proposal_changes_require_user_approval"
+                                                                             ],
+                                                           "target_budget_line_id":  null,
+                                                           "target_category":  null
+                                                       }
+                                          },
+                     "assistant_message":  {
+                                               "content":  "I used the shared MCP transaction search for Transport and found 2 matching transactions totalling $70.00.",
+                                               "grounding":  null,
+                                               "mode":  "advice",
+                                               "response_source":  "mcp",
+                                               "role":  "assistant",
+                                               "tool_result":  {
+                                                                   "arguments":  {
+                                                                                     "category_name":  "Transport",
+                                                                                     "end_date":  "2026-09-30",
+                                                                                     "start_date":  "2026-09-01"
+                                                                                 },
+                                                                   "count":  2,
+                                                                   "result_preview":  [
+                                                                                          {
+                                                                                              "amount":  10.0,
+                                                                                              "category_name":  null,
+                                                                                              "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                                              "description":  "train",
+                                                                                              "merchant":  "train"
+                                                                                          },
+                                                                                          {
+                                                                                              "amount":  60.0,
+                                                                                              "category_name":  null,
+                                                                                              "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                                              "description":  "opal",
+                                                                                              "merchant":  "Opal"
+                                                                                          }
+                                                                                      ],
+                                                                   "tool_name":  "search_transactions"
+                                                               }
+                                           },
+                     "fallback":  false,
+                     "grounding":  null,
+                     "messages_to_store":  [
+                                               {
+                                                   "content":  "Show me the most relevant transactions for this month\u0027s budget pressure.",
+                                                   "role":  "user"
+                                               },
+                                               {
+                                                   "content":  "I used the shared MCP transaction search for Transport and found 2 matching transactions totalling $70.00.",
+                                                   "grounding_json":  null,
+                                                   "mode":  "advice",
+                                                   "observation_json":  {
+                                                                            "active_proposal_count":  1,
+                                                                            "budget_id":  "9",
+                                                                            "budget_line_count":  2,
+                                                                            "history_turn_count":  9,
+                                                                            "month":  "2026-09",
+                                                                            "planned_event_count":  1,
+                                                                            "projected_high_total":  26000,
+                                                                            "remaining_income_high":  534000,
+                                                                            "transactions_count":  2,
+                                                                            "uncategorised_total":  0
+                                                                        },
+                                                   "plan_json":  {
+                                                                     "conversation_mode":  "advice",
+                                                                     "human_confirmation_required":  false,
+                                                                     "intent":  "other",
+                                                                     "requested_amount_cents":  null,
+                                                                     "safety_checks":  [
+                                                                                           "budget_must_exist",
+                                                                                           "responses_must_stay_grounded_in_budget_summary",
+                                                                                           "proposal_changes_require_user_approval"
+                                                                                       ],
+                                                                     "target_budget_line_id":  null,
+                                                                     "target_category":  null
+                                                                 },
+                                                   "proposal_id":  null,
+                                                   "response_source":  "mcp",
+                                                   "role":  "assistant",
+                                                   "stage_trace":  [
+                                                                       "observe",
+                                                                       "plan",
+                                                                       "act",
+                                                                       "adapt"
+                                                                   ],
+                                                   "tool_result_json":  {
+                                                                            "arguments":  {
+                                                                                              "category_name":  "Transport",
+                                                                                              "end_date":  "2026-09-30",
+                                                                                              "start_date":  "2026-09-01"
+                                                                                          },
+                                                                            "count":  2,
+                                                                            "result_preview":  [
+                                                                                                   {
+                                                                                                       "amount":  10.0,
+                                                                                                       "category_name":  null,
+                                                                                                       "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                                                       "description":  "train",
+                                                                                                       "merchant":  "train"
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "amount":  60.0,
+                                                                                                       "category_name":  null,
+                                                                                                       "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                                                       "description":  "opal",
+                                                                                                       "merchant":  "Opal"
+                                                                                                   }
+                                                                                               ],
+                                                                            "tool_name":  "search_transactions"
+                                                                        }
+                                               }
+                                           ],
+                     "mode":  "advice",
+                     "proposal":  null,
+                     "question":  null,
+                     "reply":  "I used the shared MCP transaction search for Transport and found 2 matching transactions totalling $70.00.",
+                     "response_source":  "mcp",
+                     "stage_trace":  [
+                                         "observe",
+                                         "plan",
+                                         "act",
+                                         "adapt"
+                                     ],
+                     "tool_result":  {
+                                         "arguments":  {
+                                                           "category_name":  "Transport",
+                                                           "end_date":  "2026-09-30",
+                                                           "start_date":  "2026-09-01"
+                                                       },
+                                         "count":  2,
+                                         "result_preview":  [
+                                                                {
+                                                                    "amount":  10.0,
+                                                                    "category_name":  null,
+                                                                    "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                    "description":  "train",
+                                                                    "merchant":  "train"
+                                                                },
+                                                                {
+                                                                    "amount":  60.0,
+                                                                    "category_name":  null,
+                                                                    "date":  "Wed, 30 Sep 2026 00:00:00 GMT",
+                                                                    "description":  "opal",
+                                                                    "merchant":  "Opal"
+                                                                }
+                                                            ],
+                                         "tool_name":  "search_transactions"
+                                     },
+                     "user_message":  {
+                                          "content":  "Show me the most relevant transactions for this month\u0027s budget pressure.",
+                                          "role":  "user"
+                                      }
+                 },
+    "rag_chat":  {
+                     "agentic_workflow":  {
+                                              "act":  {
+                                                          "fallback_used":  false,
+                                                          "response_mode":  "advice",
+                                                          "response_source":  "rag",
+                                                          "used_model":  false
+                                                      },
+                                              "adapt":  {
+                                                            "proposal_created":  false,
+                                                            "proposal_id":  null,
+                                                            "replaced_proposal_ids":  [
+
+                                                                                      ],
+                                                            "reused_existing_proposal":  false
+                                                        },
+                                              "observe":  {
+                                                              "active_proposal_count":  1,
+                                                              "budget_id":  "9",
+                                                              "budget_line_count":  2,
+                                                              "history_turn_count":  9,
+                                                              "month":  "2026-09",
+                                                              "planned_event_count":  1,
+                                                              "projected_high_total":  26000,
+                                                              "remaining_income_high":  534000,
+                                                              "transactions_count":  2,
+                                                              "uncategorised_total":  0
+                                                          },
+                                              "plan":  {
+                                                           "conversation_mode":  "advice",
+                                                           "human_confirmation_required":  false,
+                                                           "intent":  "other",
+                                                           "requested_amount_cents":  null,
+                                                           "safety_checks":  [
+                                                                                 "budget_must_exist",
+                                                                                 "responses_must_stay_grounded_in_budget_summary",
+                                                                                 "proposal_changes_require_user_approval"
+                                                                             ],
+                                                           "target_budget_line_id":  null,
+                                                           "target_category":  null
+                                                       }
+                                          },
+                     "assistant_message":  {
+                                               "content":  "This month, you should focus on managing your planned spending in the \u0027Dining\u0027 category, as it is already near its warning threshold. The week-ahead planned spending for Dining is $190.00, which is close to the warning threshold of $190.00. Additionally, the Transport category is currently spending $70.00, which is at its planned high of $70.00 and at the hard-cap of $100.00. The remaining discretionary income is $5,340.00, which is sufficient to cover these planned events without risking over-spending in other categories.",
+                                               "grounding":  {
+                                                                 "citations":  [
+                                                                                   {
+                                                                                       "distance":  0.898,
+                                                                                       "label":  "Budget Coach guidance",
+                                                                                       "source":  "budget-guidance.md"
+                                                                                   }
+                                                                               ],
+                                                                 "confidence":  "medium",
+                                                                 "insufficient_context":  false,
+                                                                 "retrieval":  [
+                                                                                   {
+                                                                                       "distance":  0.898,
+                                                                                       "id":  "budgets_budget-guidance.md_0",
+                                                                                       "source":  "budget-guidance.md"
+                                                                                   }
+                                                                               ]
+                                                             },
+                                               "mode":  "advice",
+                                               "response_source":  "rag",
+                                               "role":  "assistant",
+                                               "tool_result":  null
+                                           },
+                     "fallback":  false,
+                     "grounding":  {
+                                       "citations":  [
+                                                         {
+                                                             "distance":  0.898,
+                                                             "label":  "Budget Coach guidance",
+                                                             "source":  "budget-guidance.md"
+                                                         }
+                                                     ],
+                                       "confidence":  "medium",
+                                       "insufficient_context":  false,
+                                       "retrieval":  [
+                                                         {
+                                                             "distance":  0.898,
+                                                             "id":  "budgets_budget-guidance.md_0",
+                                                             "source":  "budget-guidance.md"
+                                                         }
+                                                     ]
+                                   },
+                     "messages_to_store":  [
+                                               {
+                                                   "content":  "Using grounded budget guidance with sources, what should I focus on this month?",
+                                                   "role":  "user"
+                                               },
+                                               {
+                                                   "content":  "This month, you should focus on managing your planned spending in the \u0027Dining\u0027 category, as it is already near its warning threshold. The week-ahead planned spending for Dining is $190.00, which is close to the warning threshold of $190.00. Additionally, the Transport category is currently spending $70.00, which is at its planned high of $70.00 and at the hard-cap of $100.00. The remaining discretionary income is $5,340.00, which is sufficient to cover these planned events without risking over-spending in other categories.",
+                                                   "grounding_json":  {
+                                                                          "citations":  [
+                                                                                            {
+                                                                                                "distance":  0.898,
+                                                                                                "label":  "Budget Coach guidance",
+                                                                                                "source":  "budget-guidance.md"
+                                                                                            }
+                                                                                        ],
+                                                                          "confidence":  "medium",
+                                                                          "insufficient_context":  false,
+                                                                          "retrieval":  [
+                                                                                            {
+                                                                                                "distance":  0.898,
+                                                                                                "id":  "budgets_budget-guidance.md_0",
+                                                                                                "source":  "budget-guidance.md"
+                                                                                            }
+                                                                                        ]
+                                                                      },
+                                                   "mode":  "advice",
+                                                   "observation_json":  {
+                                                                            "active_proposal_count":  1,
+                                                                            "budget_id":  "9",
+                                                                            "budget_line_count":  2,
+                                                                            "history_turn_count":  9,
+                                                                            "month":  "2026-09",
+                                                                            "planned_event_count":  1,
+                                                                            "projected_high_total":  26000,
+                                                                            "remaining_income_high":  534000,
+                                                                            "transactions_count":  2,
+                                                                            "uncategorised_total":  0
+                                                                        },
+                                                   "plan_json":  {
+                                                                     "conversation_mode":  "advice",
+                                                                     "human_confirmation_required":  false,
+                                                                     "intent":  "other",
+                                                                     "requested_amount_cents":  null,
+                                                                     "safety_checks":  [
+                                                                                           "budget_must_exist",
+                                                                                           "responses_must_stay_grounded_in_budget_summary",
+                                                                                           "proposal_changes_require_user_approval"
+                                                                                       ],
+                                                                     "target_budget_line_id":  null,
+                                                                     "target_category":  null
+                                                                 },
+                                                   "proposal_id":  null,
+                                                   "response_source":  "rag",
+                                                   "role":  "assistant",
+                                                   "stage_trace":  [
+                                                                       "observe",
+                                                                       "plan",
+                                                                       "act",
+                                                                       "adapt"
+                                                                   ],
+                                                   "tool_result_json":  null
+                                               }
+                                           ],
+                     "mode":  "advice",
+                     "proposal":  null,
+                     "question":  null,
+                     "reply":  "This month, you should focus on managing your planned spending in the \u0027Dining\u0027 category, as it is already near its warning threshold. The week-ahead planned spending for Dining is $190.00, which is close to the warning threshold of $190.00. Additionally, the Transport category is currently spending $70.00, which is at its planned high of $70.00 and at the hard-cap of $100.00. The remaining discretionary income is $5,340.00, which is sufficient to cover these planned events without risking over-spending in other categories.",
+                     "response_source":  "rag",
+                     "stage_trace":  [
+                                         "observe",
+                                         "plan",
+                                         "act",
+                                         "adapt"
+                                     ],
+                     "tool_result":  null,
+                     "user_message":  {
+                                          "content":  "Using grounded budget guidance with sources, what should I focus on this month?",
+                                          "role":  "user"
+                                      }
+                 }
+}

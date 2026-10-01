@@ -1,10 +1,12 @@
 import pytest
 
+from database import app as database_app
 from database.app import create_app
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
+    monkeypatch.setattr(database_app, "_current_budget_month", lambda: "2026-10")
     db_path = str(tmp_path / "budgets.db")
     app = create_app(db_path, seed_demo_data=False)
     app.config["TESTING"] = True
@@ -33,6 +35,7 @@ def test_budget_crud_round_trip(client):
     assert isinstance(budget["id"], int)
     assert budget["month"] == "2026-09"
     assert budget["declared_income"] == 500000
+    assert budget["status"] == "closed"
 
     fetched = client.get(f"/budgets/{budget['id']}")
     assert fetched.status_code == 200
@@ -47,8 +50,40 @@ def test_budget_crud_round_trip(client):
         json={"status": "active", "declared_income": 550000},
     )
     assert updated.status_code == 200
-    assert updated.get_json()["status"] == "active"
+    assert updated.get_json()["status"] == "closed"
     assert updated.get_json()["declared_income"] == 550000
+
+
+def test_budget_statuses_follow_current_month(client):
+    september = client.post("/budgets", json={"month": "2026-09", "declared_income": 500000}).get_json()
+    october = client.post("/budgets", json={"month": "2026-10", "declared_income": 510000}).get_json()
+    november = client.post("/budgets", json={"month": "2026-11", "declared_income": 520000}).get_json()
+
+    assert september["status"] == "closed"
+    assert october["status"] == "active"
+    assert november["status"] == "draft"
+
+    listed = client.get("/budgets")
+    assert listed.status_code == 200
+    by_month = {budget["month"]: budget["status"] for budget in listed.get_json()}
+    assert by_month["2026-09"] == "closed"
+    assert by_month["2026-10"] == "active"
+    assert by_month["2026-11"] == "draft"
+
+
+def test_seeded_budgets_recompute_statuses_from_current_month(tmp_path, monkeypatch):
+    monkeypatch.setattr(database_app, "_current_budget_month", lambda: "2026-10")
+    db_path = str(tmp_path / "seeded-budgets.db")
+    app = create_app(db_path, seed_demo_data=True)
+    app.config["TESTING"] = True
+    seeded_client = app.test_client()
+
+    listed = seeded_client.get("/budgets")
+
+    assert listed.status_code == 200
+    by_month = {budget["month"]: budget["status"] for budget in listed.get_json()}
+    assert by_month["2026-09"] == "closed"
+    assert by_month["2026-10"] == "active"
 
 
 def test_budget_line_round_trip_and_unique_category_per_budget(client):
@@ -270,10 +305,16 @@ def test_chat_message_round_trip_and_reset(client):
             "role": "assistant",
             "content": "Dining is under pressure this month.",
             "mode": "advice",
-            "response_source": "deterministic",
+            "response_source": "rag",
             "plan_json": {"intent": "overspending"},
             "observation_json": {"month": "2026-12"},
             "stage_trace": ["observe", "plan", "act", "adapt"],
+            "tool_result_json": {"tool_name": "search_transactions", "count": 2},
+            "grounding_json": {
+                "citations": [{"label": "Budget policy", "source": "budgets/policy.md", "distance": 0.4}],
+                "confidence": "high",
+                "insufficient_context": False,
+            },
             "proposal_id": proposal["id"],
         },
     )
@@ -284,8 +325,10 @@ def test_chat_message_round_trip_and_reset(client):
     messages = listed.get_json()
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[1]["proposal_id"] == proposal["id"]
-    assert messages[1]["response_source"] == "deterministic"
+    assert messages[1]["response_source"] == "rag"
     assert messages[1]["stage_trace"] == ["observe", "plan", "act", "adapt"]
+    assert messages[1]["tool_result_json"] == {"tool_name": "search_transactions", "count": 2}
+    assert messages[1]["grounding_json"]["confidence"] == "high"
 
     deleted = client.delete(f"/budgets/{budget['id']}/chat-messages")
     assert deleted.status_code == 204

@@ -39,3 +39,18 @@ def validate_chat_response(data):
     elif proposal is not None and not isinstance(proposal, dict):
         return "proposal must be null or an object"
     return None
+
+
+def validate_grounded_answer(data):
+    if not isinstance(data, dict):
+        return "response must be a JSON object"
+    answer = data.get("answer")
+    if not isinstance(answer, str) or not answer.strip() or len(answer) > 600:
+        return "answer must be a non-empty string up to 600 characters"
+    cited = data.get("cited")
+    if not isinstance(cited, list) or not all(isinstance(item, str) and item.strip() for item in cited):
+        return "cited must be a list of non-empty strings"
+    insufficient = data.get("insufficient_context")
+    if not isinstance(insufficient, bool):
+        return "insufficient_context must be a boolean"
+    return None
