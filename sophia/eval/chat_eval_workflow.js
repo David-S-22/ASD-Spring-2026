@@ -27,7 +27,9 @@ const gen = await agent(`Read sophia/eval/chat_queries.yaml. For every distinct 
 log(`generated ${gen ? gen.entries.length : 0} paraphrases`)
 
 phase('Sweep')
-const sweep = await agent(`Run the live sweep twice: first "python -m sophia.eval.chat_sweep --base ${BASE} --runs ${RUNS}" on the main corpus, then the same with the environment variable CHAT_QUERIES=sophia/eval/chat_queries_generated.yaml if chat_sweep supports it, otherwise temporarily point CORPUS at the generated file in a copy of the script under the job temp dir. Collect every failing row (message, expected route, got route, reply, failures). Afterwards reseed bills-db: docker compose stop bills-db && docker compose rm -f bills-db && docker volume rm tally_bills_data && docker compose up -d bills-db && docker compose restart bills-frontend shared-frontend.\n${CONTEXT}`, { label: 'sweep:live', phase: 'Sweep', schema: SWEEP_SCHEMA, model: 'sonnet', effort: 'medium' })
+const MAIN_REPORT = (args && args.mainReport) || ''
+const sweep = await agent(`The main corpus was ${MAIN_REPORT ? 'already swept; its JSON report is ' + MAIN_REPORT + ' (read it and include its failing rows)' : 'not swept yet; run "python -m sophia.eval.chat_sweep --base ' + BASE + ' --runs ' + RUNS + '" first'}. Then sweep the generated paraphrases: CHAT_QUERIES=sophia/eval/chat_queries_generated.yaml PYTHONIOENCODING=utf-8 python -u -m sophia.eval.chat_sweep --base ${BASE} --runs ${RUNS}, appending the terminal output to docs/release-2/sophia/chat-eval/sweep-terminal-generated.log. Collect every failing row from both (message, expected route, got route, reply, failures); a query counts as failing if ANY run failed. Afterwards reseed bills-db: docker compose stop bills-db && docker compose rm -f bills-db && docker volume rm tally_bills_data && docker compose up -d bills-db && docker compose restart bills-frontend shared-frontend.
+${CONTEXT}`, { label: 'sweep:live', phase: 'Sweep', schema: SWEEP_SCHEMA, model: 'sonnet', effort: 'medium' })
 log(`sweep: ${sweep ? sweep.passed + '/' + sweep.total : 'n/a'} passed, ${sweep ? sweep.failures.length : 0} failures`)
 
 phase('Diagnose')
