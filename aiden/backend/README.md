@@ -17,6 +17,9 @@ reading one raises a `RuntimeError` if the variable is unset or invalid;
 `config.check_all()` validates every variable up front (it runs on startup).
 The Compose deployment sets `MCP_SERVER_URL` to the host machine's MCP server
 at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
+It also sets `RAG_SERVER_URL` to the shared, retrieve-only RAG server at
+`http://host.docker.internal:5003` and `RAG_FEATURE` to `anomalies`; RAG can be
+disabled with `RAG_ENABLED=false`. The RAG server is likewise not containerised.
 
 ## Agentic workflow
 
@@ -28,13 +31,15 @@ at `http://host.docker.internal:8000/mcp`; the MCP server is not containerised.
 5. The agent calls the MCP server's
    `get_transactions_with_confirmed_anomalies` and
    `get_transactions_with_rejected_anomalies` tools through the `fastmcp` client
-   to retrieve reviewed examples, which are embedded into the prompt before
-   classifying the transaction.
+   to retrieve reviewed examples, and retrieves fraud/anomaly reference guidance
+   for the transaction from the shared RAG server (`services/rag_client.py`).
+   Both are embedded into the prompt before classifying the transaction.
 6. The model must return JSON containing `is_suspicious` and `justification`.
    Invalid responses are retried with increasing temperature, up to four
    attempts.
 7. If the transaction is suspicious, the resulting anomaly is written to the
-   anomalies database. Otherwise, no anomaly is created.
+   anomalies database, including the filenames of the RAG documents used as
+   `sources`. Otherwise, no anomaly is created.
 8. The worker marks the transaction as complete. The frontend can poll
    `GET /anomaly-alert?key=<transaction-id>` for a rendered alert fragment.
 
@@ -54,16 +59,20 @@ agent judges the next transaction.
   (`services/mcp_client.py`), the same way the other services talk to the MCP
   server. These return reviewed transactions and their anomaly records as
   positive and negative examples, which are formatted and embedded into the
-  user prompt. The plan for judging the current transaction is therefore shaped
-  by the accumulated human feedback. If the MCP server is unavailable the review
-  still proceeds without examples.
+  user prompt. The agent also retrieves fraud/anomaly reference guidance for the
+  transaction from the shared retrieve-only RAG server
+  (`services/rag_client.py`), and embeds the closest excerpts as a "Reference
+  guidance" section. The plan for judging the current transaction is therefore
+  shaped by the accumulated human feedback and the reference material. If the
+  MCP or RAG server is unavailable the review still proceeds without that input.
 - **Act** — The agent sends the system and user prompts to the model through
   `ollama_api.prompt`, requesting a JSON finding with `is_suspicious` and
   `justification`. A valid, suspicious finding is converted to an anomaly DTO —
   along with the model's mean confidence score derived from token log
-  probabilities — and persisted so it can be shown to the user. (Malformed
-  responses are simply retried with a higher temperature, up to four attempts —
-  a robustness detail, not part of the adaptation loop.)
+  probabilities and the filenames of the RAG documents used as `sources` — and
+  persisted so it can be shown to the user. (Malformed responses are simply
+  retried with a higher temperature, up to four attempts — a robustness detail,
+  not part of the adaptation loop.)
 - **Observe** — The persisted finding is surfaced to the user, who reviews it
   and records the ground truth by **confirming** it as genuinely suspicious
   (true positive) or **dismissing** it as a false positive. This human review
@@ -81,7 +90,8 @@ flowchart TD
 
     subgraph Plan
         B[Call MCP reviewed-example tools<br/>via fastmcp client] --> C[Retrieve confirmed/rejected examples]
-        C --> D[Construct constrained prompt<br/>transaction fields + examples]
+        C --> RAG[Retrieve RAG reference guidance<br/>via rag_client]
+        RAG --> D[Construct constrained prompt<br/>transaction fields + examples + guidance]
     end
 
     subgraph Act
@@ -111,10 +121,19 @@ flowchart TD
 ### `services/agent_api.py`
 
 Implements the anomaly-detection agent. It fetches reviewed examples from the
-MCP server through `services/mcp_client.py`, formats them into the prompt,
-parses model JSON, validates the expected response fields, captures the model's
-mean confidence (from token log probabilities), and converts suspicious findings
-into anomaly DTOs.
+MCP server through `services/mcp_client.py`, retrieves fraud/anomaly reference
+guidance from the RAG server through `services/rag_client.py`, formats both into
+the prompt, parses model JSON, validates the expected response fields, captures
+the model's mean confidence (from token log probabilities), and converts
+suspicious findings into anomaly DTOs (recording the RAG source filenames used).
+
+### `services/rag_client.py`
+
+Small HTTP client for the shared, retrieve-only RAG server. It exposes
+`retrieve` and `health`, applies `RAG_TIMEOUT_SECONDS`, validates the response
+shape, and maps every failure to a safe `RAGError` code so a RAG outage degrades
+gracefully and never blocks anomaly detection. Retrieval is skipped when
+`RAG_ENABLED` is false.
 
 ### `services/mcp_client.py`
 

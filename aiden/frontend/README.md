@@ -26,8 +26,9 @@ with horizontal scrolling on narrow screens.
 The review dialog shows the transaction details (a
 locale-formatted date with weekday, merchant, amount, description, category
 name, and confidence level with percentage) in two columns, followed by a
-full-width suspected-reason row before collecting the user's Confirm or Dismiss
-decision. Labels are styled as small uppercase
+full-width suspected-reason row and a full-width sources row (the RAG
+reference-document chips, or a dash when none) before collecting the user's
+Confirm or Dismiss decision. Labels are styled as small uppercase
 subheadings, with values emphasized in separate bordered cards. The dialog
 animates when opening and closing, and pressing Escape cancels the review.
 

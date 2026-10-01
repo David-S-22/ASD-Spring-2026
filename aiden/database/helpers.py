@@ -71,5 +71,23 @@ def try_parse_bool(value: Any) -> Optional[bool]:
 
     return None
 
+def try_parse_string_list(value: Any) -> Optional[list]:
+    """Parse a list of source filenames, dropping blanks and duplicates.
+
+    Returns an order-stable list of non-empty strings, or None if the value is
+    not a list of strings so the caller can reject the request.
+    """
+    if not isinstance(value, list):
+        return None
+
+    result: list = []
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        item = item.strip()
+        if item and item not in result:
+            result.append(item)
+    return result
+
 def empty():
     return Response(status=204)

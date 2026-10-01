@@ -1,9 +1,9 @@
 # The following is a list of models used as DTOs between microservices
 # They expose the public shape of the data, whilst leaving the internals
 # for the database engine to maintain
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 # Represents a transaction the user has entered into the application
 @dataclass(frozen=True)
@@ -25,6 +25,8 @@ class Category:
 # whether it is true positive or false positive, which is represented by is_confirmed_by_user.
 # confidence is the agent's mean confidence in its finding, derived from the model's token
 # log probabilities (log probs). It is None when no confidence signal is available.
+# sources lists the filenames of the RAG reference documents the agent used to ground
+# its reasoning; it is an empty list when no sources were retrieved.
 @dataclass(frozen=True)
 class Anomaly:
     id: int
@@ -32,6 +34,7 @@ class Anomaly:
     agent_reason_suspected: str
     is_confirmed_by_user: Optional[bool]
     confidence: Optional[float] = None
+    sources: List[str] = field(default_factory=list)
 
 @dataclass(frozen=True)
 class Goal:

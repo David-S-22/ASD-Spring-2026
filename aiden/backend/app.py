@@ -14,7 +14,7 @@ review_queue.start_worker(app)
 
 # How long the /anomaly-alert endpoint long-polls for a new anomaly before
 # returning empty so the client can re-poll.
-ANOMALY_WAIT_SECONDS = float(os.environ.get("ANOMALY_WAIT_SECONDS", "60"))
+ANOMALY_WAIT_SECONDS = float(os.environ.get("ANOMALY_WAIT_SECONDS", "180"))
 
 
 @app.get("/")

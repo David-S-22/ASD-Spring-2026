@@ -1,9 +1,9 @@
 from flask import Blueprint, Flask, abort, json, jsonify, request
-from sqlalchemy import select, inspect
+from sqlalchemy import select, inspect, text
 from werkzeug.exceptions import HTTPException
 
 from .models import Anomaly, db
-from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_float, try_parse_int
+from .helpers import empty, set_mandatory_field, set_optional_field, try_parse_bool, try_parse_float, try_parse_int, try_parse_string_list
 
 
 app = Flask(__name__)
@@ -29,6 +29,7 @@ def post_anomaly():
     set_mandatory_field(anomaly, data, "agent_reason_suspected", str)
     set_optional_field(anomaly, data, "is_confirmed_by_user", try_parse_bool)
     set_optional_field(anomaly, data, "confidence", try_parse_float)
+    set_optional_field(anomaly, data, "sources", try_parse_string_list)
 
     db.session.add(anomaly)
     db.session.commit()
@@ -113,3 +114,21 @@ def setup_database(db_path: str):
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
         db.init_app(app)
         db.create_all()
+        _migrate_add_sources_column()
+
+
+def _migrate_add_sources_column():
+    """Add the ``sources`` column to pre-existing anomaly tables.
+
+    ``db.create_all()`` never alters existing tables, so databases created before
+    the sources feature keep their old schema on a persisted volume. This adds
+    the column (defaulting to an empty JSON list) when it is missing.
+    """
+    columns = {column["name"] for column in inspect(db.engine).get_columns("anomaly")}
+    if "sources" in columns:
+        return
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE anomaly ADD COLUMN sources JSON NOT NULL DEFAULT '[]'")
+        )

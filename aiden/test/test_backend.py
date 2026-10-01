@@ -417,6 +417,87 @@ def test_review_injects_mcp_examples_into_prompt(
     assert "Coles" in user_content
 
 
+def test_review_injects_rag_sources_into_prompt_and_persists(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"is_suspicious": true, "justification": "grounded"}'))],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.ollama_api._get_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+    )
+    intercept_rag(
+        monkeypatch,
+        [
+            {
+                "id": "anomalies_fraud-red-flags.md_0",
+                "text": "Charges to ATMs and cash-advance services are higher risk.",
+                "metadata": {"source": "fraud-red-flags.md"},
+                "distance": 0.31,
+            },
+            {
+                "id": "anomalies_fraud-patterns.md_0",
+                "text": "Card testing uses a small charge before a large one.",
+                "metadata": {"source": "fraud-patterns.md"},
+                "distance": 0.44,
+            },
+        ],
+    )
+
+    transaction = dto.Transaction(
+        id=98,
+        amount=9999,
+        merchant="Sketchy ATM",
+        date=datetime.now(),
+        description="cash withdrawal",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    user_content = captured["messages"][1]["content"]
+    assert "Reference guidance" in user_content
+    assert "fraud-red-flags.md" in user_content
+    assert "higher risk" in user_content
+
+    with app.app_context():
+        persisted = anomalies_api.get_anomaly_by_transaction_id(98)
+
+    assert persisted is not None
+    assert persisted.sources == ["fraud-red-flags.md", "fraud-patterns.md"]
+
+
+def test_review_without_rag_persists_empty_sources(
+    client: FlaskClient, monkeypatch: MonkeyPatch
+):
+    intercept_ollama(monkeypatch, '{"is_suspicious": true, "justification": "no rag"}')
+
+    transaction = dto.Transaction(
+        id=99,
+        amount=9999,
+        merchant="Sketchy ATM",
+        date=datetime.now(),
+        description="cash withdrawal",
+        category_id=0,
+    )
+
+    client.post("/check-transaction", json=serialise(transaction))
+    transaction_queue.join()
+
+    with app.app_context():
+        persisted = anomalies_api.get_anomaly_by_transaction_id(99)
+
+    assert persisted is not None
+    assert persisted.sources == []
+
+
 def test_check_transaction_rejects_invalid_payload(client: FlaskClient):
     resp = client.post("/check-transaction", json={"merchant": "Nope"})
 
@@ -730,6 +811,11 @@ def integrate_services(monkeypatch: MonkeyPatch):
     monkeypatch.setenv("OLLAMA_MODEL", "billy")
     monkeypatch.setenv("OLLAMA_URL", "http://mock-ollama-url")
     monkeypatch.setenv("MCP_SERVER_URL", "http://mock-mcp-server/mcp")
+    monkeypatch.setenv("RAG_ENABLED", "true")
+    monkeypatch.setenv("RAG_SERVER_URL", "http://mock-rag-server:5003")
+    monkeypatch.setenv("RAG_FEATURE", "anomalies")
+    monkeypatch.setenv("RAG_TOP_K", "3")
+    monkeypatch.setenv("RAG_TIMEOUT_SECONDS", "5")
 
     # fastmcp bypasses the requests-based RequestsMock, so stub the MCP client by
     # default; tests that need reviewed examples override this via intercept_mcp.
@@ -806,4 +892,11 @@ def intercept_mcp(monkeypatch: MonkeyPatch, confirmed=None, rejected=None):
     monkeypatch.setattr(
         "backend.services.mcp_client.call_tool",
         lambda name, arguments=None: (results.get(name, []), 0.0),
+    )
+
+def intercept_rag(monkeypatch: MonkeyPatch, results):
+    """Stub the RAG client so the agent sees reference guidance without a server."""
+    monkeypatch.setattr(
+        "backend.services.rag_client.retrieve",
+        lambda feature, question, k=3, where=None: list(results),
     )

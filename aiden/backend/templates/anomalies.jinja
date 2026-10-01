@@ -24,6 +24,7 @@
             data-description="{{ (txn.description if txn else '—')|e }}"
             data-category="{{ (category_name if category_name else ('Unknown category (' ~ txn.category_id ~ ')' if txn else '—'))|e }}"
             data-reason="{{ anomaly.agent_reason_suspected|e }}"
+            data-sources="{{ anomaly.sources|join('\n')|e }}"
             data-confidence="{{ '%.1f'|format(anomaly.confidence * 100) if anomaly.confidence is not none else '' }}"
             data-confidence-level="{{ confidence_level or '' }}"
             onclick="openReviewModal(this)">Unreviewed<svg class="review-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="M11 2.5 13.5 5 6 12.5H3.5V10L11 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
