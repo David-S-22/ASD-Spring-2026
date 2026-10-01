@@ -14,10 +14,21 @@ from query import retrieve
 
 logger = logging.getLogger(__name__)
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
 rag_lock = threading.Lock()
 
 app = Flask(__name__)
 PORT = int(os.getenv("RAG_PORT", "5003"))
+
+
+@app.before_request
+def log_request():
+    """Log every incoming request as it arrives."""
+    logger.info("Request received: %s %s", request.method, request.path)
 
 
 def to_json(results):
