@@ -1,11 +1,43 @@
+import logging
 import os
+import sys
 from datetime import datetime
 
 import requests
 from dateutil import parser
 from fastmcp import FastMCP
+from fastmcp.server.middleware import Middleware, MiddlewareContext
+
+logger = logging.getLogger("mcp-server")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+if not logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    logger.addHandler(_handler)
+
+
+class RequestLoggingMiddleware(Middleware):
+    """Log every incoming MCP request as it arrives."""
+
+    async def on_message(self, context: MiddlewareContext, call_next):
+        logger.info("Request received: %s", context.method)
+        return await call_next(context)
+
+    async def on_call_tool(self, context: MiddlewareContext, call_next):
+        message = context.message
+        logger.info(
+            "Tool call: %s args=%s",
+            getattr(message, "name", "<unknown>"),
+            getattr(message, "arguments", {}),
+        )
+        return await call_next(context)
+
 
 mcp = FastMCP("Transactions")
+mcp.add_middleware(RequestLoggingMiddleware())
 
 TRANSACTIONS_DB_URL = os.getenv("TRANSACTIONS_DB_URL", "http://localhost:6001")
 RAG_SERVER_URL = os.getenv("RAG_SERVER_URL", "http://localhost:5003")
