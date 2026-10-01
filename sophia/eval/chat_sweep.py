@@ -4,7 +4,7 @@
     python -m sophia.eval.chat_sweep --runs 3 --base http://localhost:3000/bills-backend
 
 Each query is posted to /api/chat; the response's route, reply and proposal are scored against
-sophia/eval/chat_queries.yaml. The report (markdown + JSON) lands in docs/release-2/sophia/chat-eval/.
+sophia/eval/chat_queries.yaml. The report (markdown + JSON) lands in docs/release-1/sophia/chat-eval/.
 Approve nothing: proposals stay pending, so reseed bills-db after a sweep.
 """
 import argparse
