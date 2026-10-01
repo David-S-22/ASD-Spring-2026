@@ -677,7 +677,7 @@ def _execute(op, entity, entity_id, clean_fields):
         if bill_row is None:
             raise NotFound("bill not found")
         reason = clean_fields.get("reason", "")
-        result = bills_db.create_dispute({"bill_id": bill_row["id"], "reason": reason})
+        result = bills_db.create_dispute({"bill_id": bill_row["id"], "reason": reason, "opened_at": config.DEMO_TODAY.isoformat()})
         draft = disputes_service.draft_for_bill(bill_row, reason)
         bills_db.create_dispute_draft(
             result["id"],

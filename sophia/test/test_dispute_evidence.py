@@ -281,3 +281,32 @@ def test_seeded_drafts_and_mcp_off_drafts_show_no_evidence_block(live_client, mo
     fake_draft(monkeypatch)
     body = _text(live_client.post("/ui/disputes", data={"bill_id": "7", "reason": "Speed downgrade"}))
     assert 'class="evidence-used"' not in body and "MCP mode is disabled" in body
+
+
+def test_with_bank_facts_the_recorded_payments_are_labelled_as_tallys_and_only_bank_facts_may_be_cited():
+    from datetime import date as _date
+
+    from sophia.backend.ai import dispute_prompt
+    from sophia.backend.engine import Payment
+
+    payments = [Payment(bill_id=3, date=_date(2026, 9, 27), amount_cents=1399)]
+    with_bank = dispute_prompt.build(SPOTIFY, "Price went up", payments=payments, evidence=["20 Aug Spotify AU $17.99"])[1]["content"]
+    assert "Payments you recorded in Tally (your own records, not bank data): 2026-09-27: $13.99" in with_bank
+    assert "Cite dates and amounts only from the bank statement facts" in with_bank
+    assert "Last payments:" not in with_bank
+    without = dispute_prompt.build(SPOTIFY, "Price went up", payments=payments)[1]["content"]
+    assert "Last payments: 2026-09-27: $13.99" in without and "recorded in Tally" not in without
+
+
+def test_a_new_dispute_is_opened_on_the_demo_date_not_the_databases_clock(live_client, monkeypatch):
+    monkeypatch.setattr(config, "MCP_ENABLED", False)
+    fake_draft(monkeypatch)
+    live_client.post("/ui/disputes", data={"bill_id": "7", "reason": "Speed downgrade"})
+    assert bills_db_module.list_disputes()[-1]["opened_at"] == config.DEMO_TODAY.isoformat()
+    fake_model = lambda model, messages, timeout=None, temperature=None: {"message": {"content": json.dumps({"op": "create", "entity": "dispute", "id": None, "fields": {"bill_id": 7, "reason": "Speed downgrade"}, "question": "none", "say": "Opening."})}}
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", fake_model)
+    live_client.post("/ui/chat", data={"message": "Draft a note to dispute my Home internet charge"})
+    sid = bills_db_module.list_suggestions(status="pending")[-1]["id"]
+    monkeypatch.setattr("sophia.backend.ai.guard.chat", lambda model, messages, timeout=None, temperature=None: {"message": {"content": json.dumps({"letter_text": "x" * 100, "steps": ["Step one", "Step two"], "escalation": ["Merchant support"], "payment_method_note": None})}})
+    live_client.post(f"/ui/suggestions/{sid}/approve")
+    assert bills_db_module.list_disputes()[-1]["opened_at"] == config.DEMO_TODAY.isoformat()

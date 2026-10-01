@@ -116,7 +116,7 @@ def create_dispute(bill_id, reason):
     bill_row = bills_db.get_bill(bill_id)
     if bill_row is None:
         raise NotFound("bill not found")
-    dispute = bills_db.create_dispute({"bill_id": bill_id, "reason": reason})
+    dispute = bills_db.create_dispute({"bill_id": bill_id, "reason": reason, "opened_at": config.DEMO_TODAY.isoformat()})
     draft = draft_for_bill(bill_row, reason, opened_on=_opened_on(dispute))
     bills_db.create_dispute_draft(
         dispute["id"],

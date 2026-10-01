@@ -358,3 +358,8 @@ def test_a_dispute_built_from_the_users_words_gets_a_matching_sentence(live_clie
     body = _text(live_client.post("/ui/chat", data={"message": "Dispute my Spotify charge, the price went up without notice (the $17.99 row)."}))
     assert "Open dispute for Spotify" in body
     assert "I've suggested opening a dispute for Spotify" in body and "ending Spotify" not in body
+
+
+def test_chat_panel_shows_the_demo_date_next_to_the_rag_badge(live_client, modes_on):
+    body = _text(live_client.get("/ui/chat"))
+    assert 'class="mode-badge today-badge">Today: 20-Aug-2026</span>' in body
