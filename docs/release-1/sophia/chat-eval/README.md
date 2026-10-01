@@ -1,4 +1,4 @@
-# Ask Tally chat evaluation harness (Release 2)
+# Ask Tally chat evaluation harness (Release 1)
 
 The night of 1 Oct 2026 fixed nine chat misses by hand: type a query, read the reply, patch a rule, re-run everything. This folder is that loop as a harness, so a fix cannot land while it breaks another phrasing.
 

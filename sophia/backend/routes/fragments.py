@@ -699,7 +699,7 @@ def _render_chat_panel():
     .history) and stay visible until the panel is re-fetched, at which point it
     returns to the welcome state.
     """
-    return render_template("chat_panel.html", messages=[], rag_enabled=config.MCP_ENABLED and config.RAG_ENABLED)
+    return render_template("chat_panel.html", messages=[], rag_enabled=config.MCP_ENABLED and config.RAG_ENABLED, today=config.DEMO_TODAY.strftime("%d-%b-%Y"))
 
 
 @bp.post("/chat")

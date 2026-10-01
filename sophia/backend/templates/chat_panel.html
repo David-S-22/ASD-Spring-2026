@@ -1,6 +1,6 @@
 {# Ask Tally chat panel fragment: history with preview cards, input + Ask button. #}
 <div class="chat-panel">
-  <p class="chat-mode"><span class="mode-badge mode-{{ 'on' if rag_enabled else 'off' }}">RAG {{ 'enabled' if rag_enabled else 'disabled' }}</span></p>
+  <p class="chat-mode"><span class="mode-badge mode-{{ 'on' if rag_enabled else 'off' }}">RAG {{ 'enabled' if rag_enabled else 'disabled' }}</span><span class="mode-badge today-badge">Today: {{ today }}</span></p>
   {# id is a fragment contract: the reject flow's adapt reply appends here
      out of band (hx-swap-oob="beforeend:#chat-history"). #}
   <div class="history" id="chat-history">

@@ -7,6 +7,8 @@ that writes those, always through the same CRUD calls a manual edit uses.
 import json
 import re
 import threading
+
+import requests
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -145,14 +147,14 @@ def _answer_barely_using():
 WORD_NUMBERS = {word: number for number, word in _COUNT_WORDS.items()}
 COUNT = r"(\d+|" + "|".join(WORD_NUMBERS) + ")"
 DAYS_AHEAD = re.compile(r"\b" + COUNT + r" (day|week|month)s?\b", re.I)
-NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(fortnight|month)\b", re.I)
-NAMED_HORIZON_DAYS = {"fortnight": 14, "month": 30}
+NAMED_HORIZON = re.compile(r"(?<!each )(?<!every )(?<!per )\b(next week|fortnight|month)\b", re.I)
+NAMED_HORIZON_DAYS = {"next week": 7, "fortnight": 14, "month": 30}
 UNIT_DAYS = {"day": 1, "week": 7, "month": 30}
 MAX_HORIZON_DAYS = 180
 
 
 def _horizon_days(message):
-    """How many days ahead a what's-due question looks: a count of days, weeks or months, a fortnight or month, else a week."""
+    """How many days ahead a what's-due question looks: a count of days, weeks or months, the next week, a fortnight or month, else a week."""
     counted = DAYS_AHEAD.search(message or "")
     named = NAMED_HORIZON.search(message or "")
     if counted:
@@ -212,7 +214,11 @@ ENUM_FIELDS = {
     "status": {"draft", "sent", "resolved"},  # dispute status — the only whitelisted "status"
 }
 
+METHOD_PHRASES = {"card": ("card",), "direct_debit": ("direct debit", "direct-debit", "debit"), "bpay": ("bpay",)}
+TYPE_PHRASES = {"bill": ("bill",), "subscription": ("subscription", "sub", "subs")}
+
 MISSING_FIELD_QUESTIONS = {
+    "payment_method": "the payment method",
     "name": "what the bill is called",
     "amount_cents": "the amount (in dollars)",
     "cadence": "how often it bills (weekly, fortnightly or monthly)",
@@ -265,9 +271,9 @@ def _asks_what_is_due(message):
     return bool(DUE_WORDS.search(text) or ((DAYS_AHEAD.search(text) or NAMED_HORIZON.search(text)) and PAY_WORDS.search(text)))
 
 
-QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+)?(what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
-TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|sum|spend|spending)\b", re.I)
-BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (using|used|use)\b|\b(unused|underused)\b", re.I)
+QUESTION_START = re.compile(r"^(?:please\s+)?(?:(?:tell|show) me\s+|check\s+|list\s+)?(whats|what|which|when|how|why|is|are|was|were|does|did|has|have|any)\b", re.I)
+TOTAL_WORDS = re.compile(r"\b(add(?:s|ing|ed)? up|total|altogether|combined|sum|spend|spending)\b", re.I)
+BARELY_WORDS = re.compile(r"\b(barely|hardly|rarely|never|not) (?:really |ever )?(using|used|use|touch)\b|\b(unused|underused)\b", re.I)
 
 
 def _is_plain_question(message):
@@ -394,7 +400,23 @@ def _ungrounded_fields(entity, op, fields, stated):
         need_day = op == "create" and key == "next_billing_date"
         if fields.get(key) and not _date_stated(text, days, fields[key], need_day):
             ungrounded.append(key)
+    if op == "update" and fields.get("payment_method") and not _has_phrase(text, METHOD_PHRASES.get(fields["payment_method"], ())):
+        ungrounded.append("payment_method")
+    if op == "update" and fields.get("type") and not _has_phrase(text, TYPE_PHRASES.get(fields["type"], ())):
+        ungrounded.append("type")
     return ungrounded
+
+
+def _changed_fields(bill_id, fields):
+    """The proposed fields that differ from the bill's stored values; a field that repeats what is already saved is not a change."""
+    try:
+        row = bills_db.get_bill(bill_id) if bill_id else None
+    except (ServiceError, requests.RequestException):
+        row = None
+    if not row:
+        return fields
+    current = dict(row, amount=row["amount_cents"] / 100)
+    return {key: value for key, value in fields.items() if str(current.get(key)) != str(value)}
 
 
 def _vet_proposal(preview, say="", stated=None):
@@ -412,6 +434,11 @@ def _vet_proposal(preview, say="", stated=None):
     cadence and dates must also appear in what the user said; stated=None
     skips that check.
     """
+    if preview["op"] == "update" and preview["entity"] == "bill":
+        preview["fields"] = _changed_fields(preview.get("id"), preview.get("fields") or {})
+    if preview["op"] == "update" and not preview.get("fields"):
+        target = (_bill_name(preview.get("id")) if preview["entity"] == "bill" else None) or "that"
+        return None, f"What would you like to change about {target}? Tell me the new amount, date or payment method and I'll propose it."
     if _contradicts_an_update(preview, say):
         return None, (
             "I need to be clearer about that one — I can add a new bill, or change an "
@@ -442,6 +469,8 @@ def _vet_proposal(preview, say="", stated=None):
         if missing:
             wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
             return None, CREATE_NEEDS_REPLY.format(wants=wants)
+    if preview["op"] == "create" and stated is not None and fields.get("payment_method") and not _has_phrase(stated.lower(), METHOD_PHRASES.get(fields["payment_method"], ())):
+        fields.pop("payment_method")
     ungrounded = [] if stated is None else _ungrounded_fields(preview["entity"], preview["op"], fields, stated)
     if ungrounded:
         wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in ungrounded)
@@ -677,7 +706,7 @@ def _execute(op, entity, entity_id, clean_fields):
         if bill_row is None:
             raise NotFound("bill not found")
         reason = clean_fields.get("reason", "")
-        result = bills_db.create_dispute({"bill_id": bill_row["id"], "reason": reason})
+        result = bills_db.create_dispute({"bill_id": bill_row["id"], "reason": reason, "opened_at": config.DEMO_TODAY.isoformat()})
         draft = disputes_service.draft_for_bill(bill_row, reason)
         bills_db.create_dispute_draft(
             result["id"],

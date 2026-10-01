@@ -1,95 +1,103 @@
-# Generated paraphrases of chat_queries.yaml: the route each phrasing must take under the norms.
-# route: total | upcoming | barely_using | tool | grounded | proposal | ask_back
-# expect: contains / not (substrings of the reply), title (proposal card title), insufficient (grounded)
+# Generated paraphrases for the Ask Tally corpus, same schema as chat_queries.yaml. Route is the one the norms require.
 - message: "whats the total of all my bills per month"
   route: total
-- message: "can you add up my bills please"
+- message: "pls add up everything i pay each month (bills + subs)"
   route: total
-- message: "how much do i spend altogether each month (bills and subs)"
+- message: "how much do my bils come to altogether monthly?"
   route: total
-- message: "total for netflix and spotify together this month?"
+- message: "total for rent and electricity together each month"
   route: total
-- message: "what are my bills in total, roughly"
+  expect: {contains: ["Rent", "Electricity"], not: ["all bills"]}
+- message: "Please give me my overall monthly spend"
   route: total
-- message: "Please give me the sum of my montly bills"
+- message: "what do netflix and spotify cost me combined per month"
   route: total
+  expect: {contains: ["Netflix", "Spotify"], not: ["all bills"]}
 - message: "whats due this week"
   route: upcoming
-- message: "anything due in the next 10 days?"
+  expect: {contains: ["this week"]}
+- message: "please list what i need to pay in the next 10 days"
   route: upcoming
-- message: "please tell me what i have to pay over the next fortnight"
+  expect: {contains: ["next 10 days"]}
+- message: "anything due next fortnight (including subs)?"
   route: upcoming
-- message: "what's upcoming for netflix and gymco (just this month)"
+  expect: {contains: ["next 14 days"]}
+- message: "what bils are due over the next month"
   route: upcoming
-- message: "what do i owe in the next 2 weeks"
+  expect: {contains: ["next 30 days"]}
+- message: "when do i have to pay netflix and gymco this month"
   route: upcoming
-- message: "any bills scheduled for next month"
+  expect: {contains: ["Netflix on", "GymCo on"], not: ["Rent"]}
+- message: "what will i pay in the next week"
   route: upcoming
-- message: "which subscriptions am i hardly using"
+  expect: {contains: ["this week"]}
+- message: "which subs am i not really using"
   route: barely_using
-- message: "what am i barely using, please"
+- message: "please show me the subscriptions i barely use?"
   route: barely_using
-- message: "do i have any unused subscriptions?"
+- message: "is spotify one i hardly ever use (be honest)"
   route: barely_using
-- message: "are netflix or disney+ ones i never use (be honest)"
+- message: "which subscriptoins do i never use"
   route: barely_using
-- message: "which subs are underused"
+- message: "are netflix and disney+ ones i barely touch"
   route: barely_using
-- message: "which of my subscripions am I rarely using?"
+- message: "which of my bills am i barely using"
   route: barely_using
-- message: "did spotify charge me this month"
+- message: "has netflix charged me this month"
   route: tool
-- message: "what has gymco taken from my account?"
+- message: "please check what gymco has taken from me"
   route: tool
-- message: "has netflix actually charged me (check the bank)"
+- message: "did spotify actualy charge me (the last one)"
   route: tool
-- message: "please check what Electricity debited"
+- message: "was i charged by electricity and rent recently?"
   route: tool
-- message: "was i charged by spotify lately"
-  route: tool
-- message: "how much did netflix charge me, show the bank rows"
-  route: tool
-- message: "when is my electricity bill overdue"
-  route: grounded
-- message: "why is gymco overdue?"
-  route: grounded
-- message: "how do i pay netflix and spotify (please)"
-  route: grounded
-- message: "when is my spotify next charged"
-  route: grounded
-- message: "what does my car insurance cost"
+- message: "what has disney+ debited so far"
   route: grounded
   expect: {insufficient: true}
-- message: "how much does a coffee cost me per week (not a bill)"
+- message: "show me what netflix actually charged me"
+  route: tool
+- message: "when is my home internet due"
+  route: grounded
+- message: "how do i pay my electricity bill"
+  route: grounded
+- message: "why is my gymco bill overdue?"
+  route: grounded
+- message: "whats my car insurance cost per month (not sure it's tracked)"
   route: grounded
   expect: {insufficient: true}
-- message: "change spotify to 15.99 a month"
+- message: "how much is my phone plan"
+  route: grounded
+  expect: {insufficient: false}
+- message: "when is netflix next charged and how do i pay it"
+  route: grounded
+- message: "change spotify to $12.99 a month"
   route: proposal
   expect: {title: "Update Spotify"}
-- message: "please cancel netflix from 1 november"
+- message: "pls cancel netflix from november"
   route: proposal
   expect: {title: "Update Netflix"}
-- message: "pause gymco from 20 October (going overseas)"
+- message: "add disney+ for 11.99 monthly starting 3 november (paid by card)"
   route: proposal
-  expect: {title: "Update GymCo"}
-- message: "dispute my electricity charge, billed twice"
+  expect: {title: "Add bill: Disney+"}
+- message: "dispute my electrcity charge, i was billed twice"
   route: proposal
   expect: {title: "Open dispute for Electricity"}
-- message: "please dispute the spotify charge because the price went up"
+- message: "i want to dispute the netflix charge please"
+  route: proposal
+  expect: {title: "Open dispute for Netflix"}
+- message: "can you draft a dispute for my spotify charge?"
   route: proposal
   expect: {title: "Open dispute for Spotify"}
-- message: "add disney+ $15 monthly, first charge 5 november, subscription"
-  route: proposal
-  expect: {title: "Add bill: Disney"}
-- message: "add a bill"
+- message: "add a subscription"
   route: ask_back
-- message: "please add a streaming subscription"
-  route: ask_back
+  expect: {contains: ["I just need"]}
 - message: "change my spotify"
   route: ask_back
-- message: "add disney+ (not sure about the price yet)"
+- message: "pls add disney+"
   route: ask_back
-- message: "i want to add a gym and a phone plan"
+- message: "update my netflix bill (not sure what to put)"
   route: ask_back
-- message: "create a new subscription for me pls"
+- message: "cancel my gymco"
+  route: ask_back
+- message: "add a new bill for electricity and a gym membership"
   route: ask_back

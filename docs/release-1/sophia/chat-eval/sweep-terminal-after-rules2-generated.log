@@ -1,0 +1,88 @@
+# After the 14:46 loop's rules: generated paraphrases x2, 1 Oct 2026 14:56, GPU
+
+[PASS]   8.2s 'whats the total of all my bills per month' -> total
+[PASS]   1.0s 'whats the total of all my bills per month' -> total
+[PASS]   1.9s 'pls add up everything i pay each month (bills + subs)' -> total
+[PASS]   1.8s 'pls add up everything i pay each month (bills + subs)' -> total
+[PASS]   1.8s 'how much do my bils come to altogether monthly?' -> total
+[PASS]   1.9s 'how much do my bils come to altogether monthly?' -> total
+[PASS]   1.8s 'total for rent and electricity together each month' -> total
+[PASS]   2.0s 'total for rent and electricity together each month' -> total
+[PASS]   2.0s 'Please give me my overall monthly spend' -> total
+[PASS]   1.0s 'Please give me my overall monthly spend' -> total
+[PASS]   1.1s 'what do netflix and spotify cost me combined per month' -> total
+[PASS]   0.9s 'what do netflix and spotify cost me combined per month' -> total
+[PASS]   1.5s 'whats due this week' -> upcoming
+[PASS]   1.2s 'whats due this week' -> upcoming
+[PASS]   1.7s 'please list what i need to pay in the next 10 days' -> upcoming
+[PASS]   2.0s 'please list what i need to pay in the next 10 days' -> upcoming
+[PASS]   1.6s 'anything due next fortnight (including subs)?' -> upcoming
+[PASS]   5.9s 'anything due next fortnight (including subs)?' -> upcoming
+[PASS]   2.0s 'what bils are due over the next month' -> upcoming
+[PASS]  11.1s 'what bils are due over the next month' -> upcoming
+[PASS]   1.3s 'when do i have to pay netflix and gymco this month' -> upcoming
+[PASS]   1.4s 'when do i have to pay netflix and gymco this month' -> upcoming
+[PASS]   2.4s 'what will i pay in the next week' -> upcoming
+[PASS]   1.6s 'what will i pay in the next week' -> upcoming
+[PASS]   1.1s 'which subs am i not really using' -> barely_using
+[PASS]   1.2s 'which subs am i not really using' -> barely_using
+[PASS]   1.3s 'please show me the subscriptions i barely use?' -> barely_using
+[PASS]   1.5s 'please show me the subscriptions i barely use?' -> barely_using
+[PASS]   1.2s 'is spotify one i hardly ever use (be honest)' -> barely_using
+[PASS]   1.3s 'is spotify one i hardly ever use (be honest)' -> barely_using
+[PASS]   1.2s 'which subscriptoins do i never use' -> barely_using
+[PASS]   1.2s 'which subscriptoins do i never use' -> barely_using
+[PASS]   1.2s 'are netflix and disney+ ones i barely touch' -> barely_using
+[PASS]   1.3s 'are netflix and disney+ ones i barely touch' -> barely_using
+[PASS]   1.2s 'which of my bills am i barely using' -> barely_using
+[PASS]   1.3s 'which of my bills am i barely using' -> barely_using
+[PASS]   1.0s 'has netflix charged me this month' -> tool
+[PASS]   1.3s 'has netflix charged me this month' -> tool
+[PASS]   1.3s 'please check what gymco has taken from me' -> tool
+[PASS]   1.3s 'please check what gymco has taken from me' -> tool
+[PASS]   1.5s 'did spotify actualy charge me (the last one)' -> tool
+[PASS]   1.3s 'did spotify actualy charge me (the last one)' -> tool
+[FAIL]   5.2s 'was i charged by electricity and rent recently?' -> grounded  ['route grounded != tool']
+[FAIL]   4.8s 'was i charged by electricity and rent recently?' -> grounded  ['route grounded != tool']
+[PASS]   3.8s 'what has disney+ debited so far' -> grounded
+[PASS]   4.3s 'what has disney+ debited so far' -> grounded
+[PASS]   1.2s 'show me what netflix actually charged me' -> tool
+[PASS]   1.4s 'show me what netflix actually charged me' -> tool
+[PASS]   3.5s 'when is my home internet due' -> grounded
+[PASS]   4.9s 'when is my home internet due' -> grounded
+[PASS]   5.2s 'how do i pay my electricity bill' -> grounded
+[PASS]   3.9s 'how do i pay my electricity bill' -> grounded
+[PASS]   2.9s 'why is my gymco bill overdue?' -> grounded
+[PASS]   3.2s 'why is my gymco bill overdue?' -> grounded
+[PASS]   2.0s "whats my car insurance cost per month (not sure it's tracked" -> grounded
+[PASS]   2.8s "whats my car insurance cost per month (not sure it's tracked" -> grounded
+[PASS]   2.2s 'how much is my phone plan' -> grounded
+[PASS]   2.2s 'how much is my phone plan' -> grounded
+[PASS]   2.4s 'when is netflix next charged and how do i pay it' -> grounded
+[PASS]   2.9s 'when is netflix next charged and how do i pay it' -> grounded
+[PASS]   1.3s 'change spotify to $12.99 a month' -> proposal
+[PASS]   1.2s 'change spotify to $12.99 a month' -> proposal
+[PASS]   1.2s 'pls cancel netflix from november' -> proposal
+[PASS]   1.2s 'pls cancel netflix from november' -> proposal
+[PASS]   2.0s 'add disney+ for 11.99 monthly starting 3 november (paid by c' -> proposal
+[PASS]   2.1s 'add disney+ for 11.99 monthly starting 3 november (paid by c' -> proposal
+[PASS]   1.3s 'dispute my electrcity charge, i was billed twice' -> proposal
+[PASS]  15.9s 'dispute my electrcity charge, i was billed twice' -> proposal
+[PASS]  19.4s 'i want to dispute the netflix charge please' -> proposal
+[PASS]  20.6s 'i want to dispute the netflix charge please' -> proposal
+[PASS]  16.1s 'can you draft a dispute for my spotify charge?' -> proposal
+[PASS]  16.2s 'can you draft a dispute for my spotify charge?' -> proposal
+[PASS]  19.3s 'add a subscription' -> ask_back
+[PASS]   1.8s 'add a subscription' -> ask_back
+[PASS]   1.8s 'change my spotify' -> ask_back
+[PASS]   1.7s 'change my spotify' -> ask_back
+[PASS]   1.9s 'pls add disney+' -> ask_back
+[PASS]   2.0s 'pls add disney+' -> ask_back
+[PASS]   3.0s 'update my netflix bill (not sure what to put)' -> ask_back
+[FAIL]   1.7s 'update my netflix bill (not sure what to put)' -> proposal  ['route proposal != ask_back']
+[PASS]   1.4s 'cancel my gymco' -> ask_back
+[PASS]   1.3s 'cancel my gymco' -> ask_back
+[PASS]   2.0s 'add a new bill for electricity and a gym membership' -> ask_back
+[PASS]   1.9s 'add a new bill for electricity and a gym membership' -> ask_back
+
+81/84 passed; report docs\release-2\sophia\chat-eval\sweep-2026-10-01_1501.md
