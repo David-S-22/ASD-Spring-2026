@@ -7,6 +7,8 @@ that writes those, always through the same CRUD calls a manual edit uses.
 import json
 import re
 import threading
+
+import requests
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -212,7 +214,11 @@ ENUM_FIELDS = {
     "status": {"draft", "sent", "resolved"},  # dispute status — the only whitelisted "status"
 }
 
+METHOD_PHRASES = {"card": ("card",), "direct_debit": ("direct debit", "direct-debit", "debit"), "bpay": ("bpay",)}
+TYPE_PHRASES = {"bill": ("bill",), "subscription": ("subscription", "sub", "subs")}
+
 MISSING_FIELD_QUESTIONS = {
+    "payment_method": "the payment method",
     "name": "what the bill is called",
     "amount_cents": "the amount (in dollars)",
     "cadence": "how often it bills (weekly, fortnightly or monthly)",
@@ -394,7 +400,23 @@ def _ungrounded_fields(entity, op, fields, stated):
         need_day = op == "create" and key == "next_billing_date"
         if fields.get(key) and not _date_stated(text, days, fields[key], need_day):
             ungrounded.append(key)
+    if op == "update" and fields.get("payment_method") and not _has_phrase(text, METHOD_PHRASES.get(fields["payment_method"], ())):
+        ungrounded.append("payment_method")
+    if op == "update" and fields.get("type") and not _has_phrase(text, TYPE_PHRASES.get(fields["type"], ())):
+        ungrounded.append("type")
     return ungrounded
+
+
+def _changed_fields(bill_id, fields):
+    """The proposed fields that differ from the bill's stored values; a field that repeats what is already saved is not a change."""
+    try:
+        row = bills_db.get_bill(bill_id) if bill_id else None
+    except (ServiceError, requests.RequestException):
+        row = None
+    if not row:
+        return fields
+    current = dict(row, amount=row["amount_cents"] / 100)
+    return {key: value for key, value in fields.items() if str(current.get(key)) != str(value)}
 
 
 def _vet_proposal(preview, say="", stated=None):
@@ -412,6 +434,8 @@ def _vet_proposal(preview, say="", stated=None):
     cadence and dates must also appear in what the user said; stated=None
     skips that check.
     """
+    if preview["op"] == "update" and preview["entity"] == "bill":
+        preview["fields"] = _changed_fields(preview.get("id"), preview.get("fields") or {})
     if preview["op"] == "update" and not preview.get("fields"):
         target = (_bill_name(preview.get("id")) if preview["entity"] == "bill" else None) or "that"
         return None, f"What would you like to change about {target}? Tell me the new amount, date or payment method and I'll propose it."
@@ -445,6 +469,8 @@ def _vet_proposal(preview, say="", stated=None):
         if missing:
             wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in missing)
             return None, CREATE_NEEDS_REPLY.format(wants=wants)
+    if preview["op"] == "create" and stated is not None and fields.get("payment_method") and not _has_phrase(stated.lower(), METHOD_PHRASES.get(fields["payment_method"], ())):
+        fields.pop("payment_method")
     ungrounded = [] if stated is None else _ungrounded_fields(preview["entity"], preview["op"], fields, stated)
     if ungrounded:
         wants = ", ".join(MISSING_FIELD_QUESTIONS[f] for f in ungrounded)

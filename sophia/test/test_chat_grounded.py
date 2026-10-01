@@ -363,3 +363,35 @@ def test_a_dispute_built_from_the_users_words_gets_a_matching_sentence(live_clie
 def test_chat_panel_shows_the_demo_date_next_to_the_rag_badge(live_client, modes_on):
     body = _text(live_client.get("/ui/chat"))
     assert 'class="mode-badge today-badge">Today: 20-Aug-2026</span>' in body
+
+
+def test_an_update_that_repeats_the_bills_current_values_asks_what_to_change(live_client, modes_on, monkeypatch):
+    netflix = next(b for b in bills_db_module.list_bills() if b["name"] == "Netflix")
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": netflix["id"], "fields": {"amount": netflix["amount_cents"] / 100, "cadence": netflix["cadence"], "type": netflix["type"]},
+                             "question": "none", "say": "I've suggested leaving Netflix as is — approve it to save."})
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "update my netflix bill (not sure what to put)"}))
+    assert "What would you like to change about Netflix?" in body and "Proposed:" not in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == pending_before
+
+
+def test_an_update_to_a_payment_method_the_user_never_said_asks_for_it(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 7, "fields": {"payment_method": "card"}, "question": "none",
+                             "say": "I've suggested changing the payment method for Home internet to card — approve it to save."})
+    pending_before = len(bills_db_module.list_suggestions(status="pending"))
+    body = _text(live_client.post("/ui/chat", data={"message": "update my home internet bill"}))
+    assert "the payment method" in body and "Proposed:" not in body
+    assert len(bills_db_module.list_suggestions(status="pending")) == pending_before
+    fake_model(monkeypatch, {"op": "update", "entity": "bill", "id": 7, "fields": {"payment_method": "card"}, "question": "none",
+                             "say": "I've suggested changing the payment method for Home internet to card — approve it to save."})
+    body = _text(live_client.post("/ui/chat", data={"message": "switch my home internet to card"}))
+    assert "Update Home internet" in body
+
+
+def test_a_new_bill_drops_a_payment_method_the_user_never_said_but_is_still_proposed(live_client, modes_on, monkeypatch):
+    fake_model(monkeypatch, {"op": "create", "entity": "bill", "id": None, "fields": {"name": "Stan", "merchant": "Stan", "amount": 10.0, "cadence": "monthly", "next_billing_date": "2026-10-05", "type": "subscription", "payment_method": "card"},
+                             "question": "none", "say": "I've suggested adding Stan at $10 a month from 5 Oct — approve it to save."})
+    body = _text(live_client.post("/ui/chat", data={"message": "Add Stan, $10 a month, first charge 5 October"}))
+    assert "Add bill: Stan" in body
+    payload = json.loads(bills_db_module.list_suggestions(status="pending")[-1]["payload_json"])
+    assert "payment_method" not in payload and payload["amount_cents"] == 1000
